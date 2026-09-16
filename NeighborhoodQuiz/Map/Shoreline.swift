@@ -138,6 +138,16 @@ enum Shoreline {
         return points[points.count - 1]
     }
 
+    /// How far off vertical a line may lean and still be written as a vertical one.
+    ///
+    /// An avenue is not *quite* vertical once projected. Mercator stretches latitude
+    /// unevenly, so a line that is dead straight on the grid bends about a hundredth of
+    /// a degree over a hundred blocks — and with the fold below sitting exactly on the
+    /// quarter turn, that hundredth was enough to drop Fifth Avenue on the side that
+    /// reads *downwards* while its neighbours read up. Two degrees of slack is far more
+    /// than the projection's bend and far less than any real diagonal.
+    static let uprightTolerance = 2.0 * Double.pi / 180
+
     /// Which way the run is heading where it passes closest to `point`, as an angle in
     /// radians. Street names are written along their streets, so this is what tilts them.
     static func heading(of points: [CGPoint], near point: CGPoint) -> Double {
@@ -160,11 +170,16 @@ enum Shoreline {
 
         // A name is written left to right, and a name on a vertical street is written
         // from the bottom up — so a heading and the same heading turned round are the
-        // same thing to write along. Folding the angle into a half turn gives one
-        // answer for both, and never one that reads upside down or back to front.
+        // same thing to write along. Folding the angle into a half turn gives one answer
+        // for both, and never one that reads upside down or back to front.
+        //
+        // The window is that half turn shifted by `uprightTolerance`, which is what puts
+        // anything within a couple of degrees of vertical on the upward side of the fold
+        // rather than leaving it to which side of the quarter turn it happened to land.
+        let top = Double.pi / 2 - uprightTolerance
         var angle = atan2(dy, dx)
-        while angle >= .pi / 2 { angle -= .pi }
-        while angle < -.pi / 2 { angle += .pi }
+        while angle >= top { angle -= .pi }
+        while angle < top - .pi { angle += .pi }
         return angle
     }
 

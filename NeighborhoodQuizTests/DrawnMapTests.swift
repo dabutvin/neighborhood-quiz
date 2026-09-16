@@ -55,8 +55,11 @@ final class DrawnMapTests: XCTestCase {
     }
 
     func testNoNameIsUpsideDown() {
+        // A quarter turn, plus the slack that lets a near-vertical avenue read upwards
+        // rather than downwards. Anything past that is a name written back to front.
+        let limit = Double.pi / 2 + Shoreline.uprightTolerance + 1e-9
         for label in map.labels {
-            XCTAssertLessThanOrEqual(abs(label.angle), .pi / 2 + 1e-9, "\(label.text) reads backwards")
+            XCTAssertLessThanOrEqual(abs(label.angle), limit, "\(label.text) reads backwards")
         }
     }
 

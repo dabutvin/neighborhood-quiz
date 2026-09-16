@@ -133,6 +133,33 @@ final class ShorelineTests: XCTestCase {
         XCTAssertEqual(down, -.pi / 2, accuracy: 1e-9)
     }
 
+    func testALineAHairOffVerticalIsStillWrittenUpwards() {
+        // The case that broke: the avenues come out of the projection a hundredth of a
+        // degree off vertical, which is enough to land on the wrong side of a fold that
+        // sits exactly on the quarter turn — and Fifth Avenue then read downwards while
+        // Park Avenue beside it read up.
+        let leaningRight = Shoreline.heading(
+            of: [CGPoint(x: 0, y: 0), CGPoint(x: 0.06, y: 500)],
+            near: CGPoint(x: 0.03, y: 250)
+        )
+        let leaningLeft = Shoreline.heading(
+            of: [CGPoint(x: 0, y: 0), CGPoint(x: -0.06, y: 500)],
+            near: CGPoint(x: -0.03, y: 250)
+        )
+        XCTAssertEqual(leaningRight, -.pi / 2, accuracy: 0.01)
+        XCTAssertEqual(leaningLeft, -.pi / 2, accuracy: 0.01)
+    }
+
+    func testAGenuineDiagonalKeepsItsLean() {
+        // The slack must not swallow a real tilt: eighty-six degrees is Broadway-ish,
+        // not vertical, and it stays where it is.
+        let steep = Shoreline.heading(
+            of: [CGPoint(x: 0, y: 0), CGPoint(x: 7, y: 100)],
+            near: CGPoint(x: 3.5, y: 50)
+        )
+        XCTAssertEqual(steep, 1.50091, accuracy: 0.001)
+    }
+
     func testHeadingPicksTheNearestPartOfABentLine() {
         // Flat on the left, steep on the right.
         let bent = [
