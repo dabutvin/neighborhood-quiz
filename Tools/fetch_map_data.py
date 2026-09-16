@@ -77,6 +77,20 @@ MIN_RING_LONGITUDE = -74.03
 AVENUE_COUNT = 25
 MAJOR_COUNT = 175
 
+# Length alone makes a poor avenue. The longest roads in Manhattan include the
+# Henry Hudson Parkway, the FDR and the Harlem River Driveway, none of which anybody
+# gives directions by, and the carriage drives that loop through Central Park, which
+# are long precisely because they wander. Two rules sort the real avenues out:
+#
+#   - an avenue is a *street*. The city's roadway type tells a street (1) from a
+#     highway (2) and a bridge (3), and Fifth, Madison, Lexington, Amsterdam, Park
+#     and Broadway are every one of them a hundred per cent type 1.
+#   - an avenue is not in a park. West Drive and East Drive are type 1 and look like
+#     avenues by length, so they are caught by the greens instead: a road that spends
+#     most of itself inside a park polygon is a carriage drive.
+#
+# Neither rule is a list of street names, so both survive the city re-surveying.
+
 ORDINAL_WORDS = {
     1: "First", 2: "Second", 3: "Third", 4: "Fourth", 5: "Fifth", 6: "Sixth",
     7: "Seventh", 8: "Eighth", 9: "Ninth", 10: "Tenth", 11: "Eleventh", 12: "Twelfth",
@@ -145,6 +159,10 @@ def spell(raw: str | None) -> str | None:
                 spelled.append(ORDINAL_WORDS[number])
             else:
                 spelled.append(ordinal(number))
+        elif word == "ST" and index == 0 and len(parts) > 1:
+            # Leading ST is Saint, not Street: St Nicholas Avenue, St Marks Place.
+            # Anywhere else it is the street — "65 ST TRANSVERSE" is a cross street.
+            spelled.append("St.")
         elif word in EXPANSIONS:
             spelled.append(EXPANSIONS[word])
         elif word.isalpha():
@@ -347,6 +365,7 @@ def main() -> None:
         select="full_street_name,rw_type,the_geom",
     )
     by_name: dict[str, list] = collections.defaultdict(list)
+    kinds: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     plumbing = 0
     adrift = 0
     for row in rows:
@@ -355,6 +374,7 @@ def main() -> None:
         if not name or not geometry:
             plumbing += 1
             continue
+        kinds[name][row["properties"].get("rw_type")] += 1
         lines = geometry["coordinates"] if geometry["type"] == "MultiLineString" else [geometry["coordinates"]]
         for line in lines:
             by_name[name].append([(x, y) for x, y in line])
@@ -378,11 +398,10 @@ def main() -> None:
             "runs": runs,
             "labelled": longest,
             "length": sum(walked(r) for r in runs),
+            "roadway": kinds[name].most_common(1)[0][0] if kinds[name] else "1",
         })
 
     streets.sort(key=lambda s: -s["length"])
-    for rank, street in enumerate(streets):
-        street["tier"] = 0 if rank < AVENUE_COUNT else (1 if rank < MAJOR_COUNT else 2)
 
     print(f"    {adrift} runs were on islands the map leaves out")
     pieces = sum(len(s["runs"]) for s in streets)
@@ -405,6 +424,33 @@ def main() -> None:
             if len(ring) >= 4 and ring_area(ring) >= MIN_PARK_AREA:
                 parks.append({"name": row["properties"].get("signname") or "", "ring": ring})
     print(f"    {len(parks)} greens over eight acres")
+
+    # --- which of them are avenues
+    park_rings = [p["ring"] for p in parks]
+
+    def mostly_in_a_park(street) -> bool:
+        points = [p for run in street["runs"] for p in run]
+        if not points:
+            return False
+        inside = sum(1 for p in points if any(point_in_ring(p, ring) for ring in park_rings))
+        return inside > len(points) * 0.6
+
+    ranked = 0
+    for street in streets:
+        avenue = (
+            ranked < AVENUE_COUNT
+            and street["roadway"] == "1"
+            and not mostly_in_a_park(street)
+        )
+        if avenue:
+            street["tier"] = 0
+            ranked += 1
+        else:
+            street["tier"] = 1
+    # Everything not an avenue falls back to length order for the second band.
+    for rank, street in enumerate(s for s in streets if s["tier"] != 0):
+        street["tier"] = 1 if rank < MAJOR_COUNT else 2
+    print(f"    {ranked} of them rank as avenues")
 
     # --- write it
     names = [s["name"] for s in streets]

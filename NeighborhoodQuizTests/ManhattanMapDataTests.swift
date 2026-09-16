@@ -88,11 +88,40 @@ final class ManhattanMapDataTests: XCTestCase {
     func testTheAvenuesRankAboveTheSideStreets() {
         let byKind = Dictionary(grouping: ManhattanMapData.roads, by: \.kind)
         let avenues = Set((byKind[.avenue] ?? []).map(\.name))
-        for expected in ["Broadway", "Fifth Avenue", "Park Avenue", "Amsterdam Avenue"] {
+        for expected in [
+            "Broadway", "Fifth Avenue", "Park Avenue", "Madison Avenue", "Lexington Avenue",
+            "Amsterdam Avenue", "Central Park West", "Second Avenue", "West End Avenue",
+        ] {
             XCTAssertTrue(avenues.contains(expected), "\(expected) should rank as an avenue")
         }
         XCTAssertGreaterThan((byKind[.side] ?? []).count, (byKind[.avenue] ?? []).count,
                              "Most of Manhattan is side streets")
+    }
+
+    func testAHighwayIsNotAnAvenueAndNorIsACarriageDrive() {
+        // Rank comes from length, and the longest roads on the island are not the ones
+        // anybody gives directions by. The Henry Hudson and the FDR are highways; West
+        // Drive and East Drive are long because they wander through Central Park. All
+        // four outranked Madison Avenue before the roadway type and the greens were
+        // brought in to sort them out.
+        let avenues = Set(ManhattanMapData.roads.filter { $0.kind == .avenue }.map(\.name))
+        for pretender in [
+            "Henry Hudson Parkway", "Franklin D Roosevelt Drive", "Harlem River Driveway",
+            "West Street", "West Drive", "East Drive",
+        ] {
+            XCTAssertFalse(avenues.contains(pretender), "\(pretender) should not rank as an avenue")
+        }
+    }
+
+    func testALeadingStIsSaintAndNotStreet() {
+        let named = Set(ManhattanMapData.roads.map(\.name))
+        XCTAssertTrue(named.contains("St. Nicholas Avenue"))
+        XCTAssertTrue(named.contains("St. Marks Place"))
+        XCTAssertFalse(named.contains("Street Nicholas Avenue"))
+        // But ST anywhere else really is the street it looks like.
+        for name in named {
+            XCTAssertFalse(name.hasPrefix("Street "), "\(name) read a Saint as a Street")
+        }
     }
 
     func testTheNamesAreSpeltTheWayPeopleWriteThem() {
