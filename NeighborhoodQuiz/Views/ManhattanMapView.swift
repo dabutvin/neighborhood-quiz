@@ -41,11 +41,11 @@ struct ManhattanMapView: View {
             style: StrokeStyle(lineWidth: 2.2 / zoom, lineCap: .round, lineJoin: .round)
         )
 
-        board.fill(map.park, with: .color(palette.park))
+        board.fill(map.parks, with: .color(palette.park))
         board.stroke(
             map.parkEdge,
             with: .color(palette.parkInk),
-            style: StrokeStyle(lineWidth: 1.4 / zoom, lineCap: .round, lineJoin: .round)
+            style: StrokeStyle(lineWidth: 1.2 / zoom, lineCap: .round, lineJoin: .round)
         )
 
         // Only the roads on the glass. A stroke that lands entirely off the edge costs

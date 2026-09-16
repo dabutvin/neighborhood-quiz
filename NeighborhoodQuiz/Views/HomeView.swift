@@ -57,6 +57,7 @@ struct HomeView: View {
                 PaperTexture(palette: palette)
 
                 header
+                credit
                 zoomControls(in: size)
             }
             .onAppear { prepare(for: size) }
@@ -81,6 +82,19 @@ struct HomeView: View {
         .padding(.top, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .allowsHitTesting(false)
+    }
+
+    /// Whose map this is. Every street on it was surveyed by the City of New York and
+    /// published for anybody to use; the least the drawing can do is say so.
+    private var credit: some View {
+        Text("Map data: NYC Open Data")
+            .font(.system(size: 9, weight: .medium))
+            .kerning(0.4)
+            .foregroundStyle(palette.inkSoft.opacity(0.75))
+            .padding(.leading, 16)
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .allowsHitTesting(false)
     }
 
     private func zoomControls(in size: CGSize) -> some View {

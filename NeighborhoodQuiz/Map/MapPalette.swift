@@ -75,21 +75,21 @@ struct MapPalette {
 
     func colour(for kind: RoadKind) -> Color {
         switch kind {
-        case .avenue, .namedStreet: return avenue
-        case .majorCrossStreet: return inkSoft
-        case .crossStreet: return street
+        case .avenue: return avenue
+        case .major: return inkSoft
+        case .side: return street
         }
     }
 
-    /// How heavy the pen is for each kind of road, in points, before zoom. The hairline
-    /// the ordinary cross streets get is deliberate: two hundred of them are what give
-    /// the island its texture, and any heavier they would fill it in.
+    /// How heavy the pen is for each rank of road, in points, before zoom. The hairline
+    /// the side streets get is deliberate: there are eleven hundred runs of them and
+    /// they are what gives the island its texture. Any heavier and they fill it in,
+    /// which is exactly what the first draft of this map did.
     func weight(for kind: RoadKind) -> Double {
         switch kind {
         case .avenue: return 1.6
-        case .namedStreet: return 1.6
-        case .majorCrossStreet: return 1.15
-        case .crossStreet: return 0.55
+        case .major: return 1.0
+        case .side: return 0.5
         }
     }
 
@@ -97,10 +97,9 @@ struct MapPalette {
     /// with the map — pulling in shows *more* of them rather than bigger ones.
     func labelSize(for kind: RoadKind) -> Double {
         switch kind {
-        case .avenue: return 13
-        case .namedStreet: return 12
-        case .majorCrossStreet: return 11
-        case .crossStreet: return 9
+        case .avenue: return 12
+        case .major: return 10.5
+        case .side: return 9
         }
     }
 }

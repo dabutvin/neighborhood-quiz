@@ -3,9 +3,10 @@
 <!--
   What the app collects, said in Apple's words rather than ours: nothing.
 
-  The map is drawn from arithmetic and a traced shoreline held in the binary. There is
-  no network call, no account, nothing written to the device and nothing sent off it.
-  If that ever stops being true, this file is the first thing that has to change.
+  The map is a data file in the app bundle, fetched from NYC Open Data when a
+  developer runs Tools/fetch_map_data.py and committed to the repository. There is no
+  network call at runtime, no account, nothing written to the device and nothing sent
+  off it. If that ever stops being true, this file is the first thing that has to change.
 -->
 <plist version="1.0">
 <dict>

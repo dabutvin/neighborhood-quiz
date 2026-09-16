@@ -25,6 +25,9 @@ targets:
     resources:
       - path: NeighborhoodQuiz/Resources/Assets.xcassets
       - path: NeighborhoodQuiz/Resources/PrivacyInfo.xcprivacy
+      # Manhattan itself: every street the city has, written by Tools/fetch_map_data.py
+      # and read at launch. The app draws nothing it does not find in here.
+      - path: NeighborhoodQuiz/Resources/manhattan.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nycneighborhoodsquiz.app
