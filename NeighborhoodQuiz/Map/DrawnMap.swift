@@ -25,6 +25,9 @@ struct DrawnRoad: Identifiable {
     /// the side streets arrive the way their names do, once there is room for them, and
     /// the wide view is the island, the park, the avenues and the streets people name.
     let minZoom: Double
+    /// Where this line sits on the drawing, worked out once so that deciding whether it
+    /// is on the glass costs one rectangle test rather than walking the path.
+    let bounds: CGRect
 }
 
 /// The whole map, drawn once for a given size and then only ever re-transformed.
@@ -73,11 +76,13 @@ struct DrawnMap {
 
             let style = penStyle(for: road.kind, seed: UInt32(index &+ 101))
             for (runIndex, run) in runs.enumerated() {
+                let path = Pen.stroke(run, style: style)
                 roads.append(DrawnRoad(
                     id: "\(index)-\(runIndex)",
-                    path: Pen.stroke(run, style: style),
+                    path: path,
                     kind: road.kind,
-                    minZoom: road.kind == .crossStreet ? DrawnMap.sideStreetZoom : 1
+                    minZoom: road.kind == .crossStreet ? DrawnMap.sideStreetZoom : 1,
+                    bounds: path.boundingRect
                 ))
             }
 

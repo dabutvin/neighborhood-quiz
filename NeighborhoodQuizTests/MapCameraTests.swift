@@ -50,6 +50,62 @@ final class MapCameraTests: XCTestCase {
         XCTAssertEqual(Double(landed.y), Double(size.height) / 2, accuracy: 1e-9)
     }
 
+    func testAFreshCameraSeesTheWholeDrawing() {
+        let visible = MapCamera().visibleRect(in: size)
+        XCTAssertEqual(Double(visible.minX), 0, accuracy: 1e-9)
+        XCTAssertEqual(Double(visible.minY), 0, accuracy: 1e-9)
+        XCTAssertEqual(Double(visible.width), Double(size.width), accuracy: 1e-9)
+        XCTAssertEqual(Double(visible.height), Double(size.height), accuracy: 1e-9)
+    }
+
+    func testComingInShowsLessOfTheDrawing() {
+        var camera = MapCamera()
+        camera.setZoom(4)
+        let visible = camera.visibleRect(in: size)
+
+        // Four times in is a quarter of the width and a quarter of the height, around
+        // the middle — a twentieth of the drawing, which is the whole reason to cull.
+        XCTAssertEqual(Double(visible.width), Double(size.width) / 4, accuracy: 1e-9)
+        XCTAssertEqual(Double(visible.height), Double(size.height) / 4, accuracy: 1e-9)
+        XCTAssertEqual(Double(visible.midX), Double(size.width) / 2, accuracy: 1e-9)
+        XCTAssertEqual(Double(visible.midY), Double(size.height) / 2, accuracy: 1e-9)
+    }
+
+    func testTheVisibleRectFollowsThePan() {
+        var camera = MapCamera(zoom: 2, pan: .zero)
+        let before = camera.visibleRect(in: size)
+        camera.pan = CGSize(width: -100, height: 0)
+        let after = camera.visibleRect(in: size)
+
+        // Dragging the map left shows what was off its right edge.
+        XCTAssertEqual(Double(after.minX - before.minX), 50, accuracy: 1e-9)
+        XCTAssertEqual(Double(after.width), Double(before.width), accuracy: 1e-9)
+    }
+
+    func testWhatIsVisibleIsExactlyWhatLandsOnTheGlass() {
+        // The rect and `screenPoint` are inverses, so anything inside it draws inside
+        // the screen and anything outside it does not. That equivalence is what makes
+        // culling on the rect safe.
+        let camera = MapCamera(zoom: 3.5, pan: CGSize(width: -40, height: 90))
+        let visible = camera.visibleRect(in: size)
+        let screen = CGRect(origin: .zero, size: size)
+
+        for corner in [
+            CGPoint(x: visible.minX, y: visible.minY),
+            CGPoint(x: visible.maxX, y: visible.maxY),
+            CGPoint(x: visible.midX, y: visible.midY),
+        ] {
+            let landed = camera.screenPoint(corner, in: size)
+            XCTAssertTrue(
+                screen.insetBy(dx: -0.001, dy: -0.001).contains(landed),
+                "\(corner) should land on the glass, landed at \(landed)"
+            )
+        }
+
+        let outside = CGPoint(x: visible.minX - 20, y: visible.midY)
+        XCTAssertFalse(screen.contains(camera.screenPoint(outside, in: size)))
+    }
+
     func testTheIslandCannotBeShovedOffTheGlass() {
         var camera = MapCamera()
         camera.pan = CGSize(width: 99_999, height: -99_999)

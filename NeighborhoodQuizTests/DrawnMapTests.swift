@@ -126,6 +126,30 @@ final class DrawnMapTests: XCTestCase {
         XCTAssertEqual(order, order.sorted())
     }
 
+    func testEveryRoadKnowsWhereItSits() {
+        for road in map.roads {
+            XCTAssertFalse(road.bounds.isNull, "\(road.id) has no box to cull against")
+            XCTAssertEqual(road.bounds, road.path.boundingRect, "\(road.id)'s box is stale")
+        }
+    }
+
+    func testTheCullLeavesTheWideViewAloneAndGutsTheCloseOne() {
+        // At rest the whole island is on the glass, so nothing may be culled.
+        let wide = MapCamera().visibleRect(in: size, margin: 8)
+        XCTAssertEqual(map.roads.filter { !$0.bounds.intersects(wide) }.count, 0)
+
+        // Four times in on Midtown, almost none of it is — which is the saving.
+        let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
+        let close = MapCamera.centred(on: midtown, zoom: 4, in: size).visibleRect(in: size, margin: 8)
+        let drawn = map.roads.filter { $0.bounds.intersects(close) }
+        XCTAssertLessThan(
+            Double(drawn.count) / Double(map.roads.count),
+            0.5,
+            "Coming in should leave most of the drawing off the glass"
+        )
+        XCTAssertGreaterThan(drawn.count, 10, "But not all of it — there is a city there")
+    }
+
     func testTheMapIsDrawnTheSameWayTwice() {
         let again = DrawnMap.build(size: size)
         XCTAssertEqual(map.land, again.land)

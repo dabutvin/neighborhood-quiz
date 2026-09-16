@@ -12,6 +12,10 @@ struct ManhattanMapView: View {
     let drawn: DrawnMap
     let camera: MapCamera
     let palette: MapPalette
+    /// Whether a finger is on the map right now. Drawing is at its most expensive
+    /// exactly when it has the least time, so a couple of things the eye cannot follow
+    /// mid-drag are left until the map is still again.
+    var interacting: Bool = false
 
     var body: some View {
         Canvas { context, size in
@@ -44,7 +48,12 @@ struct ManhattanMapView: View {
             style: StrokeStyle(lineWidth: 1.4 / zoom, lineCap: .round, lineJoin: .round)
         )
 
+        // Only the roads on the glass. A stroke that lands entirely off the edge costs
+        // the same as one you can see, and at four times in almost all of them do.
+        let onScreen = camera.visibleRect(in: size, margin: 8)
+
         for road in map.roads {
+            guard road.bounds.intersects(onScreen) else { continue }
             let ink = presence(of: road)
             guard ink > 0.01 else { continue }
             board.stroke(
@@ -88,26 +97,41 @@ struct ManhattanMapView: View {
             let text = Text(label.text)
                 .font(MapFont.label(size: palette.labelSize(for: label.kind)))
             let ink = context.resolve(text.foregroundStyle(palette.label))
-            let halo = context.resolve(text.foregroundStyle(palette.labelHalo))
 
             let box = footprint(of: ink, at: point, angle: label.angle)
             if taken.contains(where: { $0.intersects(box) }) { continue }
             taken.append(box)
 
+            // The paper showing through a name is what keeps it readable where it
+            // crosses its own street: the same word laid down four times just off the
+            // mark in the colour of the page, and then once more in ink.
+            //
+            // It is also four fifths of what a name costs to draw, and while a finger is
+            // down that is four fifths of the work for something nobody is reading. So
+            // the halo is left off mid-gesture and comes back the moment the map is let
+            // go of — the names stay put either way, which is far less distracting than
+            // having them disappear.
+            let halo = interacting
+                ? nil
+                : context.resolve(text.foregroundStyle(palette.labelHalo))
+
             context.drawLayer { layer in
                 layer.translateBy(x: point.x, y: point.y)
                 layer.rotate(by: .radians(label.angle))
-
-                // The paper showing through the name is what keeps it readable where it
-                // crosses its own street: the same word laid down four times just off
-                // the mark in the colour of the page, and then once more in ink.
-                for offset in ManhattanMapView.haloOffsets {
-                    layer.draw(halo, at: offset, anchor: .center)
+                if let halo {
+                    for offset in ManhattanMapView.haloOffsets {
+                        layer.draw(halo, at: offset, anchor: .center)
+                    }
                 }
                 layer.draw(ink, at: .zero, anchor: .center)
             }
         }
     }
+
+    private static let haloOffsets: [CGPoint] = [
+        CGPoint(x: -1.4, y: 0), CGPoint(x: 1.4, y: 0),
+        CGPoint(x: 0, y: -1.4), CGPoint(x: 0, y: 1.4),
+    ]
 
     /// The upright box a rotated name sits in. A name written up an avenue is measured
     /// lying down and then stood up, which is what the sine and cosine are doing.
@@ -130,8 +154,4 @@ struct ManhattanMapView: View {
         )
     }
 
-    private static let haloOffsets: [CGPoint] = [
-        CGPoint(x: -1.4, y: 0), CGPoint(x: 1.4, y: 0),
-        CGPoint(x: 0, y: -1.4), CGPoint(x: 0, y: 1.4),
-    ]
 }

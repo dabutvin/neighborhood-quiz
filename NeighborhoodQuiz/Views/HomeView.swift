@@ -41,7 +41,12 @@ struct HomeView: View {
                 palette.water.ignoresSafeArea()
 
                 if let drawn, drawn.size == size {
-                    ManhattanMapView(drawn: drawn, camera: live(in: size), palette: palette)
+                    ManhattanMapView(
+                        drawn: drawn,
+                        camera: live(in: size),
+                        palette: palette,
+                        interacting: pinch != 1 || drag != .zero
+                    )
                         .contentShape(Rectangle())
                         .gesture(pan(in: size).simultaneously(with: magnify(in: size)))
                         .accessibilityElement()
