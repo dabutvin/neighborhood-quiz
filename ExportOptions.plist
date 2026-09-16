@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>uploadSymbols</key>
+    <true/>
+    <!-- teamID, signingCertificate and the per-bundle-ID profile are filled in by
+         the release workflows from whatever certificate the secrets carry. -->
+    <key>provisioningProfiles</key>
+    <dict/>
+</dict>
+</plist>

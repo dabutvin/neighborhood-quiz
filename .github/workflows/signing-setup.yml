@@ -1,0 +1,89 @@
+name: Signing Setup
+
+# Manages the account's signing certificates through the App Store Connect API — no
+# Mac involved. Run it from the Actions tab or the GitHub mobile app.
+#
+# Builds mint and retire their own certificate by default, so `create` is only for
+# switching to one stored certificate that every build reuses. `list` and `revoke`
+# are how you inspect the account and clear out certificates whose keys are gone.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to do
+        type: choice
+        default: list
+        options:
+          - list
+          - create
+          - revoke
+      certificate_ids:
+        description: Certificate ids to revoke, space separated (task = revoke)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# Shared with testflight.yml and release.yml: only one run at a time may be
+# creating or revoking certificates on the account.
+concurrency:
+  group: apple-signing
+
+jobs:
+  signing:
+    name: ${{ github.event.inputs.task }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List certificates and profiles
+        if: github.event.inputs.task == 'list'
+        run: Tools/bootstrap_signing.py list
+
+      - name: Revoke certificates
+        if: github.event.inputs.task == 'revoke'
+        env:
+          CERTIFICATE_IDS: ${{ github.event.inputs.certificate_ids }}
+        run: |
+          if [ -z "$CERTIFICATE_IDS" ]; then
+            echo "::error::Set certificate_ids to ids from the list task."
+            exit 1
+          fi
+          case "$CERTIFICATE_IDS" in
+            *[!A-Za-z0-9\ _-]*)
+              echo "::error::certificate_ids must be ids separated by spaces."
+              exit 1 ;;
+          esac
+          Tools/bootstrap_signing.py revoke $CERTIFICATE_IDS
+
+      - name: Create a stored certificate and profile, and set the secrets
+        if: github.event.inputs.task == 'create'
+        env:
+          # Repository secrets cannot be written with the built-in token.
+          GH_TOKEN: ${{ secrets.SIGNING_BOOTSTRAP_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Add a SIGNING_BOOTSTRAP_PAT secret first: a fine-grained token for this repository with Secrets read and write. Delete it once signing works."
+            exit 1
+          fi
+          Tools/bootstrap_signing.py create --set-secrets --repo "$GITHUB_REPOSITORY"
+
+      - name: Post next steps
+        if: success() && github.event.inputs.task == 'create'
+        run: |
+          {
+            echo "### Signing secrets stored"
+            echo "Builds now reuse this certificate instead of minting their own. Then:"
+            echo "- Delete the \`SIGNING_BOOTSTRAP_PAT\` secret — it is not needed again."
+            echo "- Revoke any older certificates with the \`revoke\` task, since their keys are gone."
+            echo "- Renew this one before it expires in a year."
+          } >> $GITHUB_STEP_SUMMARY

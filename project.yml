@@ -1,0 +1,66 @@
+name: NeighborhoodQuiz
+options:
+  bundleIdPrefix: com.nycneighborhoodsquiz
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "26.0"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.2"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "${TEAM_ID}"
+    CODE_SIGN_STYLE: Automatic
+    INFOPLIST_FILE: NeighborhoodQuiz/Resources/Info.plist
+
+targets:
+  NeighborhoodQuiz:
+    type: application
+    platform: iOS
+    sources:
+      - NeighborhoodQuiz
+    resources:
+      - path: NeighborhoodQuiz/Resources/Assets.xcassets
+      - path: NeighborhoodQuiz/Resources/PrivacyInfo.xcprivacy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nycneighborhoodsquiz.app
+        INFOPLIST_FILE: NeighborhoodQuiz/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    scheme:
+      testTargets:
+        - NeighborhoodQuizTests
+    info:
+      path: NeighborhoodQuiz/Resources/Info.plist
+      properties:
+        # What fits under the icon. The App Store listing is the longer
+        # "NYC Neighborhoods: Map Quiz"; a home screen truncates past about twelve
+        # characters, so the two are not the same string and should not be.
+        CFBundleDisplayName: NYC Quiz
+        CFBundleName: NeighborhoodQuiz
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen:
+          UIColorName: ""
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+  NeighborhoodQuizTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - NeighborhoodQuizTests
+    dependencies:
+      - target: NeighborhoodQuiz

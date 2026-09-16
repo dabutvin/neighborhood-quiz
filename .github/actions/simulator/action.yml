@@ -1,0 +1,78 @@
+name: Wake up a simulator
+description: >
+  Pick an iPhone or iPad simulator and get it to the point where it can install,
+  run and photograph an app. A simulator that has never been booted on a fresh runner
+  spends five or six minutes getting there, and almost none of that is the app's
+  doing: it is installd starting up, the runtime's shared cache being built the
+  first time anything launches, and a display being attached the first time
+  anything is photographed. Handing all of that to a stub app leaves the real one
+  arriving to a simulator that has done it once already.
+
+inputs:
+  family:
+    description: >
+      Which kind of device to wake: `iPhone` or `iPad`. The tests and most of the
+      screenshots want a phone; the handful of shots that show the tablet's
+      layouts want a tablet.
+    required: false
+    default: 'iPhone'
+  display:
+    description: >
+      Whether the simulator is going to be photographed. Sets the status bar to
+      the usual 9:41 with everything full, and exercises the appearance switch
+      and the display grab. Jobs that only run tests can leave this off.
+    required: false
+    default: 'true'
+
+outputs:
+  udid:
+    description: Identifier of the chosen simulator, for `-destination "id=..."`
+    value: ${{ steps.pick.outputs.udid }}
+  device:
+    description: Name of the chosen simulator, for the logs
+    value: ${{ steps.pick.outputs.device }}
+
+runs:
+  using: composite
+  steps:
+    - id: pick
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        AVAILABLE=$(xcrun simctl list devices available)
+        FAMILY="${{ inputs.family }}"
+        if [ "$FAMILY" = "iPad" ]; then
+          # The 13-inch is the one App Review asks for, so it is the one the tablet's
+          # layouts are photographed on when the runner has it.
+          NAMES=("iPad Pro 13-inch (M5)" "iPad Pro 13-inch (M4)" "iPad Air 13-inch (M3)" "iPad Air 13-inch (M2)" "iPad Pro (12.9-inch) (6th generation)")
+        else
+          NAMES=("iPhone 17 Pro" "iPhone 17" "iPhone 16 Pro" "iPhone 16" "iPhone 15 Pro" "iPhone 15")
+        fi
+        LINE=""
+        for NAME in "${NAMES[@]}"; do
+          LINE=$(grep -m1 -F "$NAME (" <<< "$AVAILABLE" || true)
+          [ -n "$LINE" ] && break
+        done
+        if [ -z "$LINE" ]; then
+          LINE=$(grep -m1 -E "^ *$FAMILY .*\([0-9A-Fa-f-]{36}\)" <<< "$AVAILABLE" || true)
+        fi
+        if [ -z "$LINE" ]; then
+          echo "ERROR: No $FAMILY simulator available"
+          echo "$AVAILABLE"
+          exit 1
+        fi
+
+        DEVICE=$(sed -E 's/^ *(.*) \(([0-9A-Fa-f-]{36})\).*/\1/' <<< "$LINE")
+        UDID=$(sed -E 's/.*\(([0-9A-Fa-f-]{36})\).*/\1/' <<< "$LINE")
+        echo "Chose simulator: $DEVICE ($UDID)"
+        echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
+        echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+    - shell: bash
+      run: |
+        bash "${{ github.action_path }}/warm-up.sh" \
+          "${{ steps.pick.outputs.udid }}" \
+          "${{ github.action_path }}/stub" \
+          "$RUNNER_TEMP/simulator" \
+          "${{ inputs.display }}"

@@ -1,0 +1,164 @@
+name: TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  # Every push to main goes out on its own, but sometimes a build needs to be sent
+  # again — an upload that failed on App Store Connect's side, or a branch you want
+  # testers on before it merges. Run it from the Actions tab and pick the branch.
+  workflow_dispatch:
+
+# Shared with release.yml and signing-setup.yml: only one run at a time may be
+# creating or revoking certificates on the account.
+concurrency:
+  group: apple-signing
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+      TEAM_ID: ${{ secrets.TEAM_ID }}
+      PROFILE_PREFIX: 'NYC Neighborhoods CI '
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NeighborhoodQuiz.xcodeproj \
+            -scheme NeighborhoodQuiz
+
+      - name: Set up App Store Connect API key
+        run: |
+          mkdir -p ./private_keys
+          KEY_PATH="$(pwd)/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          echo "$APP_STORE_CONNECT_API_KEY_CONTENT" > "$KEY_PATH"
+          echo "API_KEY_PATH=$KEY_PATH" >> $GITHUB_ENV
+
+      - name: Choose signing source
+        id: source
+        env:
+          STORED_CERTIFICATE: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+        run: |
+          if [ -n "$STORED_CERTIFICATE" ]; then
+            echo "mode=stored" >> $GITHUB_OUTPUT
+            echo "Signing with the certificate in APPLE_DISTRIBUTION_CERT_P12."
+          else
+            echo "mode=per-build" >> $GITHUB_OUTPUT
+            echo "No stored certificate, so this build makes its own and retires it."
+          fi
+
+      # Sweeping at the start of the next build rather than the end of this one keeps
+      # revocation well clear of App Store Connect still processing the upload, and
+      # picks up anything a cancelled run left behind. One certificate sits idle
+      # between builds; the account never holds more than two of ours.
+      #
+      # Only *CI* certificates, by prefix. A release build signs under
+      # 'NYC Neighborhoods Release ' and its certificate must outlive every CI build
+      # that runs while the release sits in App Review — resubmission re-checks the
+      # signature, and a revoked certificate fails it. The release profile keeps that
+      # certificate out of the orphan sweep too, since an orphan is a certificate no
+      # profile at all points to.
+      - name: Retire earlier builds' certificates
+        if: steps.source.outputs.mode == 'per-build'
+        run: Tools/bootstrap_signing.py cleanup --profile-prefix "$PROFILE_PREFIX" --include-orphans
+
+      - name: Create this build's certificate
+        if: steps.source.outputs.mode == 'per-build'
+        run: |
+          Tools/bootstrap_signing.py create \
+            --ephemeral \
+            --profile-name "$PROFILE_PREFIX$GITHUB_RUN_ID" \
+            --out-dir "$RUNNER_TEMP/minted"
+
+      - name: Set up code signing
+        id: signing
+        uses: ./.github/actions/setup-signing
+        with:
+          secrets-directory: ${{ steps.source.outputs.mode == 'per-build' && format('{0}/minted', runner.temp) || '' }}
+          certificate-p12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          certificate-password: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          provisioning-profile: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+
+      - name: Set build number
+        run: |
+          BUILD_NUMBER=$(date +%Y%m%d%H%M)
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+
+      - name: Archive
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project NeighborhoodQuiz.xcodeproj \
+            -scheme NeighborhoodQuiz \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/NeighborhoodQuiz.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_IDENTITY="${{ steps.signing.outputs.identity }}" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.profile-name }}" \
+            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }}
+
+      - name: Configure export options
+        env:
+          IDENTITY: ${{ steps.signing.outputs.identity }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
+        run: |
+          /usr/libexec/PlistBuddy \
+            -c "Add :teamID string $TEAM_ID" \
+            -c "Add :signingCertificate string $IDENTITY" \
+            -c "Add :provisioningProfiles:com.nycneighborhoodsquiz.app string $PROFILE_NAME" \
+            ExportOptions.plist
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/NeighborhoodQuiz.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/export
+
+      - name: Upload to TestFlight
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file $RUNNER_TEMP/export/NeighborhoodQuiz.ipa \
+            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          rm -rf ./private_keys "$RUNNER_TEMP/minted" "$RUNNER_TEMP/code-signing"
+          security delete-keychain "${{ steps.signing.outputs.keychain-path }}" 2>/dev/null || true
+
+      - name: Post build info
+        if: success()
+        run: |
+          echo "### TestFlight Build Uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build:** ${{ env.BUILD_NUMBER }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

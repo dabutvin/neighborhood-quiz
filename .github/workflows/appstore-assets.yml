@@ -1,0 +1,153 @@
+name: App Store Assets
+
+# The PR screenshots are shot on whatever iPhone the runner has and posted for a
+# reviewer to glance at — the wrong sizes for the store, and unframed. This is the
+# other job: it shoots a chosen few screens on the exact simulators App Review asks
+# for — iPhone 6.9 inch and iPad 13 inch — and frames each with a line of copy, so
+# what comes out of it uploads straight to App Store Connect.
+#
+# It is hand-cranked rather than run on every push: store assets are wanted at a
+# release, not a commit. Run it from the Actions tab; the framed and raw shots come
+# back as a downloadable artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      appearance:
+        description: Light or dark screens
+        required: false
+        default: light
+        type: choice
+        options: [light, dark]
+
+concurrency:
+  group: appstore-assets-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  assets:
+    name: Capture App Store Assets
+    runs-on: macos-26
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Install Pillow
+        run: python3 -m pip install --quiet --break-system-packages Pillow
+
+      - name: Build for Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NeighborhoodQuiz.xcodeproj \
+            -scheme NeighborhoodQuiz \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            -derivedDataPath DerivedData \
+            ARCHS="$(uname -m)" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+          if grep -q "BUILD FAILED" build.log; then exit 1; fi
+
+      - name: Capture and frame
+        env:
+          APPEARANCE: ${{ github.event.inputs.appearance || 'light' }}
+        run: |
+          set -euo pipefail
+
+          BUNDLE_ID="com.nycneighborhoodsquiz.app"
+          APP_PATH=$(find DerivedData/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
+          if [ -z "$APP_PATH" ]; then echo "ERROR: no .app built"; exit 1; fi
+
+          # The screens the store leads with, each with the line of copy it carries.
+          # Kept here, in the order they will sit on the listing, so the story a
+          # browser reads is set in one place.
+          SCREENS=(
+            "map:-map:Manhattan, drawn by hand"
+            "streets:-map-zoomed:Every avenue, every cross street"
+          )
+
+          # Pick the first simulator on offer whose name matches one we want, and
+          # make it if the runner has the device type but has not built one yet.
+          pick() {
+            local kind="$1"; shift
+            local available; available=$(xcrun simctl list devices available)
+            local udid=""
+            for name in "$@"; do
+              udid=$(grep -m1 "^ *$name (" <<< "$available" | sed -E 's/.*\(([0-9A-Fa-f-]{36})\).*/\1/' || true)
+              [ -n "$udid" ] && { echo "$udid"; return; }
+            done
+            # None booted yet — create the first named type against the newest runtime.
+            local runtime; runtime=$(xcrun simctl list runtimes | grep -E 'iOS' | tail -1 | sed -E 's/.*(com\.apple[^ ]*).*/\1/')
+            for name in "$@"; do
+              udid=$(xcrun simctl create "$name" "$name" "$runtime" 2>/dev/null || true)
+              [ -n "$udid" ] && { echo "$udid"; return; }
+            done
+            echo "ERROR: no $kind simulator available" >&2
+            echo "$available" >&2
+            return 1
+          }
+
+          shoot() {
+            local label="$1" udid="$2"
+            mkdir -p "out/$label/raw" "out/$label/framed"
+            xcrun simctl boot "$udid" 2>/dev/null || true
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl ui "$udid" appearance "$APPEARANCE"
+            # The status bar App Review likes: full bars, full battery, 9:41.
+            xcrun simctl status_bar "$udid" override \
+              --time "9:41" --batteryState charged --batteryLevel 100 \
+              --cellularBars 4 --wifiBars 3 --dataNetwork wifi 2>/dev/null || true
+            xcrun simctl install "$udid" "$APP_PATH"
+
+            local order=1
+            for entry in "${SCREENS[@]}"; do
+              local slug="${entry%%:*}"; local rest="${entry#*:}"
+              local arg="${rest%%:*}"; local caption="${rest#*:}"
+              local raw="out/$label/raw/${slug}.png"
+              xcrun simctl launch "$udid" "$BUNDLE_ID" "$arg"
+              sleep 3
+              xcrun simctl io "$udid" screenshot "$raw"
+              xcrun simctl terminate "$udid" "$BUNDLE_ID" 2>/dev/null || true
+              python3 Tools/appstore_frames.py \
+                --input "$raw" \
+                --output "$(printf 'out/%s/framed/%02d_%s.png' "$label" "$order" "$slug")" \
+                --caption "$caption"
+              order=$((order + 1))
+            done
+            echo "== $label ($APPEARANCE) =="
+            ls -la "out/$label/framed" || true
+          }
+
+          IPHONE=$(pick "iPhone 6.9-inch" "iPhone 16 Pro Max" "iPhone 17 Pro Max" "iPhone 15 Pro Max")
+          IPAD=$(pick "iPad 13-inch" "iPad Pro 13-inch (M4)" "iPad Pro (12.9-inch) (6th generation)" "iPad Pro (12.9-inch) (5th generation)")
+
+          shoot iphone_6_9 "$IPHONE"
+          shoot ipad_13 "$IPAD"
+
+          echo "Sizes captured:"
+          python3 -c "import glob; from PIL import Image; [print(p, Image.open(p).size) for p in sorted(glob.glob('out/*/framed/*.png'))]"
+
+      - name: Upload assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: appstore-assets
+          path: out/
+          if-no-files-found: error

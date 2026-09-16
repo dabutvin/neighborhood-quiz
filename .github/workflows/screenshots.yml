@@ -1,0 +1,382 @@
+name: PR Screenshots
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  # A hand crank, for when the run a pull request should have started never
+  # arrives — a runner shortage, a cancelled queue, an Actions hiccup. Give it
+  # the pull request number and it posts the shots to that one as usual.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to post the screenshots to
+        required: true
+
+concurrency:
+  group: screenshots-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  screenshots:
+    name: Capture App Screenshots
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # The destination is generic so that nothing here has to wait on a
+      # simulator, and `ARCHS` keeps a generic destination from compiling every
+      # architecture the simulator platform has.
+      - name: Build for Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project NeighborhoodQuiz.xcodeproj \
+            -scheme NeighborhoodQuiz \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            -derivedDataPath DerivedData \
+            ARCHS="$(uname -m)" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+          if grep -q "BUILD FAILED" build.log; then exit 1; fi
+
+      # After the build rather than beside it: booting takes every core a runner
+      # has, and sharing them made the build four times slower for no gain.
+      - name: Wake up the iPhone simulator
+        id: simulator
+        uses: ./.github/actions/simulator
+
+      - name: Capture iPhone screenshots
+        env:
+          UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          mkdir -p screenshots
+
+          BUNDLE_ID="com.nycneighborhoodsquiz.app"
+
+          APP_PATH=$(find DerivedData/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Could not find built .app bundle"
+            exit 1
+          fi
+          echo "Installing: $APP_PATH"
+          xcrun simctl install "$UDID" "$APP_PATH"
+
+          # Each screen is shot in both appearances off a single launch: the views
+          # read the colour scheme out of the environment, so flipping the
+          # simulator under a running app re-draws it, and the two shots then show
+          # the same map rather than two rolls of the dice. The launch arguments
+          # are the ones `NeighborhoodQuizApp.Screen` understands — `-map` is the
+          # home screen as it opens, `-map-zoomed` the same map already pulled in
+          # far enough that the numbered cross streets have their names on.
+          capture() {
+            local order="$1"
+            local screen="$2"
+            shift 2
+
+            local light dark
+            light=$(printf 'screenshots/%02d_%s_light.png' "$order" "$screen")
+            dark=$(printf 'screenshots/%02d_%s_dark.png' "$((order + 1))" "$screen")
+
+            xcrun simctl ui "$UDID" appearance light
+            xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@"
+            sleep 3
+            xcrun simctl io "$UDID" screenshot "$light"
+
+            xcrun simctl ui "$UDID" appearance dark
+            sleep 2
+            xcrun simctl io "$UDID" screenshot "$dark"
+
+            xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+            echo "Captured: $light, $dark"
+          }
+
+          capture 1 map -map
+          capture 3 map_zoomed -map-zoomed
+
+          xcrun simctl status_bar "$UDID" clear
+          # Put away before the tablet is woken, so the two are never sharing the
+          # runner's cores.
+          xcrun simctl shutdown "$UDID" 2>/dev/null || true
+
+          echo "Phone screenshots captured:"
+          ls -la screenshots/
+
+      # The same screens again on a tablet: the map fits itself to whatever glass
+      # it is given, so the tablet shows more of the island at the same zoom.
+      - name: Wake up the iPad simulator
+        id: ipad
+        uses: ./.github/actions/simulator
+        with:
+          family: iPad
+
+      - name: Capture iPad screenshots
+        env:
+          UDID: ${{ steps.ipad.outputs.udid }}
+        run: |
+          set -euo pipefail
+
+          BUNDLE_ID="com.nycneighborhoodsquiz.app"
+          APP_PATH=$(find DerivedData/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
+          xcrun simctl install "$UDID" "$APP_PATH"
+
+          # The same two shots off one launch the phone gets, named `ipad_<screen>` so
+          # the gallery files them under their own heading.
+          capture() {
+            local order="$1"
+            local screen="$2"
+            shift 2
+
+            local light dark
+            light=$(printf 'screenshots/%02d_ipad_%s_light.png' "$order" "$screen")
+            dark=$(printf 'screenshots/%02d_ipad_%s_dark.png' "$((order + 1))" "$screen")
+
+            xcrun simctl ui "$UDID" appearance light
+            xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@"
+            sleep 3
+            xcrun simctl io "$UDID" screenshot "$light"
+
+            xcrun simctl ui "$UDID" appearance dark
+            sleep 2
+            xcrun simctl io "$UDID" screenshot "$dark"
+
+            xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+            echo "Captured: $light, $dark"
+          }
+
+          # Numbered past every phone shot, so the tablet's sit together at the end of
+          # the gallery.
+          capture 21 map -map
+
+          xcrun simctl status_bar "$UDID" clear
+
+          echo "All screenshots captured:"
+          ls -la screenshots/
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screenshots-pr-${{ github.event.pull_request.number || inputs.pr }}
+          path: screenshots/
+          retention-days: 30
+
+      - name: Post screenshots to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const prNumber = context.payload.pull_request?.number
+              ?? Number(context.payload.inputs.pr);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = 'ci-screenshots';
+            const screenshotsDir = 'screenshots';
+
+            // Ensure the ci-screenshots branch exists
+            async function ensureBranch() {
+              try {
+                await github.rest.repos.getBranch({ owner, repo, branch });
+              } catch (e) {
+                if (e.status === 404) {
+                  const defaultBranch = await github.rest.repos.getBranch({
+                    owner, repo, branch: 'main'
+                  });
+                  await github.rest.git.createRef({
+                    owner, repo,
+                    ref: `refs/heads/${branch}`,
+                    sha: defaultBranch.data.commit.sha
+                  });
+                  core.info(`Created branch: ${branch}`);
+                } else {
+                  throw e;
+                }
+              }
+            }
+
+            // Run `worker` over `items`, `limit` of them in flight at a time.
+            async function inParallel(items, limit, worker) {
+              const results = new Array(items.length);
+              let next = 0;
+              await Promise.all(
+                Array.from({ length: Math.min(limit, items.length) }, async () => {
+                  while (next < items.length) {
+                    const i = next++;
+                    results[i] = await worker(items[i], i);
+                  }
+                })
+              );
+              return results;
+            }
+
+            await ensureBranch();
+
+            const files = fs.readdirSync(screenshotsDir)
+              .filter(f => f.endsWith('.png'))
+              .sort();
+
+            // A blob apiece, several at a time, and then one commit holding all of
+            // them. Writing the files one at a time through the contents API meant
+            // a round trip and a commit each; this is one commit and a few seconds.
+            const blobs = await inParallel(files, 8, async (file) => {
+              const content = fs.readFileSync(path.join(screenshotsDir, file));
+              const { data } = await github.rest.git.createBlob({
+                owner, repo,
+                content: content.toString('base64'),
+                encoding: 'base64'
+              });
+              core.info(`Uploaded ${file}`);
+              return {
+                path: `pr-${prNumber}/${file}`,
+                mode: '100644',
+                type: 'blob',
+                sha: data.sha
+              };
+            });
+
+            // Every pull request writes to this one branch, so the commit is built
+            // on whatever the tip is at the moment it lands. If somebody else's run
+            // got there first, build it again on top of theirs rather than over it.
+            async function commitShots() {
+              const ref = await github.rest.git.getRef({
+                owner, repo, ref: `heads/${branch}`
+              });
+              const parent = ref.data.object.sha;
+              const parentCommit = await github.rest.git.getCommit({
+                owner, repo, commit_sha: parent
+              });
+              const tree = await github.rest.git.createTree({
+                owner, repo,
+                base_tree: parentCommit.data.tree.sha,
+                tree: blobs
+              });
+              const commit = await github.rest.git.createCommit({
+                owner, repo,
+                message: `Update screenshots for PR #${prNumber}`,
+                tree: tree.data.sha,
+                parents: [parent]
+              });
+              await github.rest.git.updateRef({
+                owner, repo,
+                ref: `heads/${branch}`,
+                sha: commit.data.sha
+              });
+            }
+
+            for (let attempt = 1; ; attempt++) {
+              try {
+                await commitShots();
+                break;
+              } catch (e) {
+                if (e.status !== 422 || attempt === 5) throw e;
+                core.info(`${branch} moved under us; trying again (${attempt})`);
+              }
+            }
+
+            const images = files.map(file => ({
+              name: file,
+              url: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/pr-${prNumber}/${file}`
+            }));
+
+            // A pull request event knows all of this; a hand-cranked run has to be told
+            // the number and look the rest up.
+            const pr = context.payload.pull_request
+              ?? (await github.rest.pulls.get({ owner, repo, pull_number: prNumber })).data;
+
+            const commitSha = pr.head.sha.substring(0, 7);
+            const cacheBust = Date.now();
+
+            let body = `## 📱 App Screenshots\n\n`;
+            body += `> Automatically captured from commit \`${commitSha}\` on **${pr.head.ref}**\n\n`;
+
+            // A screen is named <order>_<screen>_<appearance>.png and gets its own
+            // light/dark row; anything else is shown on its own.
+            const screens = [];
+            const loose = [];
+            const screenNamed = (name) => {
+              let screen = screens.find(s => s.name === name);
+              if (!screen) { screen = { name }; screens.push(screen); }
+              return screen;
+            };
+            for (const img of images) {
+              const pair = img.name.match(/^\d+_(.+)_(light|dark)\.png$/);
+              if (pair) { screenNamed(pair[1])[pair[2]] = img.url; continue; }
+              loose.push(img);
+            }
+
+            const shot = (url) => `<img src="${url}?v=${cacheBust}" width="300" />`;
+            const cell = (url) => url ? shot(url) : '—';
+
+            // A tablet's shot is headed "iPad …" rather than "Ipad …".
+            const heading = (name) => {
+              const label = name.replace(/_/g, ' ');
+              if (label.startsWith('ipad ')) return `iPad ${label.slice(5)}`;
+              return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+            };
+
+            for (const screen of screens) {
+              body += `### ${heading(screen.name)}\n\n`;
+              body += `| Light Mode | Dark Mode |\n`;
+              body += `|:---:|:---:|\n`;
+              body += `| ${cell(screen.light)} | ${cell(screen.dark)} |\n\n`;
+            }
+
+            for (const img of loose) {
+              body += `### ${img.name.replace('.png', '').replace(/_/g, ' ')}\n`;
+              body += `<img src="${img.url}?v=${cacheBust}" width="350" />\n\n`;
+            }
+
+            body += `\n<sub>📦 Full-resolution screenshots available in the <a href="${pr.html_url}/checks">workflow artifacts</a>.</sub>\n`;
+            body += `\n<!-- pr-screenshots-bot -->`;
+
+            // Find existing bot comment to update, or create a new one
+            const watermark = '<!-- pr-screenshots-bot -->';
+            const comments = await github.rest.issues.listComments({
+              owner, repo, issue_number: prNumber
+            });
+
+            const existing = comments.data.find(c => c.body && c.body.includes(watermark));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo,
+                comment_id: existing.id,
+                body
+              });
+              core.info(`Updated existing comment #${existing.id}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: prNumber,
+                body
+              });
+              core.info('Created new PR comment with screenshots');
+            }
