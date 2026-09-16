@@ -31,6 +31,15 @@ struct MapPalette {
     var street: Color
     var park: Color
     var parkInk: Color
+    /// The line round every neighbourhood, drawn faintly enough to read as a border
+    /// rather than as another road.
+    var border: Color
+    /// The wash a picked-out neighbourhood is filled with, and the firm line and
+    /// lettering that go with it. Terracotta, because it is the one warm colour that
+    /// neither the sage of the parks nor the brown of the streets is already using —
+    /// a highlight has to be unmistakably *not* part of the drawing underneath it.
+    var highlight: Color
+    var highlightInk: Color
     /// What a street name is written in, and the halo of paper that keeps it legible
     /// where it crosses its own street.
     var label: Color
@@ -47,6 +56,9 @@ struct MapPalette {
         street: Color(hex: 0xB7A78F),
         park: Color(hex: 0xBCD1A6),
         parkInk: Color(hex: 0x7D976A),
+        border: Color(hex: 0x9C8A72),
+        highlight: Color(hex: 0xD98A5E),
+        highlightInk: Color(hex: 0x9A472A),
         label: Color(hex: 0x5B4A3A),
         labelHalo: Color(hex: 0xF7F0DF),
         grain: Color(hex: 0x5B4A3A)
@@ -64,6 +76,9 @@ struct MapPalette {
         street: Color(hex: 0x7C7160),
         park: Color(hex: 0x36452F),
         parkInk: Color(hex: 0x6C8A5C),
+        border: Color(hex: 0x7A6E5B),
+        highlight: Color(hex: 0xD4794C),
+        highlightInk: Color(hex: 0xF0A87E),
         label: Color(hex: 0xE2D6BE),
         labelHalo: Color(hex: 0x2B2A26),
         grain: Color(hex: 0xEFE6D2)
@@ -102,6 +117,11 @@ struct MapPalette {
         case .side: return 9
         }
     }
+
+    /// The size a picked-out neighbourhood's name is written at. Larger than any street
+    /// name, and claiming its paper first, because while it is showing it is the thing
+    /// the map is saying.
+    var neighborhoodLabelSize: Double { 17 }
 }
 
 /// The hand the map is written in.

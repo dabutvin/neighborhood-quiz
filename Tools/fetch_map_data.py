@@ -9,11 +9,12 @@ It writes NeighborhoodQuiz/Resources/manhattan.json, which is committed. The app
 reads that file and nothing else; CI never touches the network and neither does a
 shipped build. This is the same arrangement the Park Slope map uses.
 
-Three datasets, all from data.cityofnewyork.us:
+Four datasets, all from data.cityofnewyork.us:
 
-  Centerline (inkn-q76z)         every street segment in the city, with its name
-  Borough Boundaries (gthc-hcne) the real shoreline, piers and all
-  Parks Properties (enfh-gkve)   the greens, Central Park chief among them
+  Centerline (inkn-q76z)          every street segment in the city, with its name
+  Borough Boundaries (gthc-hcne)  the real shoreline, piers and all
+  Parks Properties (enfh-gkve)    the greens, Central Park chief among them
+  2020 NTAs (9nt8-h7nd)           the neighborhoods, which are the point of the app
 
 What comes back is not drawable as it stands. The city stores a street as the
 dozens of little segments between its corners — Broadway is 389 rows — named in
@@ -38,6 +39,7 @@ DOMAIN = "https://data.cityofnewyork.us/resource"
 CENTERLINE = "inkn-q76z"
 BOROUGHS = "gthc-hcne"
 PARKS = "enfh-gkve"
+NEIGHBORHOODS = "9nt8-h7nd"
 MANHATTAN = "1"
 
 OUT = Path(__file__).resolve().parents[1] / "NeighborhoodQuiz/Resources/manhattan.json"
@@ -64,6 +66,18 @@ MIN_RING_AREA = 1e-5
 # degenerate rather than small — Washington Square is a twentieth of the area the
 # smallest island has to clear, and belongs on the map.
 MIN_PARK_AREA = 1e-7
+
+# A neighborhood's outline is thinned about as hard as the shoreline. It is a shape
+# somebody taps rather than reads, and the tap is tested against the thinned ring, so
+# what is drawn and what is hit are the same polygon either way.
+NEIGHBORHOOD_TOLERANCE = 0.00025
+
+# The NTA table is not only neighborhoods. Type 9 is a park or a cemetery — Central
+# Park, Highbridge, Inwood Hill, Randall's Island — and type 6 is the United Nations,
+# which is a place but not a neighborhood anybody is asked to name. Only type 0 is
+# somewhere people live and call something.
+NEIGHBORHOOD_TYPE = "0"
+
 # Manhattan borough runs down to Governors, Ellis and Liberty Islands. They are real
 # but they are a mile out to sea, and a map that fits them in shrinks the island it
 # is actually about. Ellis and Liberty sit west of anything Manhattan proper reaches,
@@ -458,6 +472,30 @@ def main() -> None:
     # being enough the moment a long highway could sit above a shorter avenue.
     streets.sort(key=lambda s: (s["tier"], -s["length"]))
 
+    # --- the neighborhoods
+    nta_rows = fetch(
+        NEIGHBORHOODS,
+        where=f"boroname='Manhattan' AND ntatype='{NEIGHBORHOOD_TYPE}'",
+        limit=500,
+    )
+    neighborhoods = []
+    for row in nta_rows:
+        geometry = row.get("geometry")
+        name = (row["properties"].get("ntaname") or "").strip()
+        if not geometry or not name:
+            continue
+        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        rings = []
+        for polygon in polygons:
+            ring = thin_ring([(x, y) for x, y in polygon[0]], NEIGHBORHOOD_TOLERANCE)
+            if len(ring) >= 4 and ring_area(ring) >= MIN_PARK_AREA:
+                rings.append(ring)
+        if rings:
+            neighborhoods.append({"name": name, "rings": rings})
+    neighborhoods.sort(key=lambda n: n["name"])
+    print(f"    {len(neighborhoods)} neighborhoods, "
+          f"{sum(len(r) for n in neighborhoods for r in n['rings'])} points")
+
     # --- write it
     names = [s["name"] for s in streets]
     roads = []
@@ -476,11 +514,16 @@ def main() -> None:
         "roads": roads,
         "land": [round_points(r, ring=True) for r in land],
         "parks": [{"name": p["name"], "ring": round_points(p["ring"], ring=True)} for p in parks],
+        "neighborhoods": [
+            {"name": n["name"], "rings": [round_points(r, ring=True) for r in n["rings"]]}
+            for n in neighborhoods
+        ],
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(document, separators=(",", ":")))
     print(f"\nwrote {OUT} ({OUT.stat().st_size / 1024:.0f} KB)")
-    print(f"  {len(names)} streets, {len(roads)} runs, {len(land)} islands, {len(parks)} greens")
+    print(f"  {len(names)} streets, {len(roads)} runs, {len(land)} islands, "
+          f"{len(parks)} greens, {len(neighborhoods)} neighborhoods")
 
 
 if __name__ == "__main__":
