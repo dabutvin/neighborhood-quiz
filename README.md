@@ -10,25 +10,50 @@ streets, Central Park and the water round it.
 
 ## The map
 
-The map is not a tile server and not a `MKMapView`. It is drawn from two things the app
-carries in its binary:
+The map is not a tile server and not an `MKMapView`, but nor is it invented. It is the
+City of New York's own street centreline file, drawn by hand.
 
-- **The 1811 grid, as arithmetic.** Above Houston Street Manhattan is a ruled sheet:
-  numbered streets every twentieth of a mile, avenues at fixed distances either side of
-  Fifth, the whole thing turned about twenty-nine degrees east of north. `ManhattanGrid`
-  is that ruling, and it lands where it should — Times Square, Columbus Circle and the
-  north-east corner of Central Park all come out within a block of where they are, which
-  `ManhattanGridTests` pins down against their real coordinates.
-- **A traced shoreline.** Three dozen fixed points round the island, in
-  `ManhattanMapData.shoreline`.
+`Tools/fetch_map_data.py` pulls three datasets from [NYC Open Data](https://data.cityofnewyork.us)
+and writes `NeighborhoodQuiz/Resources/manhattan.json`, which is committed:
 
-Everything else falls out of those two. Each street is drawn far too long — out into the
-Hudson on one side and the East River on the other — and then cut against the shoreline
-by `Shoreline.clip`, so the map's edges all come from the one traced outline and a
-correction to the shoreline corrects every street that meets it. Below Fourteenth, where
-the ruling gives out and the streets have names, a handful are traced by hand instead:
-Houston, Canal, Delancey, the Bowery, Chambers, Wall — and Broadway, which was a
-footpath before there was a grid and still refuses it.
+| Dataset | What it gives |
+|---|---|
+| Centerline (`inkn-q76z`) | every street segment in Manhattan, with its name |
+| Borough Boundaries (`gthc-hcne`) | the real shoreline, piers and all |
+| Parks Properties (`enfh-gkve`) | the greens, Central Park chief among them |
+
+It runs on demand, never at build time and never at runtime. CI does not touch the
+network and neither does a shipped build.
+
+What comes back is not drawable as it stands, and most of the tool is the difference:
+
+- **The city stores a street as the pieces between its corners.** Broadway is 389 rows.
+  Those are sewn back into whole streets on shared endpoints — 12,025 segments become
+  1,528 runs — so that Broadway is one line with one name on it rather than 389.
+- **Names are stored clipped and shouted**: `1 AVE`, `E  HOUSTON ST`. They are spelled
+  out the way a person writes them, which includes knowing that a numbered *avenue* is
+  written in words (Fifth Avenue) and a numbered *street* in figures (42nd Street).
+- **Ramps and service roads are named like streets and are not streets.** `FDR DRIVE NB
+  EN E HOUSTON ST` is plumbing; 229 rows like it are dropped.
+- **There is no "avenue" in the data** — no road class at all, only a roadway type that
+  tells a street from a bridge. So rank is taken from the one thing that does separate
+  an avenue: length. The streets are sorted by how far they run and cut into three
+  bands, which means the map re-ranks itself if the city re-surveys a block and nothing
+  anywhere holds a hand-written list of which streets matter.
+- **37,252 points is more than a shaky pen can show**, so the geometry is thinned to
+  5,800. The shoreline is thinned harder still — it is one path that is always on screen
+  and so can never be culled — but only as hard as each island's own shape allows: the
+  tool backs the tolerance off until the ring stops folding over itself, because a
+  tolerance that smooths a pier off Manhattan pinches Wards Island into a bow tie.
+
+The result is 216 KB, 967 streets and four islands. Everything below Houston Street is
+there, because it is there in the data; Washington Heights is laid out the way it was
+actually laid out rather than the way the 1811 grid would have continued.
+
+The one thing left of that grid is its bearing. Manhattan runs about twenty-nine degrees
+east of north, and turning the projected plane back by that much is what stands the
+avenues upright and lays the cross streets flat — the difference between a drawing and a
+satellite photograph.
 
 ### Why it wobbles
 
@@ -42,6 +67,12 @@ slightly differently, because a person going over a line twice never quite retra
 The wobble is seeded, which matters more than it sounds: an unseeded one would re-roll
 itself on every redraw and the island would shimmer under your finger. Each road gets its
 own seed from its place in the list, so it wobbles the same way for ever.
+
+It is also a good deal steadier than it started. The first settings were chosen against
+269 generated streets, where a wandering line was most of what said the drawing was
+drawn; against fifteen hundred real ones the same numbers read as a shake rather than a
+style, and Broadway wavered where Broadway does not. At a third of that stray the
+doubled stroke and the soft corners carry the hand, which is where it shows anyway.
 
 Manhattan is an island, so the palette is used the other way up from the Brooklyn map:
 there, paper is the background and the neighbourhood is a lighter patch on it; here the
@@ -65,19 +96,19 @@ NeighborhoodQuiz/
 │   └── NeighborhoodQuizApp.swift   # App entry point, and the launch arguments CI shoots with
 ├── Map/
 │   ├── Geography.swift             # A coordinate, and a Mercator turned so the avenues stand up
-│   ├── ManhattanGrid.swift         # The 1811 grid as arithmetic: street and avenue to lon/lat
-│   ├── ManhattanMapData.swift      # The shoreline, the park, the avenues, the streets, Broadway
-│   ├── Shoreline.swift             # Cutting lines off at the water's edge
+│   ├── ManhattanMapData.swift      # Reads manhattan.json: the island, the greens, the streets
+│   ├── Polyline.swift              # Measuring along a line: length, middle, which way a name goes
 │   ├── Pen.swift                   # The unsteady hand: seeded wobble, after rough.js
 │   ├── DrawnMap.swift              # Builds the whole drawing once for a given size
-│   ├── MapCamera.swift             # How far in, and how far pushed about
+│   ├── MapCamera.swift             # How far in, how far pushed about, and what is on the glass
 │   └── MapPalette.swift            # Paper, ink, sage — day and night — and the hand it is lettered in
 ├── Views/
 │   ├── HomeView.swift              # The screen: the map, the header, the zoom buttons, the gestures
 │   ├── ManhattanMapView.swift      # One Canvas: the island under the transform, the names over it
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette
 └── Resources/
-    ├── Assets.xcassets             # App icon (drawn by Tools/generate_app_icon.py) and accent colour
+    ├── manhattan.json              # The city's Manhattan, written by Tools/fetch_map_data.py
+    ├── Assets.xcassets             # App icon (drawn from the same data) and accent colour
     └── PrivacyInfo.xcprivacy       # Nothing collected, nothing sent
 ```
 
@@ -111,40 +142,34 @@ open NeighborhoodQuiz.xcodeproj
 generated from `project.yml` and are gitignored — edit `project.yml`, never the generated
 project.
 
-### App icon
-
-The icon is the map, not a picture of a map: it is projected from the same shoreline and
-the same grid the app draws from, so correcting the island corrects the tile. What it does
-differently is the angle — the app stands the avenues upright, which leaves a tall thin
-island in a square tile, so the icon turns the whole thing another forty-five degrees and
-lets Manhattan run corner to corner.
+### Refreshing the map
 
 ```bash
-python3 Tools/generate_app_icon.py
+python3 Tools/fetch_map_data.py       # re-reads NYC Open Data
+python3 Tools/generate_app_icon.py    # the icon is the same map, so it follows
 ```
 
-No Pillow, no cairo, nothing to install: it rasterises by scanline at four times the final
-size and averages back down, and writes the PNGs by hand. It writes three tiles — the
-standard one, the dark one and the grayscale tinted one. Commit the regenerated PNGs; the
-build reads them, not the script.
+Commit whatever changes. There is no list of streets to maintain: a street the city adds
+appears, one it renames is renamed, and the avenue/major/side ranking re-derives itself
+from the lengths.
 
-### Adding a street
+`ManhattanMapDataTests` is the check on a re-fetch — that the island is still an island
+and has not folded over itself, that every street is named exactly once, that the
+speller did not meet an abbreviation it does not know, that ramps stayed out, and that
+the streets below Houston are still there.
 
-Almost every street is already there, because the grid draws them. What needs adding is a
-street the grid cannot find:
+### App icon
 
-- **A numbered street** — it is drawn already. To give it a *name* at a wide zoom, add its
-  number to `majorCrossStreets`, and to `headlineCrossStreets` if it belongs on the opening
-  map.
-- **An avenue** — one line in `ManhattanMapData.avenues`: how far west of Fifth it runs (in
-  feet, negative east), between which two numbered streets, where along itself its name is
-  written, and how far in the map must be pulled before that name appears.
-- **A named street downtown** — a traced polyline in `namedStreets`. Overshoot the ends; the
-  shoreline will cut it.
+The icon is the map, not a picture of a map: it reads the very same `manhattan.json`,
+so a re-fetch corrects the tile too and the two cannot drift apart. What it does
+differently is the angle — the app stands the avenues upright, which leaves a tall thin
+island in a square tile, so the icon turns the whole thing another forty-five degrees and
+lets Manhattan run corner to corner. It draws the avenues only: at sixty points across,
+a hundred cross streets are not lines but a smudge.
 
-`ManhattanMapDataTests` checks the table is coherent and `DrawnMapTests` checks that not one
-road is clipped out of existence — which on a map made of two hundred lines is exactly the
-sort of thing nobody notices by eye.
+No Pillow, no cairo, nothing to install — it rasterises by scanline at four times the
+final size, averages back down, and writes the PNGs by hand. Commit the regenerated
+PNGs; the build reads them, not the script.
 
 ## How changes ship
 

@@ -44,6 +44,21 @@ struct MapCamera: Equatable {
         )
     }
 
+    /// The piece of the drawing that is on the glass, in the drawing's own coordinates.
+    ///
+    /// This is `screenPoint` run backwards, and it is what lets the drawing skip the
+    /// nine tenths of itself that is off the edge: at four times in, a phone is showing
+    /// about a twentieth of the island, and stroking the other nineteen twentieths every
+    /// frame is most of what made a drag feel heavy.
+    func visibleRect(in size: CGSize, margin: Double = 0) -> CGRect {
+        let centre = MapCamera.centre(of: size)
+        let left = (-centre.x - Double(pan.width)) / zoom + centre.x - margin
+        let top = (-centre.y - Double(pan.height)) / zoom + centre.y - margin
+        let right = (Double(size.width) - centre.x - Double(pan.width)) / zoom + centre.x + margin
+        let bottom = (Double(size.height) - centre.y - Double(pan.height)) / zoom + centre.y + margin
+        return CGRect(x: left, y: top, width: right - left, height: bottom - top)
+    }
+
     /// A camera looking straight at one point of the drawing.
     static func centred(on point: CGPoint, zoom: Double, in size: CGSize) -> MapCamera {
         let centre = MapCamera.centre(of: size)

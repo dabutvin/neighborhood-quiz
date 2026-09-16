@@ -4,48 +4,43 @@ import XCTest
 
 final class MapProjectionTests: XCTestCase {
     private let size = CGSize(width: 400, height: 800)
+    private var island: [Coordinate] { ManhattanMapData.land.flatMap { $0 } }
+
+    private func fitted(padding: Double = 10) -> MapProjection {
+        MapProjection(
+            fitting: island,
+            in: size,
+            padding: padding,
+            rotation: -ManhattanGeometry.gridBearingDegrees
+        )
+    }
 
     /// With the plane turned back by the grid's own bearing, an avenue must come out
-    /// vertical. This is the whole reason the projection can be turned at all.
+    /// close to vertical. This is the whole reason the projection can be turned at all,
+    /// and now it is checked against a real avenue rather than a generated one.
     func testTurningThePlaneStandsTheAvenuesUp() {
-        let projection = MapProjection(
-            fitting: ManhattanMapData.shoreline,
-            in: size,
-            padding: 10,
-            rotation: -ManhattanGrid.bearingDegrees
-        )
+        let projection = fitted()
+        let fifth = ManhattanMapData.roads.first { $0.name == "Fifth Avenue" && $0.carriesName }
+        let points = projection.points(fifth?.coordinates ?? [])
+        XCTAssertGreaterThanOrEqual(points.count, 2, "Fifth Avenue is missing from the map")
 
-        let downtown = projection.point(ManhattanGrid.coordinate(street: 20, westOfFifth: 0))
-        let uptown = projection.point(ManhattanGrid.coordinate(street: 100, westOfFifth: 0))
-
-        XCTAssertEqual(Double(downtown.x), Double(uptown.x), accuracy: 1.0)
-        XCTAssertLessThan(uptown.y, downtown.y, "Uptown is up the page")
+        let run = Polyline.heading(of: points, near: Polyline.midpoint(of: points))
+        XCTAssertEqual(run, -.pi / 2, accuracy: 0.08, "Fifth Avenue should run up the page")
     }
 
     func testTurningThePlaneLaysTheCrossStreetsFlat() {
-        let projection = MapProjection(
-            fitting: ManhattanMapData.shoreline,
-            in: size,
-            padding: 10,
-            rotation: -ManhattanGrid.bearingDegrees
-        )
+        let projection = fitted()
+        let street = ManhattanMapData.roads.first { $0.name == "East 42nd Street" && $0.carriesName }
+        let points = projection.points(street?.coordinates ?? [])
+        XCTAssertGreaterThanOrEqual(points.count, 2, "42nd Street is missing from the map")
 
-        let east = projection.point(ManhattanGrid.coordinate(street: 50, westOfFifth: -2000))
-        let west = projection.point(ManhattanGrid.coordinate(street: 50, westOfFifth: 4000))
-
-        XCTAssertEqual(Double(east.y), Double(west.y), accuracy: 1.0)
-        XCTAssertLessThan(west.x, east.x, "West of Fifth is to the left")
+        let run = Polyline.heading(of: points, near: Polyline.midpoint(of: points))
+        XCTAssertEqual(run, 0, accuracy: 0.12, "A cross street should lie flat")
     }
 
     func testTheFitStaysInsideThePaddingAndTouchesOneEdge() {
         let padding = 12.0
-        let projection = MapProjection(
-            fitting: ManhattanMapData.shoreline,
-            in: size,
-            padding: padding,
-            rotation: -ManhattanGrid.bearingDegrees
-        )
-        let points = projection.points(ManhattanMapData.shoreline)
+        let points = fitted(padding: padding).points(island)
 
         let minX = points.map { Double($0.x) }.min() ?? 0
         let maxX = points.map { Double($0.x) }.max() ?? 0
@@ -64,13 +59,7 @@ final class MapProjectionTests: XCTestCase {
     }
 
     func testTheFitIsCentredAcrossTheSlackDimension() {
-        let projection = MapProjection(
-            fitting: ManhattanMapData.shoreline,
-            in: size,
-            padding: 12,
-            rotation: -ManhattanGrid.bearingDegrees
-        )
-        let xs = projection.points(ManhattanMapData.shoreline).map { Double($0.x) }
+        let xs = fitted(padding: 12).points(island).map { Double($0.x) }
         let centre = ((xs.min() ?? 0) + (xs.max() ?? 0)) / 2
         XCTAssertEqual(centre, Double(size.width) / 2, accuracy: 0.001)
     }

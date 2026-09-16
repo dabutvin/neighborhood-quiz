@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Draw the app icon: the same Manhattan the app draws, turned onto the diagonal.
 
-The icon is the map, not a picture of a map — it is projected from the same shoreline
-and the same 1811 grid the Swift draws from (`ManhattanMapData`, `ManhattanGrid`), so
-correcting the island corrects the tile. What it does differently is the angle: the app
-stands the avenues upright, which leaves a tall thin island in a square tile, so the
-icon turns the whole thing another forty-five degrees and lets Manhattan run corner to
-corner.
+The icon is the map, not a picture of a map. It reads the very same
+NeighborhoodQuiz/Resources/manhattan.json the app reads, so a re-fetch of the city's
+data corrects the tile along with everything else and the two can never drift apart.
+What it does differently is the angle: the app stands the avenues upright, which
+leaves a tall thin island in a square tile, so the icon turns the whole thing another
+forty-five degrees and lets Manhattan run corner to corner.
 
 Deliberately dependency-free — no Pillow, no cairo — because it writes three PNGs a
 year and a toolchain nobody has installed is a toolchain that rots. It rasterises by
@@ -14,6 +14,7 @@ scanline at four times the final size and averages back down, which is slow and
 perfectly adequate.
 
 Usage:
+    python3 Tools/fetch_map_data.py     # if the data is stale
     python3 Tools/generate_app_icon.py
 
 Writes AppIcon.png, AppIcon-Dark.png and AppIcon-Tinted.png into
@@ -22,6 +23,7 @@ NeighborhoodQuiz/Resources/Assets.xcassets/AppIcon.appiconset/.
 
 from __future__ import annotations
 
+import json
 import math
 import struct
 import zlib
@@ -30,41 +32,20 @@ from pathlib import Path
 
 SIZE = 1024
 SUPERSAMPLE = 4
-# Where the app's own map is defined, kept in step with it by hand. Anything here that
-# drifts from the Swift will show up as an icon that is not the app's map.
-ROTATION_DEGREES = 16.0  # the app uses -29, which stands the avenues up
+# Manhattan's grid runs about twenty-nine degrees east of north; the app turns the
+# plane back by that to stand the avenues up. The icon turns it another forty-five so
+# the island runs corner to corner instead of filling a narrow stripe.
+ROTATION_DEGREES = -29.0 + 45.0
 PADDING = 40  # in final pixels, before supersampling
 
-OUTPUT = (
-    Path(__file__).resolve().parents[1]
-    / "NeighborhoodQuiz/Resources/Assets.xcassets/AppIcon.appiconset"
-)
+ROOT = Path(__file__).resolve().parents[1]
+DATA = ROOT / "NeighborhoodQuiz/Resources/manhattan.json"
+OUTPUT = ROOT / "NeighborhoodQuiz/Resources/Assets.xcassets/AppIcon.appiconset"
 
-# The shoreline, transcribed from ManhattanMapData.shoreline.
-SHORELINE = [
-    (-74.0170, 40.7033), (-74.0175, 40.7110), (-74.0168, 40.7185), (-74.0110, 40.7262),
-    (-74.0100, 40.7340), (-74.0095, 40.7420), (-74.0090, 40.7490), (-74.0070, 40.7570),
-    (-74.0000, 40.7650), (-73.9925, 40.7720), (-73.9855, 40.7855), (-73.9750, 40.8000),
-    (-73.9630, 40.8195), (-73.9545, 40.8350), (-73.9475, 40.8517), (-73.9345, 40.8690),
-    (-73.9270, 40.8760), (-73.9180, 40.8745), (-73.9230, 40.8620), (-73.9290, 40.8480),
-    (-73.9335, 40.8300), (-73.9320, 40.8155), (-73.9295, 40.8040), (-73.9310, 40.7950),
-    (-73.9400, 40.7825), (-73.9440, 40.7742), (-73.9490, 40.7660), (-73.9585, 40.7580),
-    (-73.9680, 40.7490), (-73.9730, 40.7405), (-73.9730, 40.7310), (-73.9745, 40.7188),
-    (-73.9765, 40.7135), (-73.9880, 40.7095), (-73.9985, 40.7075), (-74.0030, 40.7055),
-]
-
-# The avenues worth showing at icon size, as (feet west of Fifth, first street, last).
-ICON_AVENUES = [
-    (-2950, 1, 125), (-1650, 6, 129), (-840, 17, 132), (0, 8, 142),
-    (920, 3, 59), (1720, 11, 59), (2520, 13, 110), (3320, 13, 110), (4120, 14, 125),
-]
-
-BEARING_DEGREES = 29.0
-ANCHOR = (-73.98145, 40.75368)
-ANCHOR_STREET = 42.0
-FEET_PER_BLOCK = 5280.0 / 20
-METRES_PER_FOOT = 0.3048
-METRES_PER_DEGREE_LATITUDE = 111_320.0
+# Only the avenues. The tile is sixty points across on a home screen, where the
+# hundred-odd major cross streets are not lines but a smudge — the same lesson the
+# map itself learned at its widest zoom, arrived at from the other direction.
+ICON_TIERS = {0: 7.0}
 
 
 @dataclass(frozen=True)
@@ -107,19 +88,6 @@ TINTED = Palette(
     avenue=(0x3A, 0x3A, 0x3A),
     street=(0x8A, 0x8A, 0x8A),
 )
-
-
-def grid_coordinate(street: float, west_of_fifth: float) -> tuple[float, float]:
-    """The corner of a numbered street and a line so many feet west of Fifth Avenue."""
-    bearing = math.radians(BEARING_DEGREES)
-    along = (street - ANCHOR_STREET) * FEET_PER_BLOCK
-    north_feet = along * math.cos(bearing) + west_of_fifth * math.sin(bearing)
-    east_feet = along * math.sin(bearing) - west_of_fifth * math.cos(bearing)
-    metres_per_degree_longitude = METRES_PER_DEGREE_LATITUDE * math.cos(math.radians(ANCHOR[1]))
-    return (
-        ANCHOR[0] + east_feet * METRES_PER_FOOT / metres_per_degree_longitude,
-        ANCHOR[1] + north_feet * METRES_PER_FOOT / METRES_PER_DEGREE_LATITUDE,
-    )
 
 
 class Projection:
@@ -244,77 +212,41 @@ def write_png(path: Path, size: int, pixels: bytearray) -> None:
     )
 
 
-def inside(polygon, point) -> bool:
-    result = False
-    previous = len(polygon) - 1
-    for index in range(len(polygon)):
-        ax, ay = polygon[index]
-        bx, by = polygon[previous]
-        if (ay > point[1]) != (by > point[1]):
-            x = (bx - ax) * (point[1] - ay) / (by - ay) + ax
-            if point[0] < x:
-                result = not result
-        previous = index
-    return result
+def load():
+    if not DATA.exists():
+        raise SystemExit(f"{DATA} is missing — run Tools/fetch_map_data.py first")
+    return json.loads(DATA.read_text())
 
 
-def draw(palette: Palette) -> None:
+def draw(palette: Palette, data) -> None:
     size = SIZE * SUPERSAMPLE
-    projection = Projection(SHORELINE, size, PADDING * SUPERSAMPLE, ROTATION_DEGREES)
+    land = data["land"]
+    projection = Projection(
+        [tuple(c) for ring in land for c in ring], size, PADDING * SUPERSAMPLE, ROTATION_DEGREES
+    )
     canvas = Canvas(size, palette.water)
 
-    shore = [projection.point(c) for c in SHORELINE]
-    canvas.fill_polygon(shore, palette.land)
+    for ring in land:
+        canvas.fill_polygon([projection.point(c) for c in ring], palette.land)
+    for park in data["parks"]:
+        canvas.fill_polygon([projection.point(c) for c in park["ring"]], palette.park)
 
-    park = [
-        projection.point(grid_coordinate(59, 0)),
-        projection.point(grid_coordinate(110, 0)),
-        projection.point(grid_coordinate(110, 2520)),
-        projection.point(grid_coordinate(59, 2520)),
-    ]
-    canvas.fill_polygon(park, palette.park)
-
-    # Every fifth cross street, and then the avenues over them. Both are cut at the
-    # water by walking the line and keeping the parts that land on the island, which
-    # is the same trick the app plays with `Shoreline.clip` and a great deal cruder.
-    def draw_ruled(a, b, width, colour) -> None:
-        steps = 240
-        run = []
-        for step in range(steps + 1):
-            t = step / steps
-            point = projection.point((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
-            if inside(shore, point):
-                run.append(point)
-            else:
-                if len(run) > 1:
-                    canvas.stroke_segment(run[0], run[-1], width, colour)
-                run = []
-        if len(run) > 1:
-            canvas.stroke_segment(run[0], run[-1], width, colour)
-
-    for number in range(5, 156, 5):
-        spans = [(-4000, 0), (2520, 6200)] if 60 <= number <= 109 else [(-4000, 6200)]
-        for west_from, west_to in spans:
-            draw_ruled(
-                grid_coordinate(number, west_from),
-                grid_coordinate(number, west_to),
-                3.0 * SUPERSAMPLE,
-                palette.street,
-            )
-
-    for west, first, last in ICON_AVENUES:
-        draw_ruled(
-            grid_coordinate(first, west),
-            grid_coordinate(last, west),
-            5.5 * SUPERSAMPLE,
-            palette.avenue,
-        )
+    # Heaviest last, so an avenue is never broken by a cross street over it.
+    roads = [r for r in data["roads"] if r["t"] in ICON_TIERS]
+    for road in sorted(roads, key=lambda r: -r["t"]):
+        width = ICON_TIERS[road["t"]] * SUPERSAMPLE
+        colour = palette.avenue if road["t"] == 0 else palette.street
+        points = [projection.point(c) for c in road["p"]]
+        for i in range(len(points) - 1):
+            canvas.stroke_segment(points[i], points[i + 1], width, colour)
 
     # The shoreline itself, inked last so nothing crosses it.
-    for index in range(len(shore)):
-        canvas.stroke_segment(
-            shore[index], shore[(index + 1) % len(shore)], 7.0 * SUPERSAMPLE, palette.shore
-        )
+    for ring in land:
+        points = [projection.point(c) for c in ring]
+        for i in range(len(points)):
+            canvas.stroke_segment(
+                points[i], points[(i + 1) % len(points)], 6.0 * SUPERSAMPLE, palette.shore
+            )
 
     final_size, pixels = canvas.downsample(SUPERSAMPLE)
     OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -323,8 +255,9 @@ def draw(palette: Palette) -> None:
 
 
 def main() -> None:
+    data = load()
     for palette in (LIGHT, DARK, TINTED):
-        draw(palette)
+        draw(palette, data)
 
 
 if __name__ == "__main__":

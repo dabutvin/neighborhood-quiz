@@ -7,44 +7,26 @@ final class DrawnMapTests: XCTestCase {
     private let size = CGSize(width: 393, height: 852)  // an iPhone, near enough
     private lazy var map = DrawnMap.build(size: size)
 
-    func testTheIslandAndTheParkAreDrawn() {
+    func testTheIslandTheGreensAndTheStreetsAreAllDrawn() {
         XCTAssertFalse(map.land.isEmpty)
         XCTAssertFalse(map.landEdge.isEmpty)
-        XCTAssertFalse(map.park.isEmpty)
+        XCTAssertFalse(map.parks.isEmpty)
         XCTAssertFalse(map.parkEdge.isEmpty)
         XCTAssertEqual(map.size, size)
+        XCTAssertEqual(map.roads.count, ManhattanMapData.roads.count)
     }
 
-    func testTheParkIsInsideTheIsland() {
+    func testTheGreensAreInsideTheIsland() {
         let island = map.land.boundingRect
-        let park = map.park.boundingRect
-        XCTAssertTrue(island.insetBy(dx: -4, dy: -4).contains(park))
-        XCTAssertLessThan(park.width * park.height, island.width * island.height / 4)
-    }
-
-    func testEveryStreetSurvivesTheShoreline() {
-        // Not one road may be clipped out of existence: a road that draws nothing is a
-        // road whose coordinates are wrong, and on a map made of two hundred lines that
-        // is exactly the sort of thing nobody notices by eye.
-        let roads = ManhattanMapData.roads
-        let drawn = Set(map.roads.compactMap { Int($0.id.split(separator: "-")[0]) })
-        let missing = roads.indices.filter { !drawn.contains($0) }.map { roads[$0].name }
-        XCTAssertEqual(missing, [], "These roads were clipped away entirely")
+        XCTAssertTrue(island.insetBy(dx: -6, dy: -6).contains(map.parks.boundingRect))
     }
 
     func testTheHeavyLinesAreDrawnOverTheFineOnes() {
-        let order = map.roads.map { road -> Int in
-            switch road.kind {
-            case .crossStreet: return 0
-            case .majorCrossStreet: return 1
-            case .namedStreet: return 2
-            case .avenue: return 3
-            }
-        }
-        XCTAssertEqual(order, order.sorted())
+        let order = map.roads.map { -$0.kind.rawValue }
+        XCTAssertEqual(order, order.sorted(), "Side streets first, avenues last")
     }
 
-    func testEveryNameIsWrittenOnTheIsland() {
+    func testEveryNameIsWrittenOnThePage() {
         let paper = CGRect(origin: .zero, size: size)
         for label in map.labels {
             XCTAssertTrue(
@@ -57,73 +39,64 @@ final class DrawnMapTests: XCTestCase {
     func testNoNameIsUpsideDown() {
         // A quarter turn, plus the slack that lets a near-vertical avenue read upwards
         // rather than downwards. Anything past that is a name written back to front.
-        let limit = Double.pi / 2 + Shoreline.uprightTolerance + 1e-9
+        let limit = Double.pi / 2 + Polyline.uprightTolerance + 1e-9
         for label in map.labels {
             XCTAssertLessThanOrEqual(abs(label.angle), limit, "\(label.text) reads backwards")
         }
     }
 
-    func testTheAvenuesAreWrittenUpThePageAndTheStreetsAcrossIt() {
-        func angle(_ name: String) -> Double? { map.labels.first { $0.text == name }?.angle }
-
-        // The plane is turned so the avenues stand up, so their names do too: a quarter
-        // turn anticlockwise, reading from the bottom.
-        XCTAssertEqual(angle("Fifth Avenue") ?? 0, -.pi / 2, accuracy: 0.05)
-        XCTAssertEqual(angle("42nd Street") ?? 1, 0, accuracy: 0.05)
+    func testEveryStreetIsOfferedItsNameExactlyOnce() {
+        XCTAssertEqual(map.labels.count, ManhattanMapData.roads.filter(\.carriesName).count)
+        let texts = map.labels.map(\.text)
+        XCTAssertEqual(Set(texts).count, texts.count, "A street is offered its name once")
     }
 
-    func testTheNamesEverybodyKnowsAreAllThere() {
-        let names = Set(map.labels.map(\.text))
-        for expected in [
-            "Fifth Avenue", "Broadway", "Park Avenue", "Central Park West",
-            "Lexington Avenue", "Amsterdam Avenue", "42nd Street", "125th Street",
-            "Houston Street", "Canal Street", "Wall Street",
-        ] {
-            XCTAssertTrue(names.contains(expected), "\(expected) is not on the map")
+    func testTheImportantNamesAreOfferedFirst() {
+        // Whichever name reaches a patch of paper first keeps it, so the order labels
+        // come in is the order they win ties in — and within a rank it is longest first,
+        // because the data arrives that way.
+        let order = map.labels.map(\.kind.rawValue)
+        XCTAssertEqual(order, order.sorted())
+    }
+
+    func testEveryRoadKnowsWhereItSits() {
+        for road in map.roads {
+            XCTAssertFalse(road.bounds.isNull, "\(road.id) has no box to cull against")
+            XCTAssertEqual(road.bounds, road.path.boundingRect, "\(road.id)'s box is stale")
         }
-    }
-
-    func testTheWholeIslandOpensWithoutAWallOfText() {
-        // At the widest zoom only the names somebody could place blind are written.
-        let atRest = map.labels.filter { $0.minZoom <= 1 }
-        XCTAssertGreaterThan(atRest.count, 8, "The opening map should not be bare")
-        XCTAssertLessThan(atRest.count, 30, "Nor a wall of text")
-    }
-
-    func testPullingInBringsMoreNamesOut() {
-        let atRest = map.labels.filter { $0.minZoom <= 1 }.count
-        let closer = map.labels.filter { $0.minZoom <= 4 }.count
-        XCTAssertGreaterThan(closer, atRest * 2)
     }
 
     func testTheSideStreetsWaitUntilThereIsRoomForThem() {
         for road in map.roads {
             switch road.kind {
-            case .crossStreet:
-                XCTAssertGreaterThan(road.minZoom, 1, "Side streets are a smudge at the widest zoom")
-                XCTAssertLessThan(road.minZoom, DrawnMap.sideStreetFullZoom)
-            case .avenue, .majorCrossStreet, .namedStreet:
+            case .side:
+                XCTAssertEqual(road.minZoom, DrawnMap.sideStreetZoom)
+            case .avenue, .major:
                 XCTAssertEqual(road.minZoom, 1, "\(road.kind) is part of the wide view")
             }
         }
-
-        // The wide view is not bare: the avenues and the streets people name are all on it.
+        // The wide view is not bare, and it is not the whole city either.
         let atRest = map.roads.filter { $0.minZoom <= 1 }
-        XCTAssertGreaterThan(atRest.count, 30)
+        XCTAssertGreaterThan(atRest.count, 50)
+        XCTAssertLessThan(atRest.count, map.roads.count / 2)
     }
 
-    func testTheImportantNamesAreOfferedFirst() {
-        // Whichever name reaches a patch of paper first keeps it, so the order labels
-        // come in is the order they win ties in.
-        let order = map.labels.map { label -> Int in
-            switch label.kind {
-            case .avenue: return 0
-            case .namedStreet: return 1
-            case .majorCrossStreet: return 2
-            case .crossStreet: return 3
-            }
-        }
-        XCTAssertEqual(order, order.sorted())
+    func testTheCullLeavesTheWideViewAloneAndGutsTheCloseOne() {
+        // At rest the whole island is on the glass, so almost nothing may be culled.
+        let wide = MapCamera().visibleRect(in: size, margin: 8)
+        let offscreenWide = map.roads.filter { !$0.bounds.intersects(wide) }.count
+        XCTAssertLessThan(offscreenWide, map.roads.count / 20, "The wide view shows the island")
+
+        // Four times in on Midtown, most of it is not — which is the saving.
+        let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
+        let close = MapCamera.centred(on: midtown, zoom: 4, in: size).visibleRect(in: size, margin: 8)
+        let drawn = map.roads.filter { $0.bounds.intersects(close) }
+        XCTAssertLessThan(
+            Double(drawn.count) / Double(map.roads.count),
+            0.5,
+            "Coming in should leave most of the drawing off the glass"
+        )
+        XCTAssertGreaterThan(drawn.count, 10, "But not all of it — there is a city there")
     }
 
     func testTheMapIsDrawnTheSameWayTwice() {
