@@ -65,8 +65,8 @@ struct DrawnMap {
         for (index, ring) in islands.enumerated() {
             let points = projection.points(ring)
             let seed = UInt32(7 &+ index &* 13)
-            land.addPath(Pen.fill(points, style: PenStyle(roughness: 1.5, bowing: 1.2, reach: 2.2, seed: seed)))
-            landEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 1.5, bowing: 1.2, reach: 2, seed: seed &+ 1)))
+            land.addPath(Pen.fill(points, style: PenStyle(roughness: 0.4, bowing: 0.32, reach: 1.1, seed: seed)))
+            landEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.4, bowing: 0.32, reach: 1, seed: seed &+ 1)))
         }
 
         var parks = Path()
@@ -75,8 +75,8 @@ struct DrawnMap {
             let points = projection.points(park.ring)
             guard points.count >= 3 else { continue }
             let seed = UInt32(401 &+ index &* 7)
-            parks.addPath(Pen.fill(points, style: PenStyle(roughness: 1.2, bowing: 1, reach: 1.6, seed: seed)))
-            parkEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 1.2, bowing: 1, reach: 1.4, seed: seed &+ 1)))
+            parks.addPath(Pen.fill(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.9, seed: seed)))
+            parkEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.8, seed: seed &+ 1)))
         }
 
         var roads: [DrawnRoad] = []
@@ -139,11 +139,18 @@ struct DrawnMap {
     /// A heavier road is drawn with a steadier hand: the avenues were ruled off a long
     /// straight edge and the side streets were filled in afterwards, which is roughly
     /// how a person drawing this would have gone about it.
+    ///
+    /// The hand is much steadier than it was. These numbers were first set against a
+    /// map of 269 generated streets, where a wandering line was most of what said the
+    /// drawing was drawn; against fifteen hundred real ones it read as a shake rather
+    /// than a style, and Broadway wavered where Broadway does not. A third of the old
+    /// stray leaves the doubled stroke and the soft corners doing the work, which is
+    /// where the hand shows anyway.
     private static func penStyle(for kind: RoadKind, seed: UInt32) -> PenStyle {
         switch kind {
-        case .avenue: return PenStyle(roughness: 1.3, bowing: 1, reach: 1.8, seed: seed)
-        case .major: return PenStyle(roughness: 1.2, bowing: 0.9, reach: 1.5, seed: seed)
-        case .side: return PenStyle(roughness: 1, bowing: 0.7, reach: 1.1, seed: seed)
+        case .avenue: return PenStyle(roughness: 0.35, bowing: 0.28, reach: 1, seed: seed)
+        case .major: return PenStyle(roughness: 0.32, bowing: 0.25, reach: 0.9, seed: seed)
+        case .side: return PenStyle(roughness: 0.28, bowing: 0.2, reach: 0.7, seed: seed)
         }
     }
 }

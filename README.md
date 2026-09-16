@@ -68,6 +68,12 @@ The wobble is seeded, which matters more than it sounds: an unseeded one would r
 itself on every redraw and the island would shimmer under your finger. Each road gets its
 own seed from its place in the list, so it wobbles the same way for ever.
 
+It is also a good deal steadier than it started. The first settings were chosen against
+269 generated streets, where a wandering line was most of what said the drawing was
+drawn; against fifteen hundred real ones the same numbers read as a shake rather than a
+style, and Broadway wavered where Broadway does not. At a third of that stray the
+doubled stroke and the soft corners carry the hand, which is where it shows anyway.
+
 Manhattan is an island, so the palette is used the other way up from the Brooklyn map:
 there, paper is the background and the neighbourhood is a lighter patch on it; here the
 background is the water and the paper is the land, which is what makes the shape read
