@@ -72,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          BUNDLE_ID="com.neighborhoodquiz.app"
+          BUNDLE_ID="com.nycneighborhoodsquiz.app"
           APP_PATH=$(find DerivedData/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
           if [ -z "$APP_PATH" ]; then echo "ERROR: no .app built"; exit 1; fi
 

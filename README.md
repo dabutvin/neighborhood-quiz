@@ -1,4 +1,4 @@
-# Neighborhood Quiz
+# NYC Neighborhoods: Map Quiz
 
 An iOS app about knowing where you are in New York. It opens on Manhattan — drawn by
 hand, in ink, on paper — with every avenue and every numbered cross street named, and
@@ -170,12 +170,12 @@ Set these in GitHub repo settings → Secrets and variables → Actions.
 | `APP_STORE_CONNECT_API_KEY_CONTENT` | API key (`.p8` file contents), **raw text** | Paste the full text including `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` |
 | `APPLE_DISTRIBUTION_CERT_P12` | Optional. Distribution certificate **and its private key**, base64 | [One stored certificate](#one-stored-certificate) |
 | `APPLE_DISTRIBUTION_CERT_PASSWORD` | Optional. Password protecting that `.p12` | Same |
-| `APPLE_PROVISIONING_PROFILE` | Optional. App Store profile for `com.neighborhoodquiz.app`, base64 | Same |
+| `APPLE_PROVISIONING_PROFILE` | Optional. App Store profile for `com.nycneighborhoodsquiz.app`, base64 | Same |
 
 CI and the PR screenshots need none of them — a fork builds, tests and photographs the app
 with no secrets at all. Only TestFlight and the release need signing.
 
-The App Store Connect app record must exist with bundle ID `com.neighborhoodquiz.app` (see
+The App Store Connect app record must exist with bundle ID `com.nycneighborhoodsquiz.app` (see
 `project.yml`) before the first TestFlight upload.
 
 ## Signing
@@ -199,8 +199,8 @@ revocation well away from App Store Connect still processing an upload, and it c
 anything a cancelled run left behind.
 
 The two workflows mint under different prefixes, and each sweeps only its own. TestFlight
-builds sign as `Neighborhood Quiz CI <run id>` and retire each other. A release signs as
-`Neighborhood Quiz Release <run id>`, and its certificate is retired only by the *next*
+builds sign as `NYC Neighborhoods CI <run id>` and retire each other. A release signs as
+`NYC Neighborhoods Release <run id>`, and its certificate is retired only by the *next*
 release's sweep — never by the TestFlight builds that keep shipping `main` in between. That
 difference is load-bearing: a build sitting in App Review has its signature re-checked when
 the submission is resubmitted, and a revoked certificate fails that check (`ITMS-90035`).
@@ -249,7 +249,7 @@ If you would rather use Xcode's own certificate flow for the stored-certificate 
    *Export*, save as `.p12`, set a password. Expanding the row must reveal a private key; if
    it does not, this Mac does not have the key and the export is useless.
 3. developer.apple.com → Profiles → `+` → *App Store Connect* → App ID
-   `com.neighborhoodquiz.app` → pick that certificate → download the `.mobileprovision`.
+   `com.nycneighborhoodsquiz.app` → pick that certificate → download the `.mobileprovision`.
 4. Check and encode the pair, which also confirms the profile was really issued for that
    certificate:
 

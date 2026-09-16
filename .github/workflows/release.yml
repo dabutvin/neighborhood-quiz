@@ -31,7 +31,7 @@ jobs:
       # main all week. Release certificates are retired only here, by the next
       # release's sweep, by which time the one before it is approved. The one rule
       # left: don't cut a new release while the previous one is still in review.
-      PROFILE_PREFIX: 'Neighborhood Quiz Release '
+      PROFILE_PREFIX: 'NYC Neighborhoods Release '
 
     steps:
       - name: Checkout
@@ -130,7 +130,7 @@ jobs:
           /usr/libexec/PlistBuddy \
             -c "Add :teamID string $TEAM_ID" \
             -c "Add :signingCertificate string $IDENTITY" \
-            -c "Add :provisioningProfiles:com.neighborhoodquiz.app string $PROFILE_NAME" \
+            -c "Add :provisioningProfiles:com.nycneighborhoodsquiz.app string $PROFILE_NAME" \
             ExportOptions.plist
 
       - name: Export IPA
@@ -159,7 +159,7 @@ jobs:
         with:
           name: "v${{ env.VERSION }}"
           body: |
-            ## Neighborhood Quiz v${{ env.VERSION }}
+            ## NYC Neighborhoods: Map Quiz v${{ env.VERSION }}
 
             Build ${{ env.BUILD_NUMBER }} submitted to App Store Connect.
           draft: false

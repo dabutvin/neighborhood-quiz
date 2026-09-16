@@ -28,7 +28,7 @@ inputs:
   bundle-identifier:
     description: Bundle ID the profile is expected to cover
     required: false
-    default: com.neighborhoodquiz.app
+    default: com.nycneighborhoodsquiz.app
 
 outputs:
   identity:

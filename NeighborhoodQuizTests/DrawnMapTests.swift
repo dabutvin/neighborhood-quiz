@@ -96,6 +96,36 @@ final class DrawnMapTests: XCTestCase {
         XCTAssertGreaterThan(closer, atRest * 2)
     }
 
+    func testTheSideStreetsWaitUntilThereIsRoomForThem() {
+        for road in map.roads {
+            switch road.kind {
+            case .crossStreet:
+                XCTAssertGreaterThan(road.minZoom, 1, "Side streets are a smudge at the widest zoom")
+                XCTAssertLessThan(road.minZoom, DrawnMap.sideStreetFullZoom)
+            case .avenue, .majorCrossStreet, .namedStreet:
+                XCTAssertEqual(road.minZoom, 1, "\(road.kind) is part of the wide view")
+            }
+        }
+
+        // The wide view is not bare: the avenues and the streets people name are all on it.
+        let atRest = map.roads.filter { $0.minZoom <= 1 }
+        XCTAssertGreaterThan(atRest.count, 30)
+    }
+
+    func testTheImportantNamesAreOfferedFirst() {
+        // Whichever name reaches a patch of paper first keeps it, so the order labels
+        // come in is the order they win ties in.
+        let order = map.labels.map { label -> Int in
+            switch label.kind {
+            case .avenue: return 0
+            case .namedStreet: return 1
+            case .majorCrossStreet: return 2
+            case .crossStreet: return 3
+            }
+        }
+        XCTAssertEqual(order, order.sorted())
+    }
+
     func testTheMapIsDrawnTheSameWayTwice() {
         let again = DrawnMap.build(size: size)
         XCTAssertEqual(map.land, again.land)

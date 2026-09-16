@@ -14,7 +14,7 @@ STUB="$2"
 WORK="$3"
 DISPLAY_WARMUP="$4"
 
-BUNDLE_ID="com.neighborhoodquiz.simwarmup"
+BUNDLE_ID="com.nycneighborhoodsquiz.simwarmup"
 APP="$WORK/SimWarmup.app"
 START=$SECONDS
 

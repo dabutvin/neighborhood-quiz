@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           mkdir -p screenshots
 
-          BUNDLE_ID="com.neighborhoodquiz.app"
+          BUNDLE_ID="com.nycneighborhoodsquiz.app"
 
           APP_PATH=$(find DerivedData/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
           if [ -z "$APP_PATH" ]; then
@@ -143,7 +143,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          BUNDLE_ID="com.neighborhoodquiz.app"
+          BUNDLE_ID="com.nycneighborhoodsquiz.app"
           APP_PATH=$(find DerivedData/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
           xcrun simctl install "$UDID" "$APP_PATH"
 

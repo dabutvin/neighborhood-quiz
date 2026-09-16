@@ -86,7 +86,7 @@ struct MapPalette {
     /// the island its texture, and any heavier they would fill it in.
     func weight(for kind: RoadKind) -> Double {
         switch kind {
-        case .avenue: return 1.9
+        case .avenue: return 1.6
         case .namedStreet: return 1.6
         case .majorCrossStreet: return 1.15
         case .crossStreet: return 0.55

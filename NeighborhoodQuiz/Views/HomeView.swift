@@ -64,8 +64,8 @@ struct HomeView: View {
 
     private var header: some View {
         VStack(alignment: .trailing, spacing: 1) {
-            Text("Neighborhood Quiz")
-                .font(MapFont.chrome(size: 26))
+            Text("NYC Neighborhoods")
+                .font(MapFont.chrome(size: 24))
                 .foregroundStyle(palette.ink)
             Text("MANHATTAN")
                 .font(.system(size: 10, weight: .semibold))

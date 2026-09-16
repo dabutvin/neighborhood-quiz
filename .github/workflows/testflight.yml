@@ -28,7 +28,7 @@ jobs:
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
       TEAM_ID: ${{ secrets.TEAM_ID }}
-      PROFILE_PREFIX: 'Neighborhood Quiz CI '
+      PROFILE_PREFIX: 'NYC Neighborhoods CI '
 
     steps:
       - name: Checkout
@@ -78,7 +78,7 @@ jobs:
       # between builds; the account never holds more than two of ours.
       #
       # Only *CI* certificates, by prefix. A release build signs under
-      # 'Neighborhood Quiz Release ' and its certificate must outlive every CI build
+      # 'NYC Neighborhoods Release ' and its certificate must outlive every CI build
       # that runs while the release sits in App Review — resubmission re-checks the
       # signature, and a revoked certificate fails it. The release profile keeps that
       # certificate out of the orphan sweep too, since an orphan is a certificate no
@@ -132,7 +132,7 @@ jobs:
           /usr/libexec/PlistBuddy \
             -c "Add :teamID string $TEAM_ID" \
             -c "Add :signingCertificate string $IDENTITY" \
-            -c "Add :provisioningProfiles:com.neighborhoodquiz.app string $PROFILE_NAME" \
+            -c "Add :provisioningProfiles:com.nycneighborhoodsquiz.app string $PROFILE_NAME" \
             ExportOptions.plist
 
       - name: Export IPA

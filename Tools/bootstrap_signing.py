@@ -544,7 +544,7 @@ def main(argv: list[str]) -> int:
     cleanup = subparsers.add_parser(
         "cleanup", help="retire the certificates and profiles earlier builds created"
     )
-    cleanup.add_argument("--profile-prefix", default="Neighborhood Quiz CI ")
+    cleanup.add_argument("--profile-prefix", default="NYC Neighborhoods CI ")
     cleanup.add_argument("--keep", default="", help="profile name to leave alone")
     cleanup.add_argument(
         "--keep-serial",
@@ -562,10 +562,10 @@ def main(argv: list[str]) -> int:
     create = subparsers.add_parser(
         "create", help="create a certificate and profile, and emit the three secrets"
     )
-    create.add_argument("--bundle-id", default="com.neighborhoodquiz.app")
-    create.add_argument("--app-name", default="Neighborhood Quiz")
-    create.add_argument("--profile-name", default="Neighborhood Quiz App Store")
-    create.add_argument("--common-name", default="Neighborhood Quiz CI", help="subject of the signing request")
+    create.add_argument("--bundle-id", default="com.nycneighborhoodsquiz.app")
+    create.add_argument("--app-name", default="NYC Neighborhoods: Map Quiz")
+    create.add_argument("--profile-name", default="NYC Neighborhoods App Store")
+    create.add_argument("--common-name", default="NYC Neighborhoods CI", help="subject of the signing request")
     create.add_argument("--password", help="password for the .p12 (random if omitted)")
     create.add_argument("--out-dir", default=".signing-secrets")
     create.add_argument(

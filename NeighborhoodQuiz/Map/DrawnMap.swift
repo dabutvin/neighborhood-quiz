@@ -18,6 +18,13 @@ struct DrawnRoad: Identifiable {
     let id: String
     let path: Path
     let kind: RoadKind
+    /// How far in the map has to be before this line is drawn at all.
+    ///
+    /// Two hundred side streets on a four-inch screen showing thirteen miles of city is
+    /// not texture, it is a smudge — the island came out a solid block of hatching. So
+    /// the side streets arrive the way their names do, once there is room for them, and
+    /// the wide view is the island, the park, the avenues and the streets people name.
+    let minZoom: Double
 }
 
 /// The whole map, drawn once for a given size and then only ever re-transformed.
@@ -69,7 +76,8 @@ struct DrawnMap {
                 roads.append(DrawnRoad(
                     id: "\(index)-\(runIndex)",
                     path: Pen.stroke(run, style: style),
-                    kind: road.kind
+                    kind: road.kind,
+                    minZoom: road.kind == .crossStreet ? DrawnMap.sideStreetZoom : 1
                 ))
             }
 
@@ -95,6 +103,9 @@ struct DrawnMap {
         }
 
         roads.sort { drawingOrder($0.kind) < drawingOrder($1.kind) }
+        // Names are drawn in this order and the first to claim a piece of the page keeps
+        // it, so the order is the priority: an avenue's name beats a side street's.
+        labels.sort { labelOrder($0.kind) < labelOrder($1.kind) }
 
         return DrawnMap(
             size: size,
@@ -107,6 +118,12 @@ struct DrawnMap {
             labels: labels
         )
     }
+
+    /// Where the side streets start to appear, and the zoom by which they are all the
+    /// way in. Fading them across a range rather than switching them on at a threshold
+    /// keeps the grid from snapping into existence under a pinch.
+    static let sideStreetZoom = 1.35
+    static let sideStreetFullZoom = 1.9
 
     /// A heavier road is drawn with a steadier hand: the avenues were ruled off a long
     /// straight edge and the side streets were filled in afterwards, which is roughly
@@ -130,6 +147,17 @@ struct DrawnMap {
         case .majorCrossStreet: return 1
         case .namedStreet: return 2
         case .avenue: return 3
+        }
+    }
+
+    /// The reverse of the drawing order: what gets its name written first when two names
+    /// want the same piece of paper.
+    private static func labelOrder(_ kind: RoadKind) -> Int {
+        switch kind {
+        case .avenue: return 0
+        case .namedStreet: return 1
+        case .majorCrossStreet: return 2
+        case .crossStreet: return 3
         }
     }
 }
