@@ -111,9 +111,9 @@ enum ManhattanMapData {
         Avenue(name: "Second Avenue", westOfFifth: -2300, from: 1, to: 127, labelStreet: 68, labelMinZoom: 2.8),
         Avenue(name: "Third Avenue", westOfFifth: -1650, from: 6, to: 129, labelStreet: 64, labelMinZoom: 1.8),
         Avenue(name: "Lexington Avenue", westOfFifth: -1245, from: 21, to: 131, labelStreet: 60, labelMinZoom: 1.8),
-        Avenue(name: "Park Avenue", westOfFifth: -840, from: 17, to: 132, labelStreet: 56, labelMinZoom: 1),
+        Avenue(name: "Park Avenue", westOfFifth: -840, from: 17, to: 132, labelStreet: 56, labelMinZoom: 1.6),
         Avenue(name: "Madison Avenue", westOfFifth: -420, from: 23, to: 138, labelStreet: 52, labelMinZoom: 1.8),
-        Avenue(name: "Fifth Avenue", westOfFifth: 0, from: 8, to: 142, labelStreet: 48, labelMinZoom: 1),
+        Avenue(name: "Fifth Avenue", westOfFifth: 0, from: 8, to: 142, labelStreet: 48, labelMinZoom: 1.6),
         Avenue(name: "Avenue of the Americas", westOfFifth: 920, from: 3, to: 59, labelStreet: 44, labelMinZoom: 2.8),
         Avenue(name: "Seventh Avenue", westOfFifth: 1720, from: 11, to: 59, labelStreet: 40, labelMinZoom: 1.8),
         Avenue(name: "Eighth Avenue", westOfFifth: 2520, from: 13, to: 59, labelStreet: 36, labelMinZoom: 1.8),
@@ -121,7 +121,7 @@ enum ManhattanMapData {
         Avenue(name: "Tenth Avenue", westOfFifth: 4120, from: 14, to: 59, labelStreet: 28, labelMinZoom: 2.8),
         Avenue(name: "Eleventh Avenue", westOfFifth: 4920, from: 14, to: 59, labelStreet: 24, labelMinZoom: 2.8),
         // Above the park the same ruled lines carry different names.
-        Avenue(name: "Central Park West", westOfFifth: 2520, from: 59, to: 110, labelStreet: 88, labelMinZoom: 1),
+        Avenue(name: "Central Park West", westOfFifth: 2520, from: 59, to: 110, labelStreet: 88, labelMinZoom: 1.6),
         Avenue(name: "Columbus Avenue", westOfFifth: 3320, from: 59, to: 110, labelStreet: 84, labelMinZoom: 1.8),
         Avenue(name: "Amsterdam Avenue", westOfFifth: 4120, from: 59, to: 125, labelStreet: 80, labelMinZoom: 1.8),
         Avenue(name: "West End Avenue", westOfFifth: 4920, from: 59, to: 107, labelStreet: 76, labelMinZoom: 2.8),
@@ -267,11 +267,14 @@ enum ManhattanMapData {
             ))
         }
 
+        // The one avenue named on the opening map, and it is named down in SoHo rather
+        // than up at Seventy-Second: the whole midtown column is spoken for by the cross
+        // street names, and below Fourteenth there is clear paper at that zoom.
         roads.append(Road(
             name: "Broadway",
             coordinates: broadway,
             kind: .avenue,
-            labelAnchor: Coordinate(-73.9820, 40.7780),
+            labelAnchor: Coordinate(-73.9968, 40.7255),
             labelMinZoom: 1
         ))
 

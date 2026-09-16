@@ -111,11 +111,20 @@ final class ManhattanMapDataTests: XCTestCase {
         let roads = ManhattanMapData.roads
         func minZoom(_ name: String) -> Double? { roads.first { $0.name == name }?.labelMinZoom }
 
-        XCTAssertEqual(minZoom("Fifth Avenue"), 1)
+        // The opening map is the cross streets and Broadway. Every other avenue name
+        // waits for the room it needs — at the widest zoom midtown is a hundred points
+        // across, and a vertical name there is written over the streets it crosses.
         XCTAssertEqual(minZoom("Broadway"), 1)
         XCTAssertEqual(minZoom("42nd Street"), 1)
+        XCTAssertEqual(minZoom("125th Street"), 1)
+        XCTAssertGreaterThan(minZoom("Fifth Avenue") ?? 0, 1)
+        XCTAssertGreaterThan(minZoom("Park Avenue") ?? 0, 1)
         XCTAssertGreaterThan(minZoom("York Avenue") ?? 0, 1)
         XCTAssertGreaterThan(minZoom("41st") ?? 0, 2, "The fine streets come last")
+
+        // Exactly one avenue is named on the opening map.
+        let opening = ManhattanMapData.roads.filter { $0.kind == .avenue && $0.labelMinZoom <= 1 }
+        XCTAssertEqual(opening.map(\.name), ["Broadway"])
     }
 
     func testOrdinals() {
