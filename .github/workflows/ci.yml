@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # `build-for-testing` builds the app and the test bundle once, and the test
+      # step below runs them without building anything again. The destination is
+      # generic so that nothing here has to wait on a simulator, and `ARCHS`
+      # keeps a generic destination from compiling every architecture the
+      # simulator platform has.
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project NeighborhoodQuiz.xcodeproj \
+            -scheme NeighborhoodQuiz \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            -derivedDataPath DerivedData \
+            ARCHS="$(uname -m)" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log
+          if grep -q "BUILD FAILED" build.log; then exit 1; fi
+
+      # After the build rather than beside it: booting takes every core a runner
+      # has, and sharing them made the build four times slower for no gain.
+      - name: Wake up the simulator
+        id: simulator
+        uses: ./.github/actions/simulator
+        with:
+          display: 'false'
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project NeighborhoodQuiz.xcodeproj \
+            -scheme NeighborhoodQuiz \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -configuration Debug \
+            -derivedDataPath DerivedData \
+            2>&1 | tee test.log
+          if grep -q "TEST FAILED\|BUILD FAILED" test.log; then exit 1; fi

@@ -60,3 +60,27 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# XcodeGen — the project and Info.plist are generated from project.yml
+*.xcodeproj
+*.xcworkspace
+NeighborhoodQuiz/Resources/Info.plist
+
+# Build output
+DerivedData/
+build/
+build.log
+screenshots/
+Package.resolved
+.swiftpm/
+
+# Tools/
+__pycache__/
+
+# Code signing — never commit certificates, keys or profiles
+.signing-secrets/
+*.p12
+*.mobileprovision
+*.p8
+*.cer
+*.certSigningRequest
