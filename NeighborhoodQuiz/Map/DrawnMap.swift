@@ -45,6 +45,8 @@ struct DrawnMap {
     let landEdge: Path
     let parks: Path
     let parkEdge: Path
+    /// The thirty-two tappable shapes, in the order the data holds them.
+    let neighborhoods: [DrawnNeighborhood]
     /// Side streets first, then the major ones, then the avenues on top, so the heavy
     /// lines are never broken by the light ones crossing them.
     let roads: [DrawnRoad]
@@ -77,6 +79,41 @@ struct DrawnMap {
             let seed = UInt32(401 &+ index &* 7)
             parks.addPath(Pen.fill(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.9, seed: seed)))
             parkEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.8, seed: seed &+ 1)))
+        }
+
+        var neighborhoods: [DrawnNeighborhood] = []
+        for (index, area) in ManhattanMapData.neighborhoods.enumerated() {
+            let rings = area.rings.map(projection.points).filter { $0.count >= 3 }
+            guard !rings.isEmpty else { continue }
+
+            var shape = Path()
+            var edge = Path()
+            for (ringIndex, ring) in rings.enumerated() {
+                let seed = UInt32(9_001 &+ index &* 17 &+ ringIndex)
+                shape.addPath(Pen.fill(ring, style: PenStyle(roughness: 0.3, bowing: 0.24, reach: 0.9, seed: seed)))
+                edge.addPath(Pen.outline(ring, style: PenStyle(roughness: 0.3, bowing: 0.24, reach: 0.8, seed: seed &+ 1)))
+            }
+
+            let widest = rings.max { $0.count < $1.count } ?? []
+            var anchor = DrawnNeighborhood.centroid(of: widest)
+            if !DrawnNeighborhood.ring(widest, contains: anchor) {
+                anchor = DrawnNeighborhood.insidePoint(of: widest, near: anchor)
+            }
+
+            var box = CGRect.null
+            for ring in rings {
+                for point in ring { box = box.union(CGRect(origin: point, size: .zero)) }
+            }
+
+            neighborhoods.append(DrawnNeighborhood(
+                id: index,
+                name: area.name,
+                shape: shape,
+                edge: edge,
+                rings: rings,
+                bounds: box,
+                labelPoint: anchor
+            ))
         }
 
         var roads: [DrawnRoad] = []
@@ -120,9 +157,23 @@ struct DrawnMap {
             landEdge: landEdge,
             parks: parks,
             parkEdge: parkEdge,
+            neighborhoods: neighborhoods,
             roads: roads,
             labels: labels
         )
+    }
+
+    /// Which neighbourhood a point of the drawing falls in, if any.
+    ///
+    /// The areas tile the island without overlapping, so the first one that claims the
+    /// point is the only one that would — but the water, and the two holes the parks
+    /// leave in the coverage, belong to nobody, and a tap there is a tap on nothing.
+    func neighborhood(at point: CGPoint) -> DrawnNeighborhood? {
+        neighborhoods.first { $0.contains(point) }
+    }
+
+    func neighborhood(named name: String) -> DrawnNeighborhood? {
+        neighborhoods.first { $0.name == name }
     }
 
     /// How far in the map must be before a name of this rank is written. The avenues

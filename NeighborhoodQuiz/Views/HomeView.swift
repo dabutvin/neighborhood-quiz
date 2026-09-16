@@ -1,20 +1,31 @@
 import SwiftUI
 
-/// The screen the app opens on: Manhattan, drawn by hand, with its streets named and
-/// nothing else on it.
+/// The screen the app opens on: Manhattan, drawn by hand, with its streets named, its
+/// thirty-two neighbourhoods bordered, and any one of them picked out by touching it.
 ///
-/// The neighbourhoods are deliberately absent. They are what the quiz will eventually
-/// be about, and a map that has already told you where SoHo is has given the game
-/// away — so for now the island is streets, the park, and the water round it.
+/// Nothing here names a neighbourhood until you ask it to. The borders are drawn from
+/// the start — knowing that there is a line between SoHo and the Village is half of
+/// what makes the map worth looking at — but the name only comes up under your finger,
+/// which is the shape the quiz will eventually be played in.
 struct HomeView: View {
-    /// Where the map opens. The screenshot runs ask for the pulled-in one so the
-    /// gallery shows the cross street names as well as the avenues.
+    /// Where the map opens. The screenshot runs ask for the pulled-in ones so the
+    /// gallery shows the cross street names, and a neighbourhood picked out, as well as
+    /// the whole island.
     enum Opening: Equatable {
         case island
         case midtown
+        case neighborhood(String)
 
         init(arguments: [String]) {
-            self = arguments.contains("-map-zoomed") ? .midtown : .island
+            if arguments.contains("-map-neighborhood") {
+                // Greenwich Village: small enough to fill a phone, and one of the few
+                // whose name the city writes the same way everybody else does.
+                self = .neighborhood("Greenwich Village")
+            } else if arguments.contains("-map-zoomed") {
+                self = .midtown
+            } else {
+                self = .island
+            }
         }
     }
 
@@ -24,6 +35,9 @@ struct HomeView: View {
 
     @State private var drawn: DrawnMap?
     @State private var camera = MapCamera()
+    /// Which neighbourhood is picked out, by `DrawnNeighborhood.id`. Nothing, until
+    /// somebody touches the map.
+    @State private var selected: Int?
     /// Set once, the first time the view is given a size, so an opening that has to be
     /// aimed at somewhere in particular is not re-aimed on every rotation.
     @State private var hasOpened = false
@@ -45,13 +59,23 @@ struct HomeView: View {
                         drawn: drawn,
                         camera: live(in: size),
                         palette: palette,
+                        selected: selected,
                         interacting: pinch != 1 || drag != .zero
                     )
                         .contentShape(Rectangle())
+                        // The tap is asked first. A drag has ten points of slop to
+                        // travel before it counts as one, so a touch that goes nowhere
+                        // reaches this and a touch that moves does not.
+                        .onTapGesture(coordinateSpace: .local) { location in
+                            choose(at: location, on: drawn, in: size)
+                        }
                         .gesture(pan(in: size).simultaneously(with: magnify(in: size)))
                         .accessibilityElement()
-                        .accessibilityLabel("Map of Manhattan")
-                        .accessibilityHint("Drag to move the map, pinch to zoom in on the streets")
+                        .accessibilityLabel(description(of: drawn))
+                        .accessibilityHint("Drag to move the map, pinch to zoom in, tap a neighborhood to pick it out")
+                        // A tap that lands on water changes nothing on screen if
+                        // nothing was picked out; the tick is what says the map heard.
+                        .sensoryFeedback(.selection, trigger: selected)
                 }
 
                 PaperTexture(palette: palette)
@@ -178,6 +202,27 @@ struct HomeView: View {
             }
     }
 
+    // MARK: - Choosing
+
+    /// Pick out whatever was touched, or put down whatever was being held.
+    ///
+    /// The tap is in screen points and the neighbourhoods are in the drawing's own
+    /// coordinates, so the camera runs backwards to say which part of the island is
+    /// under the finger. Touching the one already picked out lets go of it, and so does
+    /// touching the water — there is no way to get stuck holding something.
+    private func choose(at location: CGPoint, on map: DrawnMap, in size: CGSize) {
+        let place = live(in: size).modelPoint(location, in: size)
+        let hit = map.neighborhood(at: place)?.id
+        selected = (hit == selected) ? nil : hit
+    }
+
+    private func description(of map: DrawnMap) -> String {
+        guard let selected, let area = map.neighborhoods.first(where: { $0.id == selected }) else {
+            return "Map of Manhattan"
+        }
+        return "Map of Manhattan, \(area.name) selected"
+    }
+
     // MARK: - Building
 
     private func prepare(for size: CGSize) {
@@ -201,6 +246,11 @@ struct HomeView: View {
             // names on — which is the point of the shot.
             let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
             camera = MapCamera.centred(on: midtown, zoom: 4.2, in: size)
+            camera.clampPan(in: size)
+        case .neighborhood(let name):
+            guard let area = map.neighborhood(named: name) else { break }
+            selected = area.id
+            camera = MapCamera.framing(area.bounds, in: size)
             camera.clampPan(in: size)
         }
     }

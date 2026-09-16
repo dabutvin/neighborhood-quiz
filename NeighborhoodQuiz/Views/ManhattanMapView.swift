@@ -12,6 +12,8 @@ struct ManhattanMapView: View {
     let drawn: DrawnMap
     let camera: MapCamera
     let palette: MapPalette
+    /// Which neighbourhood is picked out, if any, by `DrawnNeighborhood.id`.
+    var selected: Int?
     /// Whether a finger is on the map right now. Drawing is at its most expensive
     /// exactly when it has the least time, so a couple of things the eye cannot follow
     /// mid-drag are left until the map is still again.
@@ -20,8 +22,19 @@ struct ManhattanMapView: View {
     var body: some View {
         Canvas { context, size in
             draw(map: drawn, in: &context, size: size)
-            draw(labels: drawn.labels, in: &context, size: size)
+            // The picked-out name claims its paper before any street name is offered
+            // one, so a street is never written across the answer.
+            let claimed = drawName(in: &context, size: size)
+            draw(labels: drawn.labels, in: &context, size: size, claimed: claimed)
         }
+    }
+
+    /// The picked-out neighbourhood. Held by identity rather than by position, so a map
+    /// rebuilt for a new size — a rotation, a split view — keeps hold of the same place
+    /// whatever order the new list came out in.
+    private var chosen: DrawnNeighborhood? {
+        guard let selected else { return nil }
+        return drawn.neighborhoods.first { $0.id == selected }
     }
 
     // MARK: - The drawing
@@ -52,6 +65,29 @@ struct ManhattanMapView: View {
         // the same as one you can see, and at four times in almost all of them do.
         let onScreen = camera.visibleRect(in: size, margin: 8)
 
+        // The wash goes under the streets rather than over them, so a picked-out
+        // neighbourhood is tinted paper with its own grid still showing through it
+        // rather than a sticker laid on top of the map.
+        if let chosen {
+            board.fill(chosen.shape, with: .color(palette.highlight.opacity(0.3)))
+        }
+
+        // Every border, faint and broken. Dashes are what keep these from reading as
+        // more roads: no street on this map is drawn with gaps in it.
+        for area in map.neighborhoods where area.bounds.intersects(onScreen) {
+            guard area.id != selected else { continue }
+            board.stroke(
+                area.edge,
+                with: .color(palette.border.opacity(0.4)),
+                style: StrokeStyle(
+                    lineWidth: 1 / zoom,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: [5 / zoom, 4.5 / zoom]
+                )
+            )
+        }
+
         for road in map.roads {
             guard road.bounds.intersects(onScreen) else { continue }
             let ink = presence(of: road)
@@ -64,6 +100,16 @@ struct ManhattanMapView: View {
                     lineCap: .round,
                     lineJoin: .round
                 )
+            )
+        }
+
+        // And the chosen one's own line, unbroken and over the top of everything, which
+        // is what makes it read as one shape rather than as a stain on the drawing.
+        if let chosen {
+            board.stroke(
+                chosen.edge,
+                with: .color(palette.highlightInk),
+                style: StrokeStyle(lineWidth: 2 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
     }
@@ -79,7 +125,65 @@ struct ManhattanMapView: View {
 
     // MARK: - The names
 
-    private func draw(labels: [DrawnLabel], in context: inout GraphicsContext, size: CGSize) {
+    /// Writes the picked-out neighbourhood's name across it, and hands back the paper it
+    /// took so no street name is offered the same patch.
+    ///
+    /// The name is kept on the glass rather than pinned to the shape: tap the Upper West
+    /// Side and then drag half of it off the edge and the name slides along the border
+    /// instead of leaving with it. Knowing what you have picked matters more than knowing
+    /// exactly where its middle is, and the highlight is already saying where.
+    private func drawName(in context: inout GraphicsContext, size: CGSize) -> [CGRect] {
+        guard let chosen else { return [] }
+
+        let text = Text(chosen.name)
+            .font(MapFont.label(size: palette.neighborhoodLabelSize))
+            .multilineTextAlignment(.center)
+        let ink = context.resolve(text.foregroundStyle(palette.highlightInk))
+        let halo = context.resolve(text.foregroundStyle(palette.labelHalo))
+
+        // The city's names for these are compound — "Upper East Side-Lenox Hill-
+        // Roosevelt Island" is one neighbourhood — and several of them are wider than a
+        // phone. Measuring inside the width it will be drawn in is what lets those wrap
+        // onto a second line instead of running off both edges.
+        let room = CGSize(width: max(size.width - 32, 40), height: 240)
+        let measured = ink.measure(in: room)
+
+        let wanted = camera.screenPoint(chosen.labelPoint, in: size)
+        // Somewhere it fits: over the shape if the shape is on screen, shouldered back
+        // onto the glass if it is not. The generous margin top and bottom keeps it out
+        // from under the title and the zoom buttons.
+        let point = CGPoint(
+            x: clamp(wanted.x, measured.width / 2 + 16, size.width - measured.width / 2 - 16),
+            y: clamp(wanted.y, measured.height / 2 + 64, size.height - measured.height / 2 - 72)
+        )
+        let box = CGRect(
+            x: point.x - measured.width / 2,
+            y: point.y - measured.height / 2,
+            width: measured.width,
+            height: measured.height
+        )
+
+        for offset in ManhattanMapView.haloOffsets {
+            context.draw(halo, in: box.offsetBy(dx: offset.x, dy: offset.y))
+        }
+        context.draw(ink, in: box)
+
+        return [box.insetBy(dx: -4, dy: -4)]
+    }
+
+    private func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat {
+        // On a narrow screen a long name can want more room than there is, and the two
+        // ends of the travel cross over. Middle of the screen, then.
+        guard low <= high else { return (low + high) / 2 }
+        return min(max(value, low), high)
+    }
+
+    private func draw(
+        labels: [DrawnLabel],
+        in context: inout GraphicsContext,
+        size: CGSize,
+        claimed: [CGRect]
+    ) {
         // A margin either side of the screen, so a name whose middle has just gone off
         // the edge does not blink out while part of it is still showing.
         let visible = CGRect(origin: .zero, size: size).insetBy(dx: -90, dy: -90)
@@ -88,7 +192,7 @@ struct ManhattanMapView: View {
         // the first to claim a patch keeps it and whatever would have been written across
         // it is left off — which is what stops "Central Park West" being written straight
         // through "96th Street" at the widest zoom.
-        var taken: [CGRect] = []
+        var taken: [CGRect] = claimed
 
         for label in labels where camera.zoom >= label.minZoom {
             let point = camera.screenPoint(label.position, in: size)

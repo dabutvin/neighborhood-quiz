@@ -44,6 +44,13 @@ enum ManhattanMapData {
     /// Central Park and ninety-five other greens over eight acres.
     static var parks: [Park] { loaded.parks }
 
+    /// The thirty-two neighborhoods, which are the point of the whole app.
+    ///
+    /// These are the city's 2020 Neighborhood Tabulation Areas, minus the ones that are
+    /// a park or the United Nations rather than somewhere people live. They tile the
+    /// island, so a tap anywhere on land lands in exactly one of them.
+    static var neighborhoods: [Neighborhood] { loaded.neighborhoods }
+
     /// Every road, longest first — which is the order the names are offered in when
     /// two of them want the same piece of paper. The drawing sorts its own copy the
     /// other way round, so the heavy lines go over the light ones.
@@ -55,6 +62,14 @@ enum ManhattanMapData {
     struct Park {
         var name: String
         var ring: [Coordinate]
+    }
+
+    struct Neighborhood {
+        var name: String
+        /// Most are one shape. A few are several — the Financial District takes in
+        /// Battery Park City and the piers, and Yorkville reaches across to a sliver
+        /// of island — so every one of them is a list.
+        var rings: [[Coordinate]]
     }
 
     // MARK: - Reading the file
@@ -70,16 +85,22 @@ enum ManhattanMapData {
             let name: String
             let ring: [[Double]]
         }
+        struct Neighborhood: Decodable {
+            let name: String
+            let rings: [[[Double]]]
+        }
         let source: String
         let names: [String]
         let roads: [Road]
         let land: [[[Double]]]
         let parks: [Park]
+        let neighborhoods: [Neighborhood]
     }
 
     private struct Loaded {
         var land: [[Coordinate]]
         var parks: [Park]
+        var neighborhoods: [Neighborhood]
         var roads: [Road]
         var source: String
     }
@@ -112,6 +133,9 @@ enum ManhattanMapData {
         return Loaded(
             land: document.land.map(coordinates),
             parks: document.parks.map { Park(name: $0.name, ring: coordinates($0.ring)) },
+            neighborhoods: document.neighborhoods.map {
+                Neighborhood(name: $0.name, rings: $0.rings.map(coordinates))
+            },
             roads: roads,
             source: document.source
         )

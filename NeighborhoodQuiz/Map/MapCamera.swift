@@ -44,6 +44,17 @@ struct MapCamera: Equatable {
         )
     }
 
+    /// Which part of the drawing is under a given spot on the glass — `screenPoint`
+    /// run backwards. This is what turns a tap into a place on the map.
+    func modelPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
+        let centre = MapCamera.centre(of: size)
+        guard zoom > 0 else { return point }
+        return CGPoint(
+            x: (Double(point.x) - centre.x - Double(pan.width)) / zoom + centre.x,
+            y: (Double(point.y) - centre.y - Double(pan.height)) / zoom + centre.y
+        )
+    }
+
     /// The piece of the drawing that is on the glass, in the drawing's own coordinates.
     ///
     /// This is `screenPoint` run backwards, and it is what lets the drawing skip the
@@ -51,12 +62,14 @@ struct MapCamera: Equatable {
     /// about a twentieth of the island, and stroking the other nineteen twentieths every
     /// frame is most of what made a drag feel heavy.
     func visibleRect(in size: CGSize, margin: Double = 0) -> CGRect {
-        let centre = MapCamera.centre(of: size)
-        let left = (-centre.x - Double(pan.width)) / zoom + centre.x - margin
-        let top = (-centre.y - Double(pan.height)) / zoom + centre.y - margin
-        let right = (Double(size.width) - centre.x - Double(pan.width)) / zoom + centre.x + margin
-        let bottom = (Double(size.height) - centre.y - Double(pan.height)) / zoom + centre.y + margin
-        return CGRect(x: left, y: top, width: right - left, height: bottom - top)
+        let topLeft = modelPoint(.zero, in: size)
+        let bottomRight = modelPoint(CGPoint(x: size.width, y: size.height), in: size)
+        return CGRect(
+            x: Double(topLeft.x) - margin,
+            y: Double(topLeft.y) - margin,
+            width: Double(bottomRight.x - topLeft.x) + margin * 2,
+            height: Double(bottomRight.y - topLeft.y) + margin * 2
+        )
     }
 
     /// A camera looking straight at one point of the drawing.
@@ -69,6 +82,20 @@ struct MapCamera: Equatable {
                 height: -(Double(point.y) - centre.y) * zoom
             )
         )
+    }
+
+    /// A camera holding a piece of the drawing comfortably on the glass, with a little
+    /// of what is round it left showing so the piece reads as part of something.
+    static func framing(_ rect: CGRect, in size: CGSize, fill: Double = 0.62) -> MapCamera {
+        guard rect.width > 0, rect.height > 0, size.width > 0, size.height > 0 else {
+            return MapCamera()
+        }
+        let wanted = min(
+            Double(size.width) / Double(rect.width),
+            Double(size.height) / Double(rect.height)
+        ) * fill
+        let zoom = min(max(wanted, range.lowerBound), range.upperBound)
+        return centred(on: CGPoint(x: rect.midX, y: rect.midY), zoom: zoom, in: size)
     }
 
     private static func centre(of size: CGSize) -> (x: Double, y: Double) {

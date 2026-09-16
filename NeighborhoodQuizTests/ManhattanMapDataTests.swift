@@ -174,4 +174,64 @@ final class ManhattanMapDataTests: XCTestCase {
     func testTheSourceIsCredited() {
         XCTAssertTrue(ManhattanMapData.source.contains("NYC Open Data"))
     }
+
+    // MARK: - The neighbourhoods
+
+    func testTheIslandIsDividedIntoNeighborhoods() {
+        let areas = ManhattanMapData.neighborhoods
+        XCTAssertEqual(areas.count, 32, "The city draws 32 lived-in NTAs in Manhattan")
+
+        for area in areas {
+            XCTAssertFalse(area.name.isEmpty)
+            XCTAssertFalse(area.rings.isEmpty, "\(area.name) has no shape")
+            for ring in area.rings {
+                XCTAssertGreaterThanOrEqual(ring.count, 3, "\(area.name) has a ring that is a line")
+            }
+        }
+
+        let names = areas.map(\.name)
+        XCTAssertEqual(Set(names).count, names.count, "Two neighborhoods share a name")
+    }
+
+    func testTheNeighborhoodsAreWhereManhattanIs() {
+        for area in ManhattanMapData.neighborhoods {
+            for point in area.rings.flatMap({ $0 }) {
+                XCTAssertTrue((-74.03...(-73.90)).contains(point.longitude), "\(area.name) is in the harbour")
+                XCTAssertTrue((40.69...40.90).contains(point.latitude), "\(area.name) is in the harbour")
+            }
+        }
+    }
+
+    func testNoNeighborhoodCrossesItself() {
+        // The same fold that turned Wards Island into a bow tie would turn a
+        // neighborhood into one, and a folded ring both fills wrong and hit tests wrong.
+        for area in ManhattanMapData.neighborhoods {
+            for (index, ring) in area.rings.enumerated() {
+                let points = ring.map { CGPoint(x: $0.longitude * 10_000, y: $0.latitude * 10_000) }
+                for i in 0..<points.count {
+                    let a = points[i]
+                    let b = points[(i + 1) % points.count]
+                    for j in (i + 1)..<points.count {
+                        if j == i || j == (i + 1) % points.count || (j + 1) % points.count == i { continue }
+                        XCTAssertNil(
+                            Polyline.crossing(a, b, points[j], points[(j + 1) % points.count]),
+                            "\(area.name) ring \(index) folds over itself at \(i)/\(j)"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    func testTheFewNeighborhoodsThatComeInPiecesStillDo() {
+        // Battery Park City is not walkable from the rest of the Financial District
+        // without crossing something the city counts as water, so the city draws it as
+        // several shapes. A re-fetch that quietly dropped every ring but the first would
+        // still look right at a glance, and would lose Roosevelt Island.
+        let byName = Dictionary(
+            uniqueKeysWithValues: ManhattanMapData.neighborhoods.map { ($0.name, $0) }
+        )
+        XCTAssertGreaterThan(byName["Financial District-Battery Park City"]?.rings.count ?? 0, 1)
+        XCTAssertGreaterThan(byName["Upper East Side-Lenox Hill-Roosevelt Island"]?.rings.count ?? 0, 1)
+    }
 }
