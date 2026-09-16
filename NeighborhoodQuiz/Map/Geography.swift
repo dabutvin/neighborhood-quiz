@@ -33,14 +33,19 @@ struct MapProjection: Equatable {
     /// with the projected plane rotated `rotation` degrees clockwise.
     init(fitting coordinates: [Coordinate], in size: CGSize, padding: Double, rotation: Double) {
         let radians = rotation * .pi / 180
-        cosAngle = cos(radians)
-        sinAngle = sin(radians)
+        // Locals, not the stored properties: naming `cosAngle` inside the closure below
+        // would capture `self` while the projection is still half-built, which Swift
+        // will not have — `scale` has not been given a value yet.
+        let turnCos = cos(radians)
+        let turnSin = sin(radians)
+        cosAngle = turnCos
+        sinAngle = turnSin
 
         let turned = coordinates.map { coordinate -> (Double, Double) in
             let raw = MapProjection.mercator(coordinate)
             return (
-                raw.x * cosAngle - raw.y * sinAngle,
-                raw.x * sinAngle + raw.y * cosAngle
+                raw.x * turnCos - raw.y * turnSin,
+                raw.x * turnSin + raw.y * turnCos
             )
         }
 
