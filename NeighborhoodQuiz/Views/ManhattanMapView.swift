@@ -27,6 +27,12 @@ struct ManhattanMapView: View {
             let claimed = drawName(in: &context, size: size)
             draw(labels: drawn.labels, in: &context, size: size, claimed: claimed)
         }
+        // Text drawn inside a `Canvas` is resolved against the canvas's own
+        // environment, and this is the only way to reach it: `Text` has no alignment
+        // modifier that hands back a `Text`. It matters for one label — a long
+        // neighbourhood name wrapping onto a second line — and does nothing at all to
+        // the street names, which are a line each.
+        .multilineTextAlignment(.center)
     }
 
     /// The picked-out neighbourhood. Held by identity rather than by position, so a map
@@ -137,7 +143,6 @@ struct ManhattanMapView: View {
 
         let text = Text(chosen.name)
             .font(MapFont.label(size: palette.neighborhoodLabelSize))
-            .multilineTextAlignment(.center)
         let ink = context.resolve(text.foregroundStyle(palette.highlightInk))
         let halo = context.resolve(text.foregroundStyle(palette.labelHalo))
 
