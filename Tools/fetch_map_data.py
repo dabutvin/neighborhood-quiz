@@ -452,6 +452,12 @@ def main() -> None:
         street["tier"] = 1 if rank < MAJOR_COUNT else 2
     print(f"    {ranked} of them rank as avenues")
 
+    # The file's order is the order names are offered in when two of them want the
+    # same piece of paper, so it has to be priority order — rank first, then length.
+    # Sorting by length alone was enough while rank *followed* length, and stopped
+    # being enough the moment a long highway could sit above a shorter avenue.
+    streets.sort(key=lambda s: (s["tier"], -s["length"]))
+
     # --- write it
     names = [s["name"] for s in streets]
     roads = []
