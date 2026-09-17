@@ -23,6 +23,12 @@ struct MapBoard: View {
     var selected: Int?
     /// Guessed and wrong, marked so a player can see what they have crossed off.
     var ruledOut: Set<Int> = []
+    /// Found earlier in the round, left filled and named.
+    var settled: Set<Int> = []
+    /// Shown to the player after three goes were not enough — named, but in grey.
+    var givenAway: Set<Int> = []
+    /// Picked out but not yet answered with — outlined, and deliberately not named.
+    var candidate: Int?
     /// Change this and the map goes back to the whole island. The quiz bumps it between
     /// questions, because arriving at Inwood still zoomed into SoHo is no use to
     /// anybody.
@@ -54,6 +60,9 @@ struct MapBoard: View {
                         palette: palette,
                         selected: selected,
                         ruledOut: ruledOut,
+                        settled: settled,
+                        givenAway: givenAway,
+                        candidate: candidate,
                         interacting: pinch != 1 || drag != .zero
                     )
                     .contentShape(Rectangle())

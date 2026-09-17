@@ -25,6 +25,11 @@ final class QuizRoundTests: XCTestCase {
         return QuizRound(askingAbout: choices, count: count, using: &generator)
     }
 
+    /// Somewhere that is not the answer and has not been tried yet.
+    private func somewhereElse(in round: QuizRound) -> Int {
+        (0..<80).first { $0 != round.current && !round.ruledOut.contains($0) } ?? -1
+    }
+
     // MARK: - Making one
 
     func testARoundAsksForTenOfTheForty() {
@@ -51,63 +56,117 @@ final class QuizRoundTests: XCTestCase {
         XCTAssertFalse(round.isFinished)
     }
 
-    // MARK: - Playing one
-
-    func testFindingEveryPlaceFirstTimeIsAPerfectRound() {
-        var round = self.round(of: Array(0..<40))
-        for expected in round.questions {
-            XCTAssertEqual(round.current, expected)
-            XCTAssertEqual(round.guess(expected), .right)
-        }
-        XCTAssertTrue(round.isFinished)
-        XCTAssertNil(round.current)
-        XCTAssertEqual(round.taps, 10, "Ten places, ten taps, which is as well as it goes")
-        XCTAssertEqual(round.firstTime, 10)
+    func testARoundCanBeAskedForExactly() {
+        let round = QuizRound(asking: [4, 8, 15])
+        XCTAssertEqual(round.questions, [4, 8, 15], "In that order, for the gallery")
+        XCTAssertEqual(round.current, 4)
     }
 
-    func testAWrongGuessCostsATapAndRulesThePlaceOut() {
+    // MARK: - What a go is worth
+
+    func testFirstGoIsFiveSecondIsThreeThirdIsOne() {
+        for used in 0..<QuizRound.tries {
+            var round = QuizRound(asking: [99])
+            for _ in 0..<used { _ = round.guess(somewhereElse(in: round)) }
+            XCTAssertEqual(round.triesUsed, used)
+            XCTAssertEqual(round.guess(99), .right)
+            XCTAssertEqual(round.score, QuizRound.points[used], "Found on go \(used + 1)")
+        }
+        XCTAssertEqual(QuizRound.points, [5, 3, 1], "The numbers themselves")
+    }
+
+    func testAPerfectRoundIsFifty() {
+        var round = self.round(of: Array(0..<40))
+        for wanted in round.questions {
+            XCTAssertEqual(round.guess(wanted), .right)
+        }
+        XCTAssertTrue(round.isFinished)
+        XCTAssertEqual(round.score, 50)
+        XCTAssertEqual(round.score, round.perfectScore, "Which is what perfect means")
+        XCTAssertEqual(round.firstTime, 10)
+        XCTAssertTrue(round.missed.isEmpty)
+    }
+
+    func testMissingEverythingScoresNothing() {
+        var round = self.round(of: Array(0..<40))
+        while !round.isFinished {
+            for _ in 0..<QuizRound.tries { _ = round.guess(somewhereElse(in: round)) }
+        }
+        XCTAssertEqual(round.score, 0)
+        XCTAssertEqual(round.missed.count, 10)
+        XCTAssertTrue(round.found.isEmpty)
+    }
+
+    // MARK: - Running out of goes
+
+    func testThreeWrongGuessesGiveThePlaceAwayAndMoveOn() {
+        var round = QuizRound(asking: [99, 77])
+
+        XCTAssertEqual(round.guess(somewhereElse(in: round)), .wrong)
+        XCTAssertEqual(round.triesLeft, 2)
+        XCTAssertEqual(round.guess(somewhereElse(in: round)), .wrong)
+        XCTAssertEqual(round.triesLeft, 1)
+        XCTAssertEqual(round.guess(somewhereElse(in: round)), .missed, "The last go")
+
+        XCTAssertEqual(round.missed, [99], "The place it wanted, for the map to show")
+        XCTAssertEqual(round.score, 0)
+        XCTAssertEqual(round.current, 77, "And straight on to the next")
+        XCTAssertEqual(round.triesLeft, QuizRound.tries, "With a full set of goes")
+        XCTAssertTrue(round.ruledOut.isEmpty)
+    }
+
+    func testAMissedPlaceIsNotAFoundPlace() {
+        var round = QuizRound(asking: [99])
+        for _ in 0..<QuizRound.tries { _ = round.guess(somewhereElse(in: round)) }
+        XCTAssertEqual(round.missed, [99])
+        XCTAssertTrue(round.found.isEmpty, "Being shown where it was is not finding it")
+        XCTAssertEqual(round.firstTime, 0)
+        XCTAssertTrue(round.isFinished)
+    }
+
+    func testThereIsNoFourthGo() {
+        var round = QuizRound(asking: [99, 77])
+        for _ in 0..<QuizRound.tries { _ = round.guess(somewhereElse(in: round)) }
+        // The round has moved on, so 99 is nobody's answer any more.
+        XCTAssertEqual(round.guess(99), .wrong)
+        XCTAssertEqual(round.score, 0)
+        XCTAssertEqual(round.missed, [99], "And it was not missed a second time")
+    }
+
+    // MARK: - Playing one
+
+    func testAWrongGuessCostsAGoAndRulesThePlaceOut() {
         var round = self.round(of: Array(0..<40))
         let wanted = round.current!
-        let wrong = round.questions.last(where: { $0 != wanted }) ?? (wanted + 1)
+        let wrong = somewhereElse(in: round)
 
         XCTAssertEqual(round.guess(wrong), .wrong)
-        XCTAssertEqual(round.taps, 1)
         XCTAssertTrue(round.ruledOut.contains(wrong))
+        XCTAssertEqual(round.triesUsed, 1)
         XCTAssertEqual(round.current, wanted, "A wrong guess does not move the round on")
-        XCTAssertEqual(round.firstTime, 0)
+        XCTAssertEqual(round.score, 0)
     }
 
     func testGuessingTheSameWrongPlaceTwiceIsFree() {
         var round = self.round(of: Array(0..<40))
-        let wrong = round.questions.last(where: { $0 != round.current }) ?? 99
+        let wrong = somewhereElse(in: round)
 
         XCTAssertEqual(round.guess(wrong), .wrong)
         // A thumb landing twice on the same place is a slip, not a second opinion.
         XCTAssertEqual(round.guess(wrong), .ignored)
         XCTAssertEqual(round.guess(wrong), .ignored)
-        XCTAssertEqual(round.taps, 1)
-    }
-
-    func testFindingItAfterAMissStillMovesOnButIsNotAFirstTime() {
-        var round = self.round(of: Array(0..<40))
-        let wanted = round.current!
-        let wrong = round.questions.last(where: { $0 != wanted }) ?? (wanted + 1)
-
-        XCTAssertEqual(round.guess(wrong), .wrong)
-        XCTAssertEqual(round.guess(wanted), .right)
-        XCTAssertEqual(round.taps, 2)
-        XCTAssertEqual(round.firstTime, 0)
-        XCTAssertNotEqual(round.current, wanted)
+        XCTAssertEqual(round.triesUsed, 1, "Still only one go gone")
+        XCTAssertEqual(round.triesLeft, 2)
     }
 
     func testWhatWasRuledOutIsForgottenAtTheNextQuestion() {
         var round = self.round(of: Array(0..<40))
-        let wrong = round.questions.last(where: { $0 != round.current }) ?? 99
-        _ = round.guess(wrong)
+        _ = round.guess(somewhereElse(in: round))
         XCTAssertFalse(round.ruledOut.isEmpty)
 
         _ = round.guess(round.current!)
         XCTAssertTrue(round.ruledOut.isEmpty, "Each question starts with the whole island open")
+        XCTAssertEqual(round.triesLeft, QuizRound.tries)
     }
 
     /// The place being asked for can be ruled out on an *earlier* question and must not
@@ -128,7 +187,7 @@ final class QuizRoundTests: XCTestCase {
     }
 
     func testGuessingAfterTheRoundIsOverChangesNothing() {
-        var round = self.round(of: [7], count: 1)
+        var round = QuizRound(asking: [7])
         XCTAssertEqual(round.guess(7), .right)
         XCTAssertTrue(round.isFinished)
 
@@ -138,28 +197,80 @@ final class QuizRoundTests: XCTestCase {
         XCTAssertEqual(round, finished, "A finished round is finished")
     }
 
+    // MARK: - What stays on the map
+
+    func testNothingIsFoundBeforeAnythingIsFound() {
+        let round = self.round(of: Array(0..<40))
+        XCTAssertTrue(round.found.isEmpty)
+        XCTAssertTrue(round.missed.isEmpty)
+        XCTAssertEqual(round.score, 0)
+        XCTAssertEqual(round.triesLeft, QuizRound.tries)
+    }
+
+    func testEveryPlaceFoundStaysFound() {
+        var round = self.round(of: Array(0..<40))
+        var expected: [Int] = []
+        while let wanted = round.current {
+            _ = round.guess(wanted)
+            expected.append(wanted)
+            XCTAssertEqual(round.found, expected, "The map fills in as the round goes on")
+        }
+        XCTAssertEqual(round.found, round.questions, "A finished round has the whole set")
+    }
+
+    func testAWrongGuessFindsNothing() {
+        var round = self.round(of: Array(0..<40))
+        let wrong = somewhereElse(in: round)
+        _ = round.guess(wrong)
+        XCTAssertTrue(round.found.isEmpty, "Guessing at a place is not finding it")
+        XCTAssertFalse(round.found.contains(wrong))
+    }
+
+    /// Found, missed and crossed off are three different things the map draws three
+    /// different ways, and every question must land in exactly one of them.
+    func testEveryQuestionEndsUpEitherFoundOrMissedAndNeverBoth() {
+        var round = self.round(of: Array(0..<40))
+        var asked = 0
+        while let wanted = round.current {
+            asked += 1
+            // Miss every third one, find the rest.
+            if asked % 3 == 0 {
+                for _ in 0..<QuizRound.tries { _ = round.guess(somewhereElse(in: round)) }
+            } else {
+                _ = round.guess(wanted)
+            }
+            for id in round.found {
+                XCTAssertFalse(round.missed.contains(id), "\(id) is both found and missed")
+                XCTAssertFalse(round.ruledOut.contains(id), "\(id) is both found and ruled out")
+            }
+        }
+        XCTAssertEqual(round.found.count + round.missed.count, round.questions.count)
+        XCTAssertEqual(Set(round.found).union(round.missed), Set(round.questions))
+    }
+
     // MARK: - The score
 
-    func testTapsCountEveryGuessAcrossTheWholeRound() {
+    func testTheScoreIsTheSumOfWhatEachGoWasWorth() {
         var round = self.round(of: Array(0..<40))
         var expected = 0
+        var asked = 0
         while let wanted = round.current {
-            // Two wrong guesses, then the right one, every time.
-            for wrong in Array(0..<40).filter({ $0 != wanted }).prefix(2) {
-                XCTAssertEqual(round.guess(wrong), .wrong)
-                expected += 1
-            }
+            // Nought, one, then two wrong guesses, round and round.
+            let wrongFirst = asked % QuizRound.tries
+            for _ in 0..<wrongFirst { _ = round.guess(somewhereElse(in: round)) }
             XCTAssertEqual(round.guess(wanted), .right)
-            expected += 1
+            expected += QuizRound.points[wrongFirst]
+            XCTAssertEqual(round.score, expected)
+            asked += 1
         }
-        XCTAssertEqual(round.taps, expected)
-        XCTAssertEqual(round.taps, 30, "Ten questions at three taps each")
-        XCTAssertEqual(round.firstTime, 0)
+        // Four found first go, three on the second, three on the third.
+        XCTAssertEqual(round.score, 4 * 5 + 3 * 3 + 3 * 1)
+        XCTAssertEqual(round.firstTime, 4)
     }
 
     func testTheScoreCanNeverBeatPerfect() {
         var round = self.round(of: Array(0..<40))
         while let wanted = round.current { _ = round.guess(wanted) }
-        XCTAssertGreaterThanOrEqual(round.taps, round.questions.count)
+        XCTAssertLessThanOrEqual(round.score, round.perfectScore)
     }
 }

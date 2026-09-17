@@ -134,6 +134,10 @@ struct MapPalette {
     /// of cross streets was a name you had to go looking for.
     var neighborhoodLabelSize: Double { 23 }
 
+    /// A name that has settled, written smaller than the one just found. Big enough to
+    /// read at a glance, small enough that ten of them do not shout over the question.
+    var settledLabelSize: Double { 15 }
+
     /// How far the paper showing through a name reaches, in points on screen. A street
     /// name crosses one street and needs very little; a neighbourhood's name lies
     /// across a whole grid of them and needs a proper clearing.
