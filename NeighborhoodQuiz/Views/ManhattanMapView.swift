@@ -14,6 +14,9 @@ struct ManhattanMapView: View {
     let palette: MapPalette
     /// Which neighbourhood is picked out, if any, by `DrawnNeighborhood.id`.
     var selected: Int?
+    /// Neighbourhoods guessed at and crossed off, greyed so a player can see where they
+    /// have already looked.
+    var ruledOut: Set<Int> = []
     /// Whether a finger is on the map right now. Drawing is at its most expensive
     /// exactly when it has the least time, so a couple of things the eye cannot follow
     /// mid-drag are left until the map is still again.
@@ -84,6 +87,15 @@ struct ManhattanMapView: View {
                     lineJoin: .round
                 )
             )
+        }
+
+        // Crossed off. Over the streets like the highlight, and before the borders, so
+        // that a greyed neighborhood still has a line round it saying where it ends.
+        if !ruledOut.isEmpty {
+            for area in map.neighborhoods where ruledOut.contains(area.id) {
+                guard area.bounds.intersects(onScreen) else { continue }
+                board.fill(area.shape, with: .color(palette.ruledOut.opacity(0.42)))
+            }
         }
 
         // Every border, over the streets rather than under them.

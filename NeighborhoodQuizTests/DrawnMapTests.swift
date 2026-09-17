@@ -115,9 +115,35 @@ final class DrawnMapTests: XCTestCase {
         XCTAssertGreaterThan(wide.land.boundingRect.height, map.land.boundingRect.height)
     }
 
-    func testTheScreenshotOpeningAimsAtMidtown() {
-        XCTAssertEqual(HomeView.Opening(arguments: ["NeighborhoodQuiz"]), .island)
-        XCTAssertEqual(HomeView.Opening(arguments: ["NeighborhoodQuiz", "-map"]), .island)
-        XCTAssertEqual(HomeView.Opening(arguments: ["NeighborhoodQuiz", "-map-zoomed"]), .midtown)
+    /// What a launch opens on. The one that matters is the first: a person launching the
+    /// app passes no arguments and must get the game, not the map. Everything else here
+    /// is the screenshot runs.
+    func testALaunchWithNoArgumentsStartsARound() {
+        XCTAssertEqual(Screen(arguments: ["NeighborhoodQuiz"]), .quiz)
+        XCTAssertEqual(Screen(arguments: []), .quiz)
+        XCTAssertEqual(
+            Screen(arguments: ["NeighborhoodQuiz", "-NSTreatUnknownArgumentsAsOpen", "NO"]),
+            .quiz,
+            "Xcode and the simulator pass arguments of their own"
+        )
+    }
+
+    func testTheScreenshotArgumentsAskForTheMap() {
+        XCTAssertEqual(Screen(arguments: ["x", "-map"]), .map(opening: .island, showing: nil))
+        XCTAssertEqual(Screen(arguments: ["x", "-map-zoomed"]), .map(opening: .midtown, showing: nil))
+        XCTAssertEqual(
+            Screen(arguments: ["x", "-map-neighborhood"]),
+            .map(opening: .neighborhood("Greenwich Village"), showing: "Greenwich Village")
+        )
+    }
+
+    /// The shot that shows a highlight names a real place, and a rename in the data
+    /// would otherwise turn it into a screenshot of nothing picked out at all.
+    func testTheHighlightShotNamesAPlaceThatExists() {
+        guard case .map(_, let showing) = Screen(arguments: ["x", "-map-neighborhood"]),
+              let showing else {
+            return XCTFail("That argument should ask for a neighborhood")
+        }
+        XCTAssertNotNil(map.neighborhood(named: showing), "\(showing) is not on the map")
     }
 }

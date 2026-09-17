@@ -1,96 +1,50 @@
 import SwiftUI
 
-/// The screen the app opens on: Manhattan, drawn by hand, with its streets named, its
-/// forty neighbourhoods bordered, and any one of them picked out by touching it.
+/// The map on its own, with no game attached: tap anywhere on land and it tells you what
+/// that is.
 ///
-/// Nothing here names a neighbourhood until you ask it to. The borders are drawn from
-/// the start — knowing that there is a line between SoHo and the Village is half of
-/// what makes the map worth looking at — but the name only comes up under your finger,
-/// which is the shape the quiz will eventually be played in.
+/// The app opens on `QuizView` now, so nothing a player does reaches this. It is kept
+/// because it is what the screenshot runs shoot — the map is most of what this app is,
+/// and a regression in the drawing is far easier to see on a screen with nothing else
+/// happening on it than it is behind a prompt and a highlight.
 struct HomeView: View {
-    /// Where the map opens. The screenshot runs ask for the pulled-in ones so the
-    /// gallery shows the cross street names, and a neighbourhood picked out, as well as
-    /// the whole island.
-    enum Opening: Equatable {
-        case island
-        case midtown
-        case neighborhood(String)
-
-        init(arguments: [String]) {
-            if arguments.contains("-map-neighborhood") {
-                // Greenwich Village: small enough to fill a phone, known to anybody
-                // who has heard of Manhattan, and a tidy shape to show a highlight on.
-                self = .neighborhood("Greenwich Village")
-            } else if arguments.contains("-map-zoomed") {
-                self = .midtown
-            } else {
-                self = .island
-            }
-        }
-    }
-
-    var opening: Opening = .island
+    var opening: MapBoard.Opening = .island
+    /// Picked out from the start, for the shot that shows what a highlight looks like.
+    var showing: String?
 
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var drawn: DrawnMap?
-    @State private var camera = MapCamera()
-    /// Which neighbourhood is picked out, by `DrawnNeighborhood.id`. Nothing, until
-    /// somebody touches the map.
     @State private var selected: Int?
-    /// Set once, the first time the view is given a size, so an opening that has to be
-    /// aimed at somewhere in particular is not re-aimed on every rotation.
-    @State private var hasOpened = false
-
-    @GestureState private var pinch: CGFloat = 1
-    @GestureState private var drag: CGSize = .zero
 
     private var palette: MapPalette { .of(colorScheme) }
 
     var body: some View {
-        GeometryReader { geometry in
-            let size = geometry.size
+        ZStack {
+            palette.water.ignoresSafeArea()
 
-            ZStack {
-                palette.water.ignoresSafeArea()
-
-                if let drawn, drawn.size == size {
-                    ManhattanMapView(
-                        drawn: drawn,
-                        camera: live(in: size),
-                        palette: palette,
-                        selected: selected,
-                        interacting: pinch != 1 || drag != .zero
-                    )
-                        .contentShape(Rectangle())
-                        // The tap is asked first. A drag has ten points of slop to
-                        // travel before it counts as one, so a touch that goes nowhere
-                        // reaches this and a touch that moves does not.
-                        .onTapGesture(coordinateSpace: .local) { location in
-                            choose(at: location, on: drawn, in: size)
-                        }
-                        .gesture(pan(in: size).simultaneously(with: magnify(in: size)))
-                        .accessibilityElement()
-                        .accessibilityLabel(description(of: drawn))
-                        .accessibilityHint("Drag to move the map, pinch to zoom in, tap a neighborhood to pick it out")
-                        // A tap that lands on water changes nothing on screen if
-                        // nothing was picked out; the tick is what says the map heard.
-                        .sensoryFeedback(.selection, trigger: selected)
+            MapBoard(
+                palette: palette,
+                opening: opening,
+                selected: selected,
+                onTap: { selected = ($0 == selected) ? nil : $0 },
+                onReady: { map in
+                    if let showing, selected == nil {
+                        selected = map.neighborhood(named: showing)?.id
+                    }
                 }
+            )
+            .accessibilityElement()
+            .accessibilityLabel("Map of Manhattan")
+            .accessibilityHint("Drag to move the map, pinch to zoom in, tap a neighborhood to name it")
+            .sensoryFeedback(.selection, trigger: selected)
 
-                PaperTexture(palette: palette)
+            PaperTexture(palette: palette)
 
-                header
-                credit
-                zoomControls(in: size)
-            }
-            .onAppear { prepare(for: size) }
-            .onChange(of: size) { _, newSize in prepare(for: newSize) }
+            header
+            credit
         }
         .background(palette.water)
     }
-
-    // MARK: - Chrome
 
     private var header: some View {
         VStack(alignment: .trailing, spacing: 1) {
@@ -119,140 +73,6 @@ struct HomeView: View {
             .padding(.bottom, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             .allowsHitTesting(false)
-    }
-
-    private func zoomControls(in size: CGSize) -> some View {
-        VStack(spacing: 10) {
-            zoomButton("+", to: camera.zoom * 1.7, in: size)
-            zoomButton("\u{2212}", to: camera.zoom / 1.7, in: size)
-        }
-        .padding(.trailing, 14)
-        .padding(.bottom, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-    }
-
-    private func zoomButton(_ symbol: String, to target: Double, in size: CGSize) -> some View {
-        // At either end of the travel the button has nothing left to do, since the
-        // camera would only clamp the request back to where it already is.
-        let reachable = clamped(target) != camera.zoom
-
-        return Button {
-            withAnimation(.easeOut(duration: 0.18)) {
-                camera.setZoom(target)
-                camera.clampPan(in: size)
-            }
-        } label: {
-            Text(symbol)
-                .font(MapFont.chrome(size: 22))
-                .foregroundStyle(palette.ink)
-                // Apple asks for forty-four points of target, and a map you are
-                // holding one-handed asks for it more loudly than most screens.
-                .frame(width: 46, height: 46)
-                .background(
-                    Circle()
-                        .fill(palette.land.opacity(0.92))
-                        .overlay(Circle().strokeBorder(palette.inkSoft, lineWidth: 1.8))
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(!reachable)
-        .opacity(reachable ? 1 : 0.4)
-        .accessibilityLabel(symbol == "+" ? "Zoom in" : "Zoom out")
-    }
-
-    /// `setZoom` clamps, so a button at the end of its travel has to ask the same
-    /// question the camera would to know it has nothing left to do.
-    private func clamped(_ zoom: Double) -> Double {
-        min(max(zoom, MapCamera.range.lowerBound), MapCamera.range.upperBound)
-    }
-
-    // MARK: - Gestures
-
-    /// The camera as it stands *plus* whatever gesture is in flight, which is what the
-    /// map is drawn against while a finger is down.
-    private func live(in size: CGSize) -> MapCamera {
-        var live = camera
-        live.setZoom(camera.zoom * Double(pinch))
-        live.pan = CGSize(
-            width: live.pan.width + drag.width,
-            height: live.pan.height + drag.height
-        )
-        live.clampPan(in: size)
-        return live
-    }
-
-    private func pan(in size: CGSize) -> some Gesture {
-        DragGesture()
-            .updating($drag) { value, state, _ in state = value.translation }
-            .onEnded { value in
-                camera.pan = CGSize(
-                    width: camera.pan.width + value.translation.width,
-                    height: camera.pan.height + value.translation.height
-                )
-                camera.clampPan(in: size)
-            }
-    }
-
-    private func magnify(in size: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .updating($pinch) { value, state, _ in state = value.magnification }
-            .onEnded { value in
-                camera.setZoom(camera.zoom * Double(value.magnification))
-                camera.clampPan(in: size)
-            }
-    }
-
-    // MARK: - Choosing
-
-    /// Pick out whatever was touched, or put down whatever was being held.
-    ///
-    /// The tap is in screen points and the neighbourhoods are in the drawing's own
-    /// coordinates, so the camera runs backwards to say which part of the island is
-    /// under the finger. Touching the one already picked out lets go of it, and so does
-    /// touching the water — there is no way to get stuck holding something.
-    private func choose(at location: CGPoint, on map: DrawnMap, in size: CGSize) {
-        let place = live(in: size).modelPoint(location, in: size)
-        let hit = map.neighborhood(at: place)?.id
-        selected = (hit == selected) ? nil : hit
-    }
-
-    private func description(of map: DrawnMap) -> String {
-        guard let selected, let area = map.neighborhoods.first(where: { $0.id == selected }) else {
-            return "Map of Manhattan"
-        }
-        return "Map of Manhattan, \(area.name) selected"
-    }
-
-    // MARK: - Building
-
-    private func prepare(for size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
-        guard drawn?.size != size else { return }
-
-        let map = DrawnMap.build(size: size)
-        drawn = map
-
-        guard !hasOpened else {
-            camera.clampPan(in: size)
-            return
-        }
-        hasOpened = true
-
-        switch opening {
-        case .island:
-            camera = MapCamera()
-        case .midtown:
-            // Times Square, far enough in that the numbered cross streets have their
-            // names on — which is the point of the shot.
-            let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
-            camera = MapCamera.centred(on: midtown, zoom: 4.2, in: size)
-            camera.clampPan(in: size)
-        case .neighborhood(let name):
-            guard let area = map.neighborhood(named: name) else { break }
-            selected = area.id
-            camera = MapCamera.framing(area.bounds, in: size)
-            camera.clampPan(in: size)
-        }
     }
 }
 
