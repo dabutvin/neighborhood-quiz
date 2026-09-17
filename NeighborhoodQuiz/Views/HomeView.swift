@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The screen the app opens on: Manhattan, drawn by hand, with its streets named, its
-/// thirty-two neighbourhoods bordered, and any one of them picked out by touching it.
+/// forty neighbourhoods bordered, and any one of them picked out by touching it.
 ///
 /// Nothing here names a neighbourhood until you ask it to. The borders are drawn from
 /// the start — knowing that there is a line between SoHo and the Village is half of
@@ -18,8 +18,8 @@ struct HomeView: View {
 
         init(arguments: [String]) {
             if arguments.contains("-map-neighborhood") {
-                // Greenwich Village: small enough to fill a phone, and one of the few
-                // whose name the city writes the same way everybody else does.
+                // Greenwich Village: small enough to fill a phone, known to anybody
+                // who has heard of Manhattan, and a tidy shape to show a highlight on.
                 self = .neighborhood("Greenwich Village")
             } else if arguments.contains("-map-zoomed") {
                 self = .midtown

@@ -44,11 +44,16 @@ enum ManhattanMapData {
     /// Central Park and ninety-five other greens over eight acres.
     static var parks: [Park] { loaded.parks }
 
-    /// The thirty-two neighborhoods, which are the point of the whole app.
+    /// The forty neighborhoods, which are the point of the whole app.
     ///
-    /// These are the city's 2020 Neighborhood Tabulation Areas, minus the ones that are
-    /// a park or the United Nations rather than somewhere people live. They tile the
-    /// island, so a tap anywhere on land lands in exactly one of them.
+    /// They are built out of the city's 2020 census tracts — the same tracts its
+    /// Neighborhood Tabulation Areas are built out of, regrouped by `fetch_map_data.py`
+    /// so that the compound names come apart and the split ones go back together. Which
+    /// is to say SoHo is SoHo here, and not "SoHo-Little Italy-Hudson Square".
+    ///
+    /// The parks and the United Nations are left out, being places nobody lives and
+    /// nobody could be asked to name. Everywhere else tiles the island, so a tap on land
+    /// falls in exactly one of them or, over Central Park, in none.
     static var neighborhoods: [Neighborhood] { loaded.neighborhoods }
 
     /// Every road, longest first — which is the order the names are offered in when
@@ -66,9 +71,8 @@ enum ManhattanMapData {
 
     struct Neighborhood {
         var name: String
-        /// Most are one shape. A few are several — the Financial District takes in
-        /// Battery Park City and the piers, and Yorkville reaches across to a sliver
-        /// of island — so every one of them is a list.
+        /// Most are one shape. A couple are several — the Financial District takes in
+        /// the piers along both rivers — so every one of them is a list.
         var rings: [[Coordinate]]
     }
 

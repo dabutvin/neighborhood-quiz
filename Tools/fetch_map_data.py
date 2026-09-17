@@ -14,7 +14,8 @@ Four datasets, all from data.cityofnewyork.us:
   Centerline (inkn-q76z)          every street segment in the city, with its name
   Borough Boundaries (gthc-hcne)  the real shoreline, piers and all
   Parks Properties (enfh-gkve)    the greens, Central Park chief among them
-  2020 NTAs (9nt8-h7nd)           the neighborhoods, which are the point of the app
+  2020 NTAs (9nt8-h7nd)           the neighborhoods the city recognises
+  2020 Census Tracts (63ge-mke6)  what those are built out of, and what ours are
 
 What comes back is not drawable as it stands. The city stores a street as the
 dozens of little segments between its corners — Broadway is 389 rows — named in
@@ -34,12 +35,14 @@ import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import NamedTuple
 
 DOMAIN = "https://data.cityofnewyork.us/resource"
 CENTERLINE = "inkn-q76z"
 BOROUGHS = "gthc-hcne"
 PARKS = "enfh-gkve"
 NEIGHBORHOODS = "9nt8-h7nd"
+TRACTS = "63ge-mke6"
 MANHATTAN = "1"
 
 OUT = Path(__file__).resolve().parents[1] / "NeighborhoodQuiz/Resources/manhattan.json"
@@ -72,11 +75,106 @@ MIN_PARK_AREA = 1e-7
 # what is drawn and what is hit are the same polygon either way.
 NEIGHBORHOOD_TOLERANCE = 0.00025
 
+# Unioning tracts leaves slivers behind: a tract's share of the river, a mooring, the
+# odd pier. Every real neighborhood comes out at 6e-5 or larger and every sliver at
+# 1.2e-7 or smaller, so there is a factor of five hundred either side of this.
+MIN_NEIGHBORHOOD_AREA = 1e-6
+
 # The NTA table is not only neighborhoods. Type 9 is a park or a cemetery — Central
 # Park, Highbridge, Inwood Hill, Randall's Island — and type 6 is the United Nations,
 # which is a place but not a neighborhood anybody is asked to name. Only type 0 is
 # somewhere people live and call something.
 NEIGHBORHOOD_TYPE = "0"
+
+class Area(NamedTuple):
+    """One neighborhood of the finished map, and where its ground comes from."""
+
+    name: str
+    #: Whole NTAs it takes, by the city's name for them.
+    ntas: tuple[str, ...] = ()
+    #: Census tracts it takes by hand, by `ctlabel`, which is unique within the borough.
+    tracts: tuple[str, ...] = ()
+    #: Tracts to leave out of the NTAs above, for the one case where a name has a
+    #: passenger it should not be carrying.
+    without: tuple[str, ...] = ()
+
+
+# The three tracts in the East River. The city files them under Lenox Hill; nobody
+# standing on them would agree.
+ROOSEVELT_ISLAND = ("238.02", "238.03", "238.04")
+
+
+# What the map is divided into.
+#
+# The city draws 32 lived-in neighborhoods in Manhattan and gives several of them
+# compound names — "SoHo-Little Italy-Hudson Square" is one area — which is fine to read
+# off a map and no good at all to be asked to name. So the map is divided again here:
+# the compounds come apart, the halves of Harlem and Washington Heights go back
+# together, and a few names are shortened to what people say.
+#
+# The dividing is done in census tracts, which is what NTAs are built out of and which
+# therefore nest inside them exactly. That matters twice over: the pieces still tile the
+# island with no gaps and no overlaps, and every border is a real one the city surveyed
+# rather than a line drawn here by eye. Where an area is a whole NTA, or two of them put
+# back together, it says so; where it is a piece of one, the tracts are listed, and the
+# check at the end of `neighborhoods()` is what keeps those lists honest.
+AREAS = (
+    # --- below Houston
+    Area("Battery Park City", tracts=("317.03", "317.04")),
+    Area("Financial District", tracts=("7", "9", "13", "15.01", "15.02")),
+    Area("Civic Center", tracts=("29.01", "31")),
+    Area("Tribeca", tracts=("21", "33", "39")),
+    Area("Chinatown", tracts=("8", "16", "25", "27", "29.02")),
+    Area("Two Bridges", tracts=("2.01", "6")),
+    Area("Little Italy", tracts=("41", "43")),
+    Area("SoHo", tracts=("45", "47", "49")),
+    Area("Hudson Square", tracts=("37",)),
+    # --- Houston to 14th
+    Area("Lower East Side", ntas=("Lower East Side",)),
+    Area("East Village", tracts=("30.02", "32", "34", "36.02", "38", "40.01", "40.02", "42")),
+    Area("Alphabet City", tracts=("20", "22.02", "24", "26.01", "26.02", "28")),
+    Area("Greenwich Village", ntas=("Greenwich Village",)),
+    Area("West Village", ntas=("West Village",)),
+    # --- 14th to 42nd
+    Area("Chelsea", tracts=("81", "83", "87", "89", "91", "93", "97", "99.01", "99.02")),
+    Area("Hudson Yards", tracts=("99.03", "103", "111", "117")),
+    Area("Union Square", tracts=("52", "54")),
+    Area("Flatiron", tracts=("56", "58")),
+    Area("NoMad", tracts=("74", "76", "95", "101")),
+    Area("Gramercy", ntas=("Gramercy",)),
+    Area("Stuy Town", ntas=("Stuyvesant Town-Peter Cooper Village",)),
+    Area("Kips Bay", tracts=("62", "66", "70.01", "70.02", "72")),
+    Area("Murray Hill", tracts=("78", "80", "86.01", "88")),
+    # --- 42nd to 59th
+    Area("Times Square", tracts=("113", "119", "125")),
+    Area("Midtown", tracts=("82", "84", "94", "96", "102", "104", "109", "112.01",
+                            "112.02", "131", "137")),
+    Area("Midtown East", tracts=("92", "100", "106.01", "108.01", "108.02", "108.03",
+                                 "112.03")),
+    Area("Turtle Bay", tracts=("86.03", "90", "98")),
+    Area("Hell's Kitchen", ntas=("Hell's Kitchen",)),
+    # --- above 59th
+    Area("Upper East Side",
+         ntas=("Upper East Side-Carnegie Hill",
+               "Upper East Side-Lenox Hill-Roosevelt Island",
+               "Upper East Side-Yorkville"),
+         without=ROOSEVELT_ISLAND),
+    Area("Roosevelt Island", tracts=ROOSEVELT_ISLAND),
+    Area("Upper West Side",
+         ntas=("Upper West Side (Central)",
+               "Upper West Side-Lincoln Square",
+               "Upper West Side-Manhattan Valley")),
+    Area("Morningside Heights", ntas=("Morningside Heights",)),
+    Area("Manhattanville", tracts=("213.03", "219")),
+    Area("West Harlem", tracts=("217.03", "223.01", "223.02")),
+    Area("Harlem", ntas=("Harlem (North)", "Harlem (South)")),
+    Area("East Harlem", ntas=("East Harlem (North)", "East Harlem (South)")),
+    Area("Hamilton Heights", tracts=("225", "229", "233", "237")),
+    Area("Sugar Hill", tracts=("227", "231", "235.01")),
+    Area("Washington Heights", ntas=("Washington Heights (North)", "Washington Heights (South)")),
+    Area("Inwood", ntas=("Inwood",)),
+)
+
 
 # Manhattan borough runs down to Governors, Ellis and Liberty Islands. They are real
 # but they are a mile out to sea, and a map that fits them in shrinks the island it
@@ -343,6 +441,149 @@ def round_points(points, places=5, ring=False):
     return out
 
 
+def outline(polygons: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
+    """The boundary of a set of polygons that share their edges exactly.
+
+    Census tracts come out of one topology, so where two of them are neighbours they
+    share an edge vertex for vertex. Walk every polygon's edges in order and an interior
+    edge turns up once in each direction; throw those pairs away and what is left is the
+    outside of the set, which then sews head to tail into rings.
+
+    No clipping, no tolerance, no arithmetic on the coordinates at all — which is why
+    the seams come out perfect rather than nearly perfect. Two neighborhoods split from
+    one NTA share a border that is the same list of points on both sides.
+    """
+    edges: collections.Counter = collections.Counter()
+    for ring in polygons:
+        points = [(round(x, 9), round(y, 9)) for x, y in ring]
+        if len(points) > 1 and points[0] == points[-1]:
+            points.pop()
+        if len(points) < 3:
+            continue
+        for index in range(len(points)):
+            edges[(points[index], points[(index + 1) % len(points)])] += 1
+
+    onward: dict = collections.defaultdict(list)
+    for (start, end), count in edges.items():
+        if edges.get((end, start)):
+            continue  # interior: the tract on the other side walks it the other way
+        onward[start].extend([end] * count)
+
+    rings = []
+    while onward:
+        first = next(iter(onward))
+        ring = [first]
+        here = first
+        while True:
+            nexts = onward.get(here)
+            if not nexts:
+                break
+            step = nexts.pop()
+            if not nexts:
+                del onward[here]
+            if step == first:
+                break
+            ring.append(step)
+            here = step
+        if len(ring) >= 3:
+            rings.append(ring)
+    return rings
+
+
+def build_neighborhoods() -> list[dict]:
+    """The forty areas of `AREAS`, drawn out of census tracts.
+
+    The city's lived-in NTAs say which tracts are in play; `AREAS` says how to divide
+    them up again. Every tract of every lived-in NTA has to end up in exactly one area —
+    claimed twice and two neighborhoods would overlap, claimed by nobody and there would
+    be a hole on the island a tap falls through — so this counts them and refuses to
+    write a map where that is not true.
+    """
+    rows = fetch(
+        TRACTS,
+        where=f"boroname='Manhattan'",
+        limit=2_000,
+    )
+
+    lived_in = set()
+    polygons: dict[str, list] = {}
+    nta_of: dict[str, str] = {}
+    for row in rows:
+        geometry = row.get("geometry")
+        properties = row["properties"]
+        label = (properties.get("ctlabel") or "").strip()
+        nta = (properties.get("ntaname") or "").strip()
+        if not geometry or not label:
+            continue
+        shapes = (
+            geometry["coordinates"]
+            if geometry["type"] == "MultiPolygon"
+            else [geometry["coordinates"]]
+        )
+        polygons.setdefault(label, []).extend([(x, y) for x, y, *_ in shape[0]] for shape in shapes)
+        nta_of[label] = nta
+
+    # Which NTAs are places people live, straight from the NTA table rather than from a
+    # list kept by hand here — so a re-fetch that reclassifies one is caught rather than
+    # quietly followed.
+    for row in fetch(
+        NEIGHBORHOODS,
+        where=f"boroname='Manhattan' AND ntatype='{NEIGHBORHOOD_TYPE}'",
+        limit=500,
+    ):
+        lived_in.add((row["properties"].get("ntaname") or "").strip())
+
+    in_play = {label for label, nta in nta_of.items() if nta in lived_in}
+
+    claimed: dict[str, str] = {}
+    neighborhoods = []
+    for area in AREAS:
+        labels = set(area.tracts)
+        for nta in area.ntas:
+            found = {label for label, name in nta_of.items() if name == nta}
+            if not found:
+                raise SystemExit(f"{area.name}: the city has no NTA called {nta!r}")
+            labels |= found
+        labels -= set(area.without)
+
+        for label in sorted(labels):
+            if label not in in_play:
+                raise SystemExit(
+                    f"{area.name}: tract {label} is in {nta_of.get(label, 'no NTA')!r}, "
+                    "which is not somewhere people live"
+                )
+            if label in claimed:
+                raise SystemExit(
+                    f"tract {label} is claimed by both {claimed[label]!r} and {area.name!r}"
+                )
+            claimed[label] = area.name
+
+        rings = []
+        for ring in outline([shape for label in labels for shape in polygons[label]]):
+            if ring_area(ring) < MIN_NEIGHBORHOOD_AREA:
+                continue  # a tract's share of the river, a pier, a mooring
+            thinned = thin_ring(ring, NEIGHBORHOOD_TOLERANCE)
+            if len(thinned) >= 4:
+                rings.append(thinned)
+        if not rings:
+            raise SystemExit(f"{area.name}: nothing left to draw")
+        neighborhoods.append({"name": area.name, "rings": rings})
+
+    orphans = sorted(in_play - set(claimed))
+    if orphans:
+        raise SystemExit(
+            "no neighborhood claims these tracts, which would leave holes in the island: "
+            + ", ".join(f"{label} ({nta_of[label]})" for label in orphans)
+        )
+
+    neighborhoods.sort(key=lambda area: area["name"])
+    print(
+        f"    {len(neighborhoods)} neighborhoods from {len(claimed)} tracts, "
+        f"{sum(len(r) for n in neighborhoods for r in n['rings'])} points"
+    )
+    return neighborhoods
+
+
 def main() -> None:
     print("NYC Open Data:")
 
@@ -473,28 +714,7 @@ def main() -> None:
     streets.sort(key=lambda s: (s["tier"], -s["length"]))
 
     # --- the neighborhoods
-    nta_rows = fetch(
-        NEIGHBORHOODS,
-        where=f"boroname='Manhattan' AND ntatype='{NEIGHBORHOOD_TYPE}'",
-        limit=500,
-    )
-    neighborhoods = []
-    for row in nta_rows:
-        geometry = row.get("geometry")
-        name = (row["properties"].get("ntaname") or "").strip()
-        if not geometry or not name:
-            continue
-        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
-        rings = []
-        for polygon in polygons:
-            ring = thin_ring([(x, y) for x, y in polygon[0]], NEIGHBORHOOD_TOLERANCE)
-            if len(ring) >= 4 and ring_area(ring) >= MIN_PARK_AREA:
-                rings.append(ring)
-        if rings:
-            neighborhoods.append({"name": name, "rings": rings})
-    neighborhoods.sort(key=lambda n: n["name"])
-    print(f"    {len(neighborhoods)} neighborhoods, "
-          f"{sum(len(r) for n in neighborhoods for r in n['rings'])} points")
+    neighborhoods = build_neighborhoods()
 
     # --- write it
     names = [s["name"] for s in streets]

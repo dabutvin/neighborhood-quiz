@@ -45,7 +45,7 @@ struct DrawnMap {
     let landEdge: Path
     let parks: Path
     let parkEdge: Path
-    /// The thirty-two tappable shapes, in the order the data holds them.
+    /// The forty tappable shapes, in the order the data holds them.
     let neighborhoods: [DrawnNeighborhood]
     /// Side streets first, then the major ones, then the avenues on top, so the heavy
     /// lines are never broken by the light ones crossing them.

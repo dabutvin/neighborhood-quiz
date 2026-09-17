@@ -15,8 +15,8 @@ final class DrawnNeighborhoodTests: XCTestCase {
         CGPoint(x: 100, y: 100), CGPoint(x: 0, y: 100),
     ]
 
-    /// A horseshoe opening east — the shape the Financial District makes round Battery
-    /// Park City, and the reason a centroid is not enough on its own.
+    /// A horseshoe opening east — the shape Midtown East makes round Turtle Bay, and the
+    /// reason a centroid is not enough on its own.
     private let horseshoe = [
         CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0), CGPoint(x: 100, y: 20),
         CGPoint(x: 30, y: 20), CGPoint(x: 30, y: 80), CGPoint(x: 100, y: 80),
@@ -151,8 +151,22 @@ final class DrawnNeighborhoodTests: XCTestCase {
         XCTAssertNil(map.neighborhood(at: ramble))
     }
 
+    /// The made-up horseshoe above is only worth testing because a real one exists. This
+    /// is it: if a future re-fetch ever made every neighborhood convex, the fallback
+    /// would go untested and this would say so.
+    func testAtLeastOneRealNeighborhoodNeedsTheFallback() {
+        let awkward = map.neighborhoods.filter { area in
+            let widest = area.rings.max { $0.count < $1.count } ?? []
+            return !DrawnNeighborhood.ring(widest, contains: DrawnNeighborhood.centroid(of: widest))
+        }
+        XCTAssertFalse(awkward.isEmpty, "Nothing exercises insidePoint any more")
+        for area in awkward {
+            XCTAssertTrue(area.contains(area.labelPoint), "\(area.name) was not rescued")
+        }
+    }
+
     func testANeighborhoodCanBeFoundByName() {
-        XCTAssertEqual(map.neighborhood(named: "Greenwich Village")?.name, "Greenwich Village")
+        XCTAssertEqual(map.neighborhood(named: "SoHo")?.name, "SoHo")
         XCTAssertNil(map.neighborhood(named: "Brooklyn Heights"))
     }
 

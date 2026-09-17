@@ -179,7 +179,7 @@ final class ManhattanMapDataTests: XCTestCase {
 
     func testTheIslandIsDividedIntoNeighborhoods() {
         let areas = ManhattanMapData.neighborhoods
-        XCTAssertEqual(areas.count, 32, "The city draws 32 lived-in NTAs in Manhattan")
+        XCTAssertEqual(areas.count, 40, "`AREAS` in fetch_map_data.py names forty")
 
         for area in areas {
             XCTAssertFalse(area.name.isEmpty)
@@ -224,14 +224,77 @@ final class ManhattanMapDataTests: XCTestCase {
     }
 
     func testTheFewNeighborhoodsThatComeInPiecesStillDo() {
-        // Battery Park City is not walkable from the rest of the Financial District
-        // without crossing something the city counts as water, so the city draws it as
-        // several shapes. A re-fetch that quietly dropped every ring but the first would
-        // still look right at a glance, and would lose Roosevelt Island.
-        let byName = Dictionary(
-            uniqueKeysWithValues: ManhattanMapData.neighborhoods.map { ($0.name, $0) }
-        )
-        XCTAssertGreaterThan(byName["Financial District-Battery Park City"]?.rings.count ?? 0, 1)
-        XCTAssertGreaterThan(byName["Upper East Side-Lenox Hill-Roosevelt Island"]?.rings.count ?? 0, 1)
+        // The Financial District takes in the piers along both rivers, which the city
+        // counts as its ground but which no walk connects to the rest of it. A re-fetch
+        // that quietly kept only the first ring of each area would still look right at a
+        // glance and would be wrong here.
+        XCTAssertGreaterThan(named("Financial District")?.rings.count ?? 0, 1)
+    }
+
+    /// Splitting the compound names was the point of building these out of tracts rather
+    /// than taking the city's areas whole. This is the check that they stayed split: the
+    /// city has no "SoHo", only "SoHo-Little Italy-Hudson Square", and a re-fetch that
+    /// fell back to the NTA table would pass every other test in this file.
+    func testTheNamesAreOnesAPlayerWouldSay() {
+        for name in [
+            "SoHo", "Little Italy", "Hudson Square", "Tribeca", "Civic Center",
+            "Chinatown", "Two Bridges", "Financial District", "Battery Park City",
+            "Alphabet City", "Flatiron", "NoMad", "Union Square", "Times Square",
+            "Midtown East", "Turtle Bay", "Hudson Yards", "Chelsea", "Roosevelt Island",
+            "Murray Hill", "Kips Bay", "Sugar Hill", "Hamilton Heights",
+            "Harlem", "East Harlem", "Washington Heights", "Upper East Side",
+            "Upper West Side",
+        ] {
+            XCTAssertNotNil(named(name), "\(name) is missing from the map")
+        }
+
+        // And no name is one of the city's compounds, which is what this pass was for.
+        for area in ManhattanMapData.neighborhoods {
+            XCTAssertFalse(
+                area.name.contains("-") && area.name.contains(" "),
+                "\(area.name) still reads like an NTA rather than like a place"
+            )
+            XCTAssertFalse(area.name.contains("("), "\(area.name) still has a qualifier on it")
+        }
+    }
+
+    /// Roosevelt Island is filed by the city under Lenox Hill. It is an island in the
+    /// East River reached by a tram, and a player told it was the Upper East Side would
+    /// be right to argue, so it is pulled out into its own area — and being its own area
+    /// means it must not also be part of the Upper East Side's.
+    func testRooseveltIslandIsNotTheUpperEastSide() {
+        guard let island = named("Roosevelt Island"), let upper = named("Upper East Side") else {
+            return XCTFail("Both areas should exist")
+        }
+        let east = island.rings.flatMap { $0 }.map(\.longitude).min() ?? 0
+        XCTAssertGreaterThan(east, -73.97, "Roosevelt Island is in the river, not on the island")
+
+        for point in island.rings.flatMap({ $0 }) {
+            for ring in upper.rings {
+                XCTAssertFalse(
+                    Self.ring(ring, contains: point),
+                    "\(point) is claimed by both Roosevelt Island and the Upper East Side"
+                )
+            }
+        }
+    }
+
+    private func named(_ name: String) -> ManhattanMapData.Neighborhood? {
+        ManhattanMapData.neighborhoods.first { $0.name == name }
+    }
+
+    private static func ring(_ ring: [Coordinate], contains point: Coordinate) -> Bool {
+        var inside = false
+        var previous = ring.count - 1
+        for index in ring.indices {
+            let a = ring[index], b = ring[previous]
+            if (a.latitude > point.latitude) != (b.latitude > point.latitude) {
+                let cut = (b.longitude - a.longitude) * (point.latitude - a.latitude)
+                    / (b.latitude - a.latitude) + a.longitude
+                if point.longitude < cut { inside.toggle() }
+            }
+            previous = index
+        }
+        return inside
     }
 }
