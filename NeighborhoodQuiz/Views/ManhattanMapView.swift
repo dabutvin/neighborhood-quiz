@@ -73,23 +73,18 @@ struct ManhattanMapView: View {
 
         // Every border, broken and in its own colour. Dashes are half of what keeps
         // these from reading as more roads — no street on this map is drawn with gaps
-        // in it — and the warm red-brown is the other half.
-        //
-        // Heavier than they first were. At the widest zoom the island is a couple of
-        // hundred points across and the borders on it are stubs, so a hairline at four
-        // tenths was something you had to hunt for; at this weight the layer reads
-        // from across the room, which is the only zoom at which the *shape* of the
-        // division is the thing worth seeing.
+        // in it — and the warm red-brown is the other half. The first version of this
+        // was a grey-brown hairline at four tenths, which is to say it was a road.
         for area in map.neighborhoods where area.bounds.intersects(onScreen) {
             guard area.id != selected else { continue }
             board.stroke(
                 area.edge,
-                with: .color(palette.border.opacity(0.75)),
+                with: .color(palette.border.opacity(0.85)),
                 style: StrokeStyle(
-                    lineWidth: 1.3 / zoom,
+                    lineWidth: CGFloat(borderWeight) / zoom,
                     lineCap: .round,
                     lineJoin: .round,
-                    dash: [4.5 / zoom, 3.5 / zoom]
+                    dash: [5 / zoom, 3.5 / zoom]
                 )
             )
         }
@@ -119,6 +114,15 @@ struct ManhattanMapView: View {
         // drawing and almost impossible to read a name off.
         if let chosen {
             board.fill(chosen.shape, with: .color(palette.land.opacity(0.62)))
+
+            // The greens come back through it. Taking the contrast out of every street
+            // inside was the point; taking it out of Washington Square along with them
+            // was not. A park is a landmark, and which neighbourhood has which is a
+            // good part of what knowing a neighbourhood means.
+            var greens = board
+            greens.clip(to: chosen.shape)
+            greens.fill(map.parks, with: .color(palette.park.opacity(0.7)))
+
             board.fill(chosen.shape, with: .color(palette.highlight.opacity(0.28)))
             // And its own line, unbroken and heavier than any avenue, which is what
             // makes it read as one shape rather than as a stain on the drawing.
@@ -128,6 +132,18 @@ struct ManhattanMapView: View {
                 style: StrokeStyle(lineWidth: 3 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
+    }
+
+    /// How heavy a border is drawn, in points on screen.
+    ///
+    /// Heavier when pulled back, which is the opposite of how a map usually behaves and
+    /// is the whole point. At the widest zoom the island is a couple of hundred points
+    /// across, every border on it is a stub, and it has the entire street grid to be
+    /// seen against; coming in gives it room and a quieter background, and it settles
+    /// back to being a line.
+    private var borderWeight: Double {
+        let pulledBack = min(max((3 - camera.zoom) / 2, 0), 1)
+        return 1.2 + 0.9 * pulledBack
     }
 
     /// How much of a road is on the page. The side streets come in over a range rather
