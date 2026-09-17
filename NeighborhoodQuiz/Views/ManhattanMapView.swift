@@ -71,24 +71,6 @@ struct ManhattanMapView: View {
         // the same as one you can see, and at four times in almost all of them do.
         let onScreen = camera.visibleRect(in: size, margin: 8)
 
-        // Every border, broken and in its own colour. Dashes are half of what keeps
-        // these from reading as more roads — no street on this map is drawn with gaps
-        // in it — and the warm red-brown is the other half. The first version of this
-        // was a grey-brown hairline at four tenths, which is to say it was a road.
-        for area in map.neighborhoods where area.bounds.intersects(onScreen) {
-            guard area.id != selected else { continue }
-            board.stroke(
-                area.edge,
-                with: .color(palette.border.opacity(0.85)),
-                style: StrokeStyle(
-                    lineWidth: CGFloat(borderWeight) / zoom,
-                    lineCap: .round,
-                    lineJoin: .round,
-                    dash: [5 / zoom, 3.5 / zoom]
-                )
-            )
-        }
-
         for road in map.roads {
             guard road.bounds.intersects(onScreen) else { continue }
             let ink = presence(of: road)
@@ -104,7 +86,44 @@ struct ManhattanMapView: View {
             )
         }
 
-        // The picked-out one, last, over the streets rather than under them.
+        // Every border, over the streets rather than under them.
+        //
+        // Under them was the mistake, and no amount of weight or colour was going to
+        // fix it: a border under the drawing is crossed by every street that crosses
+        // it, and fifteen hundred strokes of road painted these into stubs a few points
+        // long. Dashes on top of that left not a line but a rash. A boundary is not part
+        // of the drawing underneath — it is something said about it — and it belongs on
+        // top the way a line drawn over a finished map in coloured pencil would be.
+        //
+        // The casing of paper underneath is the other half of that. It is what a road
+        // atlas puts round a motorway, and it does the same job here: the line is read
+        // against the paper rather than against whatever grid it happens to be crossing.
+        for area in map.neighborhoods where area.bounds.intersects(onScreen) {
+            guard area.id != selected else { continue }
+            let dash = [5 / zoom, 3.5 / zoom]
+            board.stroke(
+                area.edge,
+                with: .color(palette.land.opacity(0.9)),
+                style: StrokeStyle(
+                    lineWidth: CGFloat(borderWeight + 1.8) / zoom,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: dash
+                )
+            )
+            board.stroke(
+                area.edge,
+                with: .color(palette.border),
+                style: StrokeStyle(
+                    lineWidth: CGFloat(borderWeight) / zoom,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: dash
+                )
+            )
+        }
+
+        // The picked-out one, last of all.
         //
         // Two coats. The first is the colour of the paper, and its whole job is to take
         // the contrast out of the grid underneath: the streets are still all there,
@@ -136,14 +155,17 @@ struct ManhattanMapView: View {
 
     /// How heavy a border is drawn, in points on screen.
     ///
-    /// Heavier when pulled back, which is the opposite of how a map usually behaves and
-    /// is the whole point. At the widest zoom the island is a couple of hundred points
-    /// across, every border on it is a stub, and it has the entire street grid to be
-    /// seen against; coming in gives it room and a quieter background, and it settles
-    /// back to being a line.
+    /// A little heavier when pulled back, where the borders are shortest and there is
+    /// most of the island on the glass at once.
+    ///
+    /// Lighter than the first version over the top, which at two points and more was a
+    /// quilt of dashes with a street map somewhere behind it — the same mistake as
+    /// hiding them under the streets, with the sign flipped. Heavier than the second,
+    /// which corrected too far. This sits between the two: a line you can follow across
+    /// the island without it becoming the thing the island is made of.
     private var borderWeight: Double {
         let pulledBack = min(max((3 - camera.zoom) / 2, 0), 1)
-        return 1.2 + 0.9 * pulledBack
+        return 1.2 + 0.5 * pulledBack
     }
 
     /// How much of a road is on the page. The side streets come in over a range rather
