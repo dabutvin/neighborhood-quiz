@@ -284,10 +284,7 @@ struct QuizView: View {
                     .foregroundStyle(palette.inkSoft)
             }
 
-            Text(breakdown(of: round))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(palette.inkSoft)
-                .multilineTextAlignment(.center)
+            breakdown(of: round)
 
             Button(action: playAgain) {
                 Text("Play again")
@@ -316,12 +313,58 @@ struct QuizView: View {
         .padding(28)
     }
 
-    private func breakdown(of round: QuizRound) -> String {
-        var parts = ["\(round.firstTime) of \(round.questions.count) first go"]
-        if !round.missed.isEmpty {
-            parts.append("\(round.missed.count) never found")
+    /// Where the score came from, a line per go.
+    ///
+    /// Every question asked is on exactly one of these lines, so the counts add up to
+    /// ten and the points add up to the number above them — which is the whole point of
+    /// showing it: a score with no working is a number somebody has to take on trust.
+    ///
+    /// A go nobody managed is still listed, greyed rather than left out. "Never found:
+    /// none" is worth reading, and a list whose rows come and go depending on how the
+    /// round went is a list you have to re-read every time.
+    private func breakdown(of round: QuizRound) -> some View {
+        VStack(spacing: 5) {
+            ForEach(0..<QuizRound.tries, id: \.self) { go in
+                tally(
+                    QuizRound.goName(go),
+                    count: round.foundOn[go],
+                    points: round.foundOn[go] * QuizRound.points[min(go, QuizRound.points.count - 1)],
+                    ink: palette.highlightInk.opacity(1 - Double(go) * 0.2)
+                )
+            }
+            tally(
+                "Never found",
+                count: round.missed.count,
+                points: 0,
+                ink: palette.ruledOut
+            )
         }
-        return parts.joined(separator: " · ")
+        .padding(.top, 2)
+    }
+
+    private func tally(_ label: String, count: Int, points: Int, ink: Color) -> some View {
+        let spent = count > 0
+        return HStack(spacing: 10) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(spent ? palette.ink : palette.inkSoft.opacity(0.55))
+            Spacer(minLength: 14)
+            Text("\(count)")
+                .font(MapFont.chrome(size: 20))
+                .foregroundStyle(spent ? ink : palette.inkSoft.opacity(0.45))
+                .monospacedDigit()
+                .frame(minWidth: 16, alignment: .trailing)
+            Text(points > 0 ? "\(points) pts" : "—")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(palette.inkSoft.opacity(spent ? 0.9 : 0.45))
+                .monospacedDigit()
+                .frame(minWidth: 42, alignment: .trailing)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(label): \(count) \(count == 1 ? "place" : "places")"
+                + (points > 0 ? ", \(points) points" : "")
+        )
     }
 
     // MARK: - Playing
