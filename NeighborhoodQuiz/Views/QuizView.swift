@@ -24,23 +24,30 @@ struct QuizView: View {
         ZStack {
             palette.water.ignoresSafeArea()
 
-            MapBoard(
-                palette: palette,
-                selected: found,
-                ruledOut: round?.ruledOut ?? [],
-                resetToken: opening,
-                onTap: guess,
-                onReady: start
-            )
-
-            PaperTexture(palette: palette)
-
-            if let round {
-                if round.isFinished {
-                    summary(of: round)
-                } else {
-                    prompt(for: round).frame(maxHeight: .infinity, alignment: .top)
+            // Stacked rather than layered, so the map is drawn into what is left over
+            // after the question has had its share. Over the top, the card hid the
+            // northern end of the island — which was fine until the question was Inwood
+            // and the answer was underneath it.
+            VStack(spacing: 0) {
+                if let round, !round.isFinished {
+                    prompt(for: round)
                 }
+
+                ZStack {
+                    MapBoard(
+                        palette: palette,
+                        selected: found,
+                        ruledOut: round?.ruledOut ?? [],
+                        resetToken: opening,
+                        onTap: guess,
+                        onReady: start
+                    )
+                    PaperTexture(palette: palette)
+                }
+            }
+
+            if let round, round.isFinished {
+                summary(of: round)
             }
         }
         .background(palette.water)
@@ -94,7 +101,7 @@ struct QuizView: View {
             .foregroundStyle(palette.inkSoft.opacity(0.85))
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(palette.land.opacity(0.95))
@@ -104,7 +111,8 @@ struct QuizView: View {
                 )
         )
         .padding(.horizontal, 12)
-        .padding(.top, 6)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Find \(wanted). Question \(round.index + 1) of \(round.questions.count).")
