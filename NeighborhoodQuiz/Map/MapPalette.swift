@@ -43,6 +43,11 @@ struct MapPalette {
     /// a highlight has to be unmistakably *not* part of the drawing underneath it.
     var highlight: Color
     var highlightInk: Color
+    /// A neighborhood guessed at and found to be somewhere else. Cool and flat rather
+    /// than red: crossing a place off is a step towards the answer, not a telling-off,
+    /// and forty of these on one screen in an angry colour would be a horrible thing to
+    /// look at.
+    var ruledOut: Color
     /// What a street name is written in, and the halo of paper that keeps it legible
     /// where it crosses its own street.
     var label: Color
@@ -62,6 +67,7 @@ struct MapPalette {
         border: Color(hex: 0xB0765A),
         highlight: Color(hex: 0xD98A5E),
         highlightInk: Color(hex: 0x9A472A),
+        ruledOut: Color(hex: 0x6E7076),
         label: Color(hex: 0x5B4A3A),
         labelHalo: Color(hex: 0xF7F0DF),
         grain: Color(hex: 0x5B4A3A)
@@ -82,6 +88,7 @@ struct MapPalette {
         border: Color(hex: 0xA5705A),
         highlight: Color(hex: 0xD4794C),
         highlightInk: Color(hex: 0xF0A87E),
+        ruledOut: Color(hex: 0x14161A),
         label: Color(hex: 0xE2D6BE),
         labelHalo: Color(hex: 0x2B2A26),
         grain: Color(hex: 0xEFE6D2)
