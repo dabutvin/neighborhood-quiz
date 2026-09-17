@@ -69,15 +69,20 @@ struct QuizView: View {
     private func prompt(for round: QuizRound) -> some View {
         let wanted = round.current.flatMap { names[$0] } ?? ""
 
+        // Two rows rather than three. The island is tall and thin and so is always
+        // fitted by its height, which means every point this card takes is a point off
+        // the map — and what has been crossed off is already plain on the map itself,
+        // greyed where you guessed.
         VStack(spacing: 2) {
             HStack {
                 Text("FIND")
                     .font(.system(size: 10, weight: .semibold))
                     .kerning(2.2)
                 Spacer()
-                Text("\(round.index + 1) of \(round.questions.count)")
+                Text(standing(of: round))
                     .font(.system(size: 10, weight: .semibold))
                     .kerning(1.2)
+                    .monospacedDigit()
             }
             .foregroundStyle(palette.inkSoft)
 
@@ -87,18 +92,6 @@ struct QuizView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-
-            HStack {
-                // A space rather than nothing, so the card does not change height on
-                // the first tap of a round.
-                Text(round.taps == 0 ? " " : tally(round.taps, of: "tap"))
-                Spacer()
-                if !round.ruledOut.isEmpty {
-                    Text("\(round.ruledOut.count) crossed off")
-                }
-            }
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(palette.inkSoft.opacity(0.85))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -118,8 +111,12 @@ struct QuizView: View {
         .accessibilityLabel("Find \(wanted). Question \(round.index + 1) of \(round.questions.count).")
     }
 
-    private func tally(_ count: Int, of thing: String) -> String {
-        "\(count) \(thing)\(count == 1 ? "" : "s")"
+    /// How far through, and what it has cost so far. The cost only appears once there
+    /// is one, so a round opens without a nought staring at you.
+    private func standing(of round: QuizRound) -> String {
+        let progress = "\(round.index + 1) of \(round.questions.count)"
+        guard round.taps > 0 else { return progress }
+        return "\(progress)   \(round.taps) tap\(round.taps == 1 ? "" : "s")"
     }
 
     // MARK: - The end of it
