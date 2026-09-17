@@ -1,7 +1,7 @@
 import Foundation
 
-/// A round of the quiz: ten neighborhoods to find, in order, and what it cost to find
-/// them.
+/// A round of the quiz: ten neighborhoods to find, three goes at each, and what those
+/// goes were worth.
 ///
 /// The whole of the game's rules live here, and none of the drawing does. A round knows
 /// nothing about maps, taps or SwiftUI — it is asked about a neighborhood by its id and
@@ -11,19 +11,26 @@ import Foundation
 ///
 /// ## Scoring
 ///
-/// A wrong guess does not end a question — you keep going until you find the place — so
-/// everybody finishes every round having found all ten. Which means the count of right
-/// answers is always ten and tells you nothing, and the only number that carries any
-/// information is **how many guesses it took**. Ten is perfect. Golf, in other words,
-/// and the same reason golf counts that way: when the task is always completed, the cost
-/// of completing it is the score.
+/// Five points for finding it straight away, three on the second go, one on the third,
+/// and nothing at all if three goes are not enough — at which point the round shows you
+/// where it was and moves on, because somebody who does not know is not going to find
+/// out by guessing a fourth time.
 ///
-/// Guesses, not taps. Touching the map costs nothing and can be taken back; it is
-/// answering with a place that goes on the card.
+/// Fifty is a perfect round. Counting up rather than down, which is the change from the
+/// version before this one: with the goes capped there is a best possible score to climb
+/// towards, and that reads as a score in a way that "the fewest guesses" never quite did.
 struct QuizRound: Equatable {
     /// How many places a round asks for. Ten is a train ride rather than an evening,
     /// and short enough that a bad start is worth playing out.
     static let questionCount = 10
+
+    /// Goes at each place before the round gives it to you.
+    static let tries = 3
+
+    /// What the first, second and third go are worth. Steep on purpose: knowing is meant
+    /// to be worth much more than narrowing down, and the third-go point is there to be
+    /// better than nothing rather than to be worth chasing.
+    static let points = [5, 3, 1]
 
     /// The neighborhoods to find, by `DrawnNeighborhood.id`, in the order asked.
     let questions: [Int]
@@ -32,17 +39,25 @@ struct QuizRound: Equatable {
     /// once the round is over.
     private(set) var index = 0
 
-    /// Every guess at a neighborhood, across the whole round. The score.
-    private(set) var guesses = 0
+    /// Points so far.
+    private(set) var score = 0
 
-    /// How many rounds were found without a single wrong guess. Not the score, but the
+    /// The places found, in the order they were found. The map leaves them filled in.
+    private(set) var found: [Int] = []
+
+    /// The places three goes were not enough for, which the round showed instead. The
+    /// map leaves these too: being shown where Inwood was is the whole consolation for
+    /// not knowing.
+    private(set) var missed: [Int] = []
+
+    /// How many places were found without a single wrong guess. Not the score, but the
     /// number people actually want to hear about themselves.
     private(set) var firstTime = 0
 
     /// What has been guessed and ruled out on the question being asked now. Kept so the
-    /// map can show a player what they have already eliminated, and so that tapping the
+    /// map can show a player what they have already eliminated, so that guessing the
     /// same wrong place twice is not charged for twice — that is a slip of the thumb,
-    /// not a second opinion.
+    /// not a second opinion — and because its size is how many goes have been used.
     private(set) var ruledOut: Set<Int> = []
 
     /// The neighborhood being asked for, or nothing once the round is over.
@@ -52,13 +67,12 @@ struct QuizRound: Equatable {
 
     var isFinished: Bool { current == nil }
 
-    /// Every place found so far this round, in the order they were asked for.
-    ///
-    /// No state of its own, because there is none to keep: a question is only ever left
-    /// by answering it, so the places found are exactly the questions already asked. The
-    /// map fills them in as it goes, which turns a round into something that is visibly
-    /// being assembled rather than ten unrelated questions in a row.
-    var found: [Int] { Array(questions.prefix(index)) }
+    /// Goes used on this question, and goes left.
+    var triesUsed: Int { ruledOut.count }
+    var triesLeft: Int { max(QuizRound.tries - triesUsed, 0) }
+
+    /// What a round of this length is worth if every place is found first go.
+    var perfectScore: Int { questions.count * (QuizRound.points.first ?? 0) }
 
     /// Ten of the forty, in an order nobody can predict. Takes the ids to choose from so
     /// that a test can hand it a known set and a known generator.
@@ -75,12 +89,21 @@ struct QuizRound: Equatable {
         self.init(askingAbout: choices, count: count, using: &generator)
     }
 
+    /// A round that asks exactly these, in exactly this order. For the screenshot runs,
+    /// which want the same places in the gallery every time, and for tests.
+    init(asking questions: [Int]) {
+        self.questions = questions
+    }
+
     /// What a guess turned out to be.
     enum Answer: Equatable {
-        /// That was the place. The round has moved on to the next question.
+        /// That was the place. The round has moved on.
         case right
-        /// That was somewhere else, which is now ruled out for this question.
+        /// Somewhere else, now ruled out, and there are goes left.
         case wrong
+        /// Somewhere else on the last go. The place the round wanted is the last of
+        /// `missed`, and the round has moved on.
+        case missed
         /// Somewhere already ruled out on this question, or a guess after the round is
         /// over. Costs nothing and changes nothing.
         case ignored
@@ -88,18 +111,28 @@ struct QuizRound: Equatable {
 
     /// Guess at the neighborhood being asked for.
     mutating func guess(_ id: Int) -> Answer {
-        guard let current else { return .ignored }
+        guard let current, triesLeft > 0 else { return .ignored }
         guard !ruledOut.contains(id) else { return .ignored }
 
-        guesses += 1
-        guard id == current else {
-            ruledOut.insert(id)
-            return .wrong
+        guard id != current else {
+            score += QuizRound.points[min(triesUsed, QuizRound.points.count - 1)]
+            if triesUsed == 0 { firstTime += 1 }
+            found.append(current)
+            moveOn()
+            return .right
         }
 
-        if ruledOut.isEmpty { firstTime += 1 }
+        ruledOut.insert(id)
+        guard triesLeft > 0 else {
+            missed.append(current)
+            moveOn()
+            return .missed
+        }
+        return .wrong
+    }
+
+    private mutating func moveOn() {
         index += 1
         ruledOut = []
-        return .right
     }
 }

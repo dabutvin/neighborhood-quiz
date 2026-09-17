@@ -119,13 +119,41 @@ final class DrawnMapTests: XCTestCase {
     /// app passes no arguments and must get the game, not the map. Everything else here
     /// is the screenshot runs.
     func testALaunchWithNoArgumentsStartsARound() {
-        XCTAssertEqual(Screen(arguments: ["NeighborhoodQuiz"]), .quiz)
-        XCTAssertEqual(Screen(arguments: []), .quiz)
+        XCTAssertEqual(Screen(arguments: ["NeighborhoodQuiz"]), .quiz(stage: nil))
+        XCTAssertEqual(Screen(arguments: []), .quiz(stage: nil))
         XCTAssertEqual(
             Screen(arguments: ["NeighborhoodQuiz", "-NSTreatUnknownArgumentsAsOpen", "NO"]),
-            .quiz,
+            .quiz(stage: nil),
             "Xcode and the simulator pass arguments of their own"
         )
+    }
+
+    /// Every state the gallery shoots has an argument that reaches it, and no two share
+    /// one. A staged screen nobody can launch is a screenshot that silently becomes the
+    /// fresh-round shot again.
+    func testEveryStagedScreenHasItsOwnArgument() {
+        for stage in QuizView.Stage.allCases {
+            XCTAssertEqual(
+                Screen(arguments: ["x", "-quiz-\(stage.rawValue)"]),
+                .quiz(stage: stage),
+                "-quiz-\(stage.rawValue) should reach \(stage)"
+            )
+        }
+        let arguments = QuizView.Stage.allCases.map(\.rawValue)
+        XCTAssertEqual(Set(arguments).count, arguments.count)
+    }
+
+    /// The staged rounds ask for these by name, so a rename in the data would quietly
+    /// shorten the round the gallery plays and the screenshots would stop matching the
+    /// states they are named after.
+    func testTheGalleryRoundAsksForPlacesThatExist() {
+        for name in QuizView.showcase {
+            XCTAssertNotNil(map.neighborhood(named: name), "\(name) is not on the map")
+        }
+        XCTAssertEqual(QuizView.showcase.count, QuizRound.questionCount)
+        // Two more the staging picks out by hand.
+        XCTAssertNotNil(map.neighborhood(named: "SoHo"))
+        XCTAssertNotNil(map.neighborhood(named: "West Village"))
     }
 
     func testTheScreenshotArgumentsAskForTheMap() {

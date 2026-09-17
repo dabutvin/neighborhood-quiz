@@ -94,11 +94,16 @@ jobs:
           # simulator under a running app re-draws it, and the two shots then show
           # the same map rather than two rolls of the dice. The launch arguments
           # are the ones `Screen` understands. No argument at all is what a person
-          # gets: a round of the quiz, which is shot first because it is the app.
-          # The rest ask for the map on its own, where a regression in the drawing
-          # shows up plainly — `-map` as it opens, `-map-zoomed` pulled in far
-          # enough that the numbered cross streets have their names on, and
-          # `-map-neighborhood` with one picked out the way a tap picks it out.
+          # gets: a fresh round, shot first because it is the app.
+          #
+          # The `-quiz-*` runs play a fixed round forward to each state the game
+          # can be in — picked and waiting on the button, two goes gone, the
+          # island half filled in, a place the round gave away, the end of it —
+          # which is where the bugs will be. They go through the real rules, so
+          # these are photographs of the game rather than mock-ups of it.
+          #
+          # The `-map-*` runs ask for the map on its own, where a regression in
+          # the drawing shows up plainly with nothing else on the screen.
           capture() {
             local order="$1"
             local screen="$2"
@@ -121,10 +126,15 @@ jobs:
             echo "Captured: $light, $dark"
           }
 
-          capture 1 quiz
-          capture 3 map -map
-          capture 5 map_zoomed -map-zoomed
-          capture 7 map_neighborhood -map-neighborhood
+          capture  1 quiz
+          capture  3 quiz_picked     -quiz-picked
+          capture  5 quiz_narrowing  -quiz-narrowing
+          capture  7 quiz_filling    -quiz-filling
+          capture  9 quiz_missed     -quiz-missed
+          capture 11 quiz_over       -quiz-over
+          capture 13 map             -map
+          capture 15 map_zoomed      -map-zoomed
+          capture 17 map_neighborhood -map-neighborhood
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true

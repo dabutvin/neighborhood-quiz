@@ -21,6 +21,11 @@ struct ManhattanMapView: View {
     /// island fills in as a round goes on, so what you have done so far is on the map
     /// rather than in a tally somewhere.
     var settled: Set<Int> = []
+    /// Neighbourhoods three goes were not enough for, which the round showed the player
+    /// instead. Named like the found ones so the map still teaches, but in the flat grey
+    /// of a crossing-out rather than in terracotta — being given a place is not the same
+    /// as knowing it, and the map should not flatter anybody about which was which.
+    var givenAway: Set<Int> = []
     /// The neighbourhood picked out but not yet answered with.
     ///
     /// Drawn in ink rather than terracotta and — this is the whole point — **never
@@ -123,7 +128,8 @@ struct ManhattanMapView: View {
         // against the paper rather than against whatever grid it happens to be crossing.
         for area in map.neighborhoods where area.bounds.intersects(onScreen) {
             // Anything found or picked has an unbroken line of its own coming later.
-            guard area.id != selected, area.id != candidate, !settled.contains(area.id)
+            guard area.id != selected, area.id != candidate,
+                  !settled.contains(area.id), !givenAway.contains(area.id)
             else { continue }
             let dash = [5 / zoom, 3.5 / zoom]
             board.stroke(
@@ -161,6 +167,17 @@ struct ManhattanMapView: View {
             )
         }
 
+        // And the ones the round gave away, in grey rather than terracotta.
+        for area in map.neighborhoods where givenAway.contains(area.id) && area.id != selected {
+            guard area.bounds.intersects(onScreen) else { continue }
+            board.fill(area.shape, with: .color(palette.ruledOut.opacity(0.3)))
+            board.stroke(
+                area.edge,
+                with: .color(palette.ruledOut.opacity(0.75)),
+                style: StrokeStyle(lineWidth: 2 / zoom, lineCap: .round, lineJoin: .round)
+            )
+        }
+
         // What is picked but not yet answered with. Ink, not terracotta: terracotta on
         // this map means found, and this is a question being asked, not one answered.
         if let candidate, let area = drawn.neighborhoods.first(where: { $0.id == candidate }),
@@ -182,6 +199,7 @@ struct ManhattanMapView: View {
         // Under the streets — which is where this started — the wash was true to the
         // drawing and almost impossible to read a name off.
         if let chosen {
+            let earned = !givenAway.contains(chosen.id)
             board.fill(chosen.shape, with: .color(palette.land.opacity(0.62)))
 
             // The greens come back through it. Taking the contrast out of every street
@@ -192,12 +210,15 @@ struct ManhattanMapView: View {
             greens.clip(to: chosen.shape)
             greens.fill(map.parks, with: .color(palette.park.opacity(0.7)))
 
-            board.fill(chosen.shape, with: .color(palette.highlight.opacity(0.28)))
+            board.fill(
+                chosen.shape,
+                with: .color(earned ? palette.highlight.opacity(0.28) : palette.ruledOut.opacity(0.34))
+            )
             // And its own line, unbroken and heavier than any avenue, which is what
             // makes it read as one shape rather than as a stain on the drawing.
             board.stroke(
                 chosen.edge,
-                with: .color(palette.highlightInk),
+                with: .color(earned ? palette.highlightInk : palette.ruledOut),
                 style: StrokeStyle(lineWidth: 3 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
@@ -241,14 +262,16 @@ struct ManhattanMapView: View {
     private func drawNames(in context: inout GraphicsContext, size: CGSize) -> [CGRect] {
         var claimed: [CGRect] = []
 
-        for area in drawn.neighborhoods where settled.contains(area.id) && area.id != selected {
+        for area in drawn.neighborhoods where area.id != selected {
+            let earned = settled.contains(area.id)
+            guard earned || givenAway.contains(area.id) else { continue }
             let point = camera.screenPoint(area.labelPoint, in: size)
             guard CGRect(origin: .zero, size: size).contains(point) else { continue }
             if let box = write(
                 area.name,
                 at: point,
                 size: palette.settledLabelSize,
-                ink: palette.highlightInk.opacity(0.9),
+                ink: earned ? palette.highlightInk.opacity(0.9) : palette.ruledOut,
                 reach: palette.labelHaloReach,
                 in: &context,
                 on: size,
@@ -265,7 +288,7 @@ struct ManhattanMapView: View {
             chosen.name,
             at: point,
             size: palette.neighborhoodLabelSize,
-            ink: palette.highlightInk,
+            ink: givenAway.contains(chosen.id) ? palette.ruledOut : palette.highlightInk,
             reach: palette.neighborhoodHaloReach,
             in: &context,
             on: size,
