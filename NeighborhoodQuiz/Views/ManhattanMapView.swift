@@ -172,10 +172,11 @@ struct ManhattanMapView: View {
         let ink = context.resolve(text.foregroundStyle(palette.highlightInk))
         let halo = context.resolve(text.foregroundStyle(palette.labelHalo))
 
-        // The city's names for these are compound — "Upper East Side-Lenox Hill-
-        // Roosevelt Island" is one neighbourhood — and several of them are wider than a
-        // phone. Measuring inside the width it will be drawn in is what lets those wrap
-        // onto a second line instead of running off both edges.
+        // Every name fits on one line at the width of a phone, now that they are names
+        // people say rather than the city's compound ones. Measuring inside the width it
+        // will be drawn in anyway, so that the day one does not fit — a longer name, a
+        // smaller screen, a larger type setting — it wraps rather than running off both
+        // edges.
         let room = CGSize(width: max(size.width - 32, 40), height: 240)
         let measured = ink.measure(in: room)
 

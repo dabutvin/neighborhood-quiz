@@ -48,11 +48,10 @@ struct DrawnNeighborhood: Identifiable {
         return inside
     }
 
-    /// The centre of area of a ring. A neighborhood is rarely a blob — the Financial
-    /// District wraps round Battery Park City, Chelsea is a long strip — so the middle
-    /// of the *bounding box* often falls outside the shape, and a name written there
-    /// would sit in the river. The centroid is a better guess, and it is checked
-    /// against the shape anyway.
+    /// The centre of area of a ring. A neighborhood is rarely a blob — Chelsea is a long
+    /// strip, Midtown East bends round Turtle Bay — so the middle of the *bounding box*
+    /// often falls outside the shape, and a name written there would sit in the river.
+    /// The centroid is a better guess, and it is checked against the shape anyway.
     static func centroid(of ring: [CGPoint]) -> CGPoint {
         guard ring.count >= 3 else { return ring.first ?? .zero }
         var twiceArea = 0.0
@@ -78,7 +77,9 @@ struct DrawnNeighborhood: Identifiable {
     }
 
     /// A point that is definitely inside the ring, at the height of `point`. Used when
-    /// a centroid lands in the notch of a horseshoe.
+    /// a centroid lands in the notch of a horseshoe, which on this map is Midtown East:
+    /// it runs up Park and Lexington and then out along the river, and the corner it
+    /// turns is Turtle Bay, so its centre of area is in somebody else's neighborhood.
     static func insidePoint(of ring: [CGPoint], near point: CGPoint) -> CGPoint {
         guard ring.count >= 3 else { return point }
         // Every place the ring crosses this height, in order; the middle of the widest
