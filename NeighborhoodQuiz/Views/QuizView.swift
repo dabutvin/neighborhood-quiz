@@ -213,10 +213,21 @@ struct QuizView: View {
     /// How far through, and what it is worth so far. The score only appears once there
     /// is one, so a round opens without a nought staring at you.
     private func standing(of round: QuizRound) -> String {
-        let asked = min(round.index + 1, round.questions.count)
-        let progress = "\(asked) of \(round.questions.count)"
+        let progress = "\(asked(of: round)) of \(round.questions.count)"
         guard round.score > 0 else { return progress }
         return "\(progress)   \(round.score) PTS"
+    }
+
+    /// Which question the card is talking about.
+    ///
+    /// Not simply where the round has got to. A question that ends moves the round on
+    /// straight away, but its answer stays on screen for a moment afterwards — and while
+    /// "IT WAS Harlem" is being read, saying "4 of 10" over the top of it is counting
+    /// the question nobody has been asked yet.
+    private func asked(of round: QuizRound) -> Int {
+        showing == nil
+            ? min(round.index + 1, round.questions.count)
+            : max(round.index, 1)
     }
 
     private func spoken(lead: String, name: String, round: QuizRound) -> String {
@@ -224,7 +235,7 @@ struct QuizView: View {
         case .found(_, let worth): return "Found \(name), worth \(worth) points."
         case .missed: return "Out of goes. It was \(name)."
         case nil:
-            return "Find \(name). Question \(round.index + 1) of \(round.questions.count), "
+            return "Find \(name). Question \(asked(of: round)) of \(round.questions.count), "
                 + "\(round.triesLeft) \(round.triesLeft == 1 ? "go" : "goes") left."
         }
     }
