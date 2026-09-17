@@ -71,25 +71,20 @@ struct ManhattanMapView: View {
         // the same as one you can see, and at four times in almost all of them do.
         let onScreen = camera.visibleRect(in: size, margin: 8)
 
-        // The wash goes under the streets rather than over them, so a picked-out
-        // neighbourhood is tinted paper with its own grid still showing through it
-        // rather than a sticker laid on top of the map.
-        if let chosen {
-            board.fill(chosen.shape, with: .color(palette.highlight.opacity(0.3)))
-        }
-
-        // Every border, faint and broken. Dashes are what keep these from reading as
-        // more roads: no street on this map is drawn with gaps in it.
+        // Every border, broken and in its own colour. Dashes are half of what keeps
+        // these from reading as more roads — no street on this map is drawn with gaps
+        // in it — and the warm red-brown is the other half. The first version of this
+        // was a grey-brown hairline at four tenths, which is to say it was a road.
         for area in map.neighborhoods where area.bounds.intersects(onScreen) {
             guard area.id != selected else { continue }
             board.stroke(
                 area.edge,
-                with: .color(palette.border.opacity(0.4)),
+                with: .color(palette.border.opacity(0.85)),
                 style: StrokeStyle(
-                    lineWidth: 1 / zoom,
+                    lineWidth: CGFloat(borderWeight) / zoom,
                     lineCap: .round,
                     lineJoin: .round,
-                    dash: [5 / zoom, 4.5 / zoom]
+                    dash: [5 / zoom, 3.5 / zoom]
                 )
             )
         }
@@ -109,15 +104,46 @@ struct ManhattanMapView: View {
             )
         }
 
-        // And the chosen one's own line, unbroken and over the top of everything, which
-        // is what makes it read as one shape rather than as a stain on the drawing.
+        // The picked-out one, last, over the streets rather than under them.
+        //
+        // Two coats. The first is the colour of the paper, and its whole job is to take
+        // the contrast out of the grid underneath: the streets are still all there,
+        // just gone quiet, so the shape and its name are what the eye lands on instead
+        // of forty cross streets. The second is the wash that says which one it is.
+        // Under the streets — which is where this started — the wash was true to the
+        // drawing and almost impossible to read a name off.
         if let chosen {
+            board.fill(chosen.shape, with: .color(palette.land.opacity(0.62)))
+
+            // The greens come back through it. Taking the contrast out of every street
+            // inside was the point; taking it out of Washington Square along with them
+            // was not. A park is a landmark, and which neighbourhood has which is a
+            // good part of what knowing a neighbourhood means.
+            var greens = board
+            greens.clip(to: chosen.shape)
+            greens.fill(map.parks, with: .color(palette.park.opacity(0.7)))
+
+            board.fill(chosen.shape, with: .color(palette.highlight.opacity(0.28)))
+            // And its own line, unbroken and heavier than any avenue, which is what
+            // makes it read as one shape rather than as a stain on the drawing.
             board.stroke(
                 chosen.edge,
                 with: .color(palette.highlightInk),
-                style: StrokeStyle(lineWidth: 2 / zoom, lineCap: .round, lineJoin: .round)
+                style: StrokeStyle(lineWidth: 3 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
+    }
+
+    /// How heavy a border is drawn, in points on screen.
+    ///
+    /// Heavier when pulled back, which is the opposite of how a map usually behaves and
+    /// is the whole point. At the widest zoom the island is a couple of hundred points
+    /// across, every border on it is a stub, and it has the entire street grid to be
+    /// seen against; coming in gives it room and a quieter background, and it settles
+    /// back to being a line.
+    private var borderWeight: Double {
+        let pulledBack = min(max((3 - camera.zoom) / 2, 0), 1)
+        return 1.2 + 0.9 * pulledBack
     }
 
     /// How much of a road is on the page. The side streets come in over a range rather
@@ -168,7 +194,11 @@ struct ManhattanMapView: View {
             height: measured.height
         )
 
-        for offset in ManhattanMapView.haloOffsets {
+        // Eight passes rather than four, and further out. A street name crosses one
+        // street; this lies across a whole grid of them, and four points of compass
+        // left the corners of every letter sitting on somebody's cross street. It is
+        // one label, so the extra draws cost nothing worth counting.
+        for offset in ManhattanMapView.ringOffsets(radius: palette.neighborhoodHaloReach) {
             context.draw(halo, in: box.offsetBy(dx: offset.x, dy: offset.y))
         }
         context.draw(ink, in: box)
@@ -198,6 +228,8 @@ struct ManhattanMapView: View {
         // it is left off — which is what stops "Central Park West" being written straight
         // through "96th Street" at the widest zoom.
         var taken: [CGRect] = claimed
+        // Worked out once for the whole pass rather than once per name.
+        let offsets = ManhattanMapView.crossOffsets(radius: palette.labelHaloReach)
 
         for label in labels where camera.zoom >= label.minZoom {
             let point = camera.screenPoint(label.position, in: size)
@@ -228,7 +260,7 @@ struct ManhattanMapView: View {
                 layer.translateBy(x: point.x, y: point.y)
                 layer.rotate(by: .radians(label.angle))
                 if let halo {
-                    for offset in ManhattanMapView.haloOffsets {
+                    for offset in offsets {
                         layer.draw(halo, at: offset, anchor: .center)
                     }
                 }
@@ -237,10 +269,27 @@ struct ManhattanMapView: View {
         }
     }
 
-    private static let haloOffsets: [CGPoint] = [
-        CGPoint(x: -1.4, y: 0), CGPoint(x: 1.4, y: 0),
-        CGPoint(x: 0, y: -1.4), CGPoint(x: 0, y: 1.4),
-    ]
+    /// Four points round a circle. What a street name gets: it crosses one street, and
+    /// there are a thousand of them to draw.
+    private static func crossOffsets(radius: Double) -> [CGPoint] {
+        [
+            CGPoint(x: -radius, y: 0), CGPoint(x: radius, y: 0),
+            CGPoint(x: 0, y: -radius), CGPoint(x: 0, y: radius),
+        ]
+    }
+
+    /// Eight points round a circle — the four compass points and the four corners —
+    /// which is enough passes that the paper showing through a name has no notches in
+    /// it at the corners of the letters.
+    private static func ringOffsets(radius: Double) -> [CGPoint] {
+        let corner = radius * 0.7071
+        return [
+            CGPoint(x: -radius, y: 0), CGPoint(x: radius, y: 0),
+            CGPoint(x: 0, y: -radius), CGPoint(x: 0, y: radius),
+            CGPoint(x: -corner, y: -corner), CGPoint(x: corner, y: -corner),
+            CGPoint(x: -corner, y: corner), CGPoint(x: corner, y: corner),
+        ]
+    }
 
     /// The upright box a rotated name sits in. A name written up an avenue is measured
     /// lying down and then stood up, which is what the sine and cosine are doing.

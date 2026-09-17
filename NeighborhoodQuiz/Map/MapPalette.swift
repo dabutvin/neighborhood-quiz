@@ -31,8 +31,11 @@ struct MapPalette {
     var street: Color
     var park: Color
     var parkInk: Color
-    /// The line round every neighbourhood, drawn faintly enough to read as a border
-    /// rather than as another road.
+    /// The line round every neighbourhood. It is a warm red-brown rather than the
+    /// grey-brown the streets are in, on purpose: the first version of this took its
+    /// colour from the same family as the roads and, dashes or no dashes, read as one
+    /// more road at the widest zoom. A border has to say which layer it belongs to
+    /// before it says anything else.
     var border: Color
     /// The wash a picked-out neighbourhood is filled with, and the firm line and
     /// lettering that go with it. Terracotta, because it is the one warm colour that
@@ -56,7 +59,7 @@ struct MapPalette {
         street: Color(hex: 0xB7A78F),
         park: Color(hex: 0xBCD1A6),
         parkInk: Color(hex: 0x7D976A),
-        border: Color(hex: 0x9C8A72),
+        border: Color(hex: 0xB0765A),
         highlight: Color(hex: 0xD98A5E),
         highlightInk: Color(hex: 0x9A472A),
         label: Color(hex: 0x5B4A3A),
@@ -76,7 +79,7 @@ struct MapPalette {
         street: Color(hex: 0x7C7160),
         park: Color(hex: 0x36452F),
         parkInk: Color(hex: 0x6C8A5C),
-        border: Color(hex: 0x7A6E5B),
+        border: Color(hex: 0xA5705A),
         highlight: Color(hex: 0xD4794C),
         highlightInk: Color(hex: 0xF0A87E),
         label: Color(hex: 0xE2D6BE),
@@ -118,10 +121,17 @@ struct MapPalette {
         }
     }
 
-    /// The size a picked-out neighbourhood's name is written at. Larger than any street
-    /// name, and claiming its paper first, because while it is showing it is the thing
-    /// the map is saying.
-    var neighborhoodLabelSize: Double { 17 }
+    /// The size a picked-out neighbourhood's name is written at. Nearly twice the
+    /// largest street name, and claiming its paper first, because while it is showing
+    /// it is the thing the map is saying. Seventeen points of Bradley Hand over a grid
+    /// of cross streets was a name you had to go looking for.
+    var neighborhoodLabelSize: Double { 23 }
+
+    /// How far the paper showing through a name reaches, in points on screen. A street
+    /// name crosses one street and needs very little; a neighbourhood's name lies
+    /// across a whole grid of them and needs a proper clearing.
+    var labelHaloReach: Double { 1.4 }
+    var neighborhoodHaloReach: Double { 2.6 }
 }
 
 /// The hand the map is written in.

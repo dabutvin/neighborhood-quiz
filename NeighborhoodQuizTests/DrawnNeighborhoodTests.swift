@@ -155,4 +155,23 @@ final class DrawnNeighborhoodTests: XCTestCase {
         XCTAssertEqual(map.neighborhood(named: "Greenwich Village")?.name, "Greenwich Village")
         XCTAssertNil(map.neighborhood(named: "Brooklyn Heights"))
     }
+
+    // MARK: - Reading it
+
+    func testANeighborhoodsNameIsWrittenLargerThanAnyStreetName() {
+        // It is the answer to the question the map is asking, and at the size it
+        // started at you had to go looking for it among the cross streets.
+        for palette in [MapPalette.day, MapPalette.night] {
+            for kind in RoadKind.allCases {
+                XCTAssertGreaterThan(
+                    palette.neighborhoodLabelSize,
+                    palette.labelSize(for: kind) * 1.5,
+                    "A \(kind) name is nearly as loud as a neighborhood's"
+                )
+            }
+            // And it clears more paper round itself, because it lies across a grid of
+            // streets rather than crossing one.
+            XCTAssertGreaterThan(palette.neighborhoodHaloReach, palette.labelHaloReach)
+        }
+    }
 }
