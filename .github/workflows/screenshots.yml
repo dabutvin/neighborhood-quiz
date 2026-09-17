@@ -104,26 +104,63 @@ jobs:
           #
           # The `-map-*` runs ask for the map on its own, where a regression in
           # the drawing shows up plainly with nothing else on the screen.
+          #
+          # Every shot is checked before it counts, because one of these came
+          # back as a white launch screen once and went up on the pull request
+          # looking like any other file in the list. A gallery whose whole job
+          # is to make a rendering regression obvious must not be able to pass
+          # a blank page quietly.
+          #
+          # Size is the tripwire. Every screen in this app is paper and paper
+          # has grain on every pixel of it, so a real capture is megabytes;
+          # the blank one was seventy-five kilobytes. A megabyte sits an order
+          # of magnitude clear of both.
+          MIN_SHOT_BYTES=1000000
+
+          looks_blank() {
+            local bytes
+            bytes=$(wc -c < "$1" | tr -d ' ')
+            [ "$bytes" -lt "$MIN_SHOT_BYTES" ]
+          }
+
           capture() {
             local order="$1"
             local screen="$2"
             shift 2
 
-            local light dark
+            local light dark attempt
             light=$(printf 'screenshots/%02d_%s_light.png' "$order" "$screen")
             dark=$(printf 'screenshots/%02d_%s_dark.png' "$((order + 1))" "$screen")
 
-            xcrun simctl ui "$UDID" appearance light
-            xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@"
-            sleep 3
-            xcrun simctl io "$UDID" screenshot "$light"
+            # Three goes, waiting longer each time. Building the map is the
+            # slow part of a launch and a loaded runner can still be at it
+            # when the first shutter goes.
+            for attempt in 1 2 3; do
+              xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+              xcrun simctl ui "$UDID" appearance light
+              xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@"
+              sleep $((2 + attempt * 2))
+              xcrun simctl io "$UDID" screenshot "$light"
+              if looks_blank "$light"; then
+                echo "::warning::$light came out blank on attempt $attempt; relaunching"
+                continue
+              fi
 
-            xcrun simctl ui "$UDID" appearance dark
-            sleep 2
-            xcrun simctl io "$UDID" screenshot "$dark"
+              xcrun simctl ui "$UDID" appearance dark
+              sleep 2
+              xcrun simctl io "$UDID" screenshot "$dark"
+              if looks_blank "$dark"; then
+                echo "::warning::$dark came out blank on attempt $attempt; relaunching"
+                continue
+              fi
 
-            xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-            echo "Captured: $light, $dark"
+              xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+              echo "Captured: $light, $dark"
+              return 0
+            done
+
+            echo "ERROR: $screen never drew — three launches came back blank."
+            exit 1
           }
 
           capture  1 quiz

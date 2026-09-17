@@ -47,7 +47,17 @@ struct MapPalette {
     /// than red: crossing a place off is a step towards the answer, not a telling-off,
     /// and forty of these on one screen in an angry colour would be a horrible thing to
     /// look at.
+    ///
+    /// This is the *wash*, and only the wash. Crossing a place off means dimming it, so
+    /// by day it is a grey darker than the paper and by night one darker than the land.
     var ruledOut: Color
+    /// What a crossed-off or given-away place is *lettered* in, which is not the same
+    /// colour as the wash and cannot be. By day the two can be the same grey, because
+    /// grey on cream paper reads either way. By night the wash is nearly black, and a
+    /// name written in it over a dark island is a name nobody can read — which is the
+    /// worst place to lose legibility, since being shown where Harlem was is the whole
+    /// of what three failed goes buy you.
+    var ruledOutInk: Color
     /// What a street name is written in, and the halo of paper that keeps it legible
     /// where it crosses its own street.
     var label: Color
@@ -68,6 +78,7 @@ struct MapPalette {
         highlight: Color(hex: 0xD98A5E),
         highlightInk: Color(hex: 0x9A472A),
         ruledOut: Color(hex: 0x6E7076),
+        ruledOutInk: Color(hex: 0x6E7076),
         label: Color(hex: 0x5B4A3A),
         labelHalo: Color(hex: 0xF7F0DF),
         grain: Color(hex: 0x5B4A3A)
@@ -89,6 +100,7 @@ struct MapPalette {
         highlight: Color(hex: 0xD4794C),
         highlightInk: Color(hex: 0xF0A87E),
         ruledOut: Color(hex: 0x14161A),
+        ruledOutInk: Color(hex: 0x9AA2AD),
         label: Color(hex: 0xE2D6BE),
         labelHalo: Color(hex: 0x2B2A26),
         grain: Color(hex: 0xEFE6D2)

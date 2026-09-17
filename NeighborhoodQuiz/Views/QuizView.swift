@@ -137,7 +137,7 @@ struct QuizView: View {
         case .missed(let id):
             lead = "IT WAS"
             name = names[id] ?? ""
-            ink = palette.ruledOut
+            ink = palette.ruledOutInk
         case nil:
             lead = "FIND"
             name = round.current.flatMap { names[$0] } ?? ""
@@ -197,7 +197,7 @@ struct QuizView: View {
         case .missed:
             Text("0")
                 .font(MapFont.chrome(size: 22))
-                .foregroundStyle(palette.ruledOut)
+                .foregroundStyle(palette.ruledOutInk)
         case nil:
             HStack(spacing: 5) {
                 ForEach(0..<QuizRound.tries, id: \.self) { index in
@@ -336,7 +336,7 @@ struct QuizView: View {
                 "Never found",
                 count: round.missed.count,
                 points: 0,
-                ink: palette.ruledOut
+                ink: palette.ruledOutInk
             )
         }
         .padding(.top, 2)
