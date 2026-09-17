@@ -14,9 +14,12 @@ import Foundation
 /// A wrong guess does not end a question — you keep going until you find the place — so
 /// everybody finishes every round having found all ten. Which means the count of right
 /// answers is always ten and tells you nothing, and the only number that carries any
-/// information is **how many taps it took**. Ten is perfect. Golf, in other words, and
-/// the same reason golf counts that way: when the task is always completed, the cost of
-/// completing it is the score.
+/// information is **how many guesses it took**. Ten is perfect. Golf, in other words,
+/// and the same reason golf counts that way: when the task is always completed, the cost
+/// of completing it is the score.
+///
+/// Guesses, not taps. Touching the map costs nothing and can be taken back; it is
+/// answering with a place that goes on the card.
 struct QuizRound: Equatable {
     /// How many places a round asks for. Ten is a train ride rather than an evening,
     /// and short enough that a bad start is worth playing out.
@@ -30,7 +33,7 @@ struct QuizRound: Equatable {
     private(set) var index = 0
 
     /// Every guess at a neighborhood, across the whole round. The score.
-    private(set) var taps = 0
+    private(set) var guesses = 0
 
     /// How many rounds were found without a single wrong guess. Not the score, but the
     /// number people actually want to hear about themselves.
@@ -88,7 +91,7 @@ struct QuizRound: Equatable {
         guard let current else { return .ignored }
         guard !ruledOut.contains(id) else { return .ignored }
 
-        taps += 1
+        guesses += 1
         guard id == current else {
             ruledOut.insert(id)
             return .wrong

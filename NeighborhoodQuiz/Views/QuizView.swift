@@ -15,7 +15,13 @@ struct QuizView: View {
     /// before the round moves along and it settles in with the rest. Also what stops a
     /// fast thumb from answering the next question before it has read it.
     @State private var justFound: Int?
-    /// Bumped between questions to send the map back to the whole island.
+    /// Picked out and waiting on the button. A tap on the map chooses; it is answering
+    /// with it that goes on the card, so a thumb landing somewhere careless is free to
+    /// be taken back.
+    @State private var candidate: Int?
+    /// Bumped at the start of a round to send the map back to the whole island. Not
+    /// between questions: where you have got the map to is yours, and pulling it back
+    /// out every time was undoing the player's own work.
     @State private var opening = 0
 
     private var palette: MapPalette { .of(colorScheme) }
@@ -39,8 +45,9 @@ struct QuizView: View {
                         selected: justFound,
                         ruledOut: round?.ruledOut ?? [],
                         settled: Set(round?.found ?? []),
+                        candidate: candidate,
                         resetToken: opening,
-                        onTap: guess,
+                        onTap: pick,
                         onReady: start
                     )
                     PaperTexture(palette: palette)
@@ -49,6 +56,8 @@ struct QuizView: View {
 
             if let round, round.isFinished {
                 summary(of: round)
+            } else if candidate != nil, justFound == nil {
+                answerButton
             }
         }
         .background(palette.water)
@@ -60,7 +69,6 @@ struct QuizView: View {
             try? await Task.sleep(for: .seconds(1.2))
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.3)) { justFound = nil }
-            opening += 1
         }
     }
 
@@ -116,8 +124,33 @@ struct QuizView: View {
     /// is one, so a round opens without a nought staring at you.
     private func standing(of round: QuizRound) -> String {
         let progress = "\(round.index + 1) of \(round.questions.count)"
-        guard round.taps > 0 else { return progress }
-        return "\(progress)   \(round.taps) tap\(round.taps == 1 ? "" : "s")"
+        guard round.guesses > 0 else { return progress }
+        return "\(progress)   \(round.guesses) guess\(round.guesses == 1 ? "" : "es")"
+    }
+
+    /// The only way to answer. It appears when something is picked and goes when it is
+    /// answered with, so there is never a button on screen with nothing behind it — and
+    /// it says "Answer" rather than the name of the place, because the name is the
+    /// question.
+    private var answerButton: some View {
+        Button(action: answer) {
+            Text("Answer")
+                .font(MapFont.chrome(size: 22))
+                .foregroundStyle(palette.labelHalo)
+                .padding(.horizontal, 34)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(palette.ink)
+                        .overlay(Capsule().strokeBorder(palette.labelHalo.opacity(0.5), lineWidth: 1.5))
+                        .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .accessibilityLabel("Answer with the neighborhood you have picked")
     }
 
     // MARK: - The end of it
@@ -129,12 +162,12 @@ struct QuizView: View {
                 .foregroundStyle(palette.ink)
 
             VStack(spacing: 4) {
-                Text("\(round.taps)")
+                Text("\(round.guesses)")
                     .font(MapFont.chrome(size: 54))
                     .foregroundStyle(palette.highlightInk)
-                Text(round.taps == round.questions.count
-                     ? "taps — a perfect round"
-                     : "taps, and \(round.questions.count) is perfect")
+                Text(round.guesses == round.questions.count
+                     ? "guesses — a perfect round"
+                     : "guesses, and \(round.questions.count) is perfect")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(palette.inkSoft)
             }
@@ -178,25 +211,50 @@ struct QuizView: View {
         round = QuizRound(askingAbout: map.neighborhoods.map(\.id))
     }
 
-    private func guess(_ id: Int?) {
-        // While the found place is on screen the round has effectively moved on, and a
-        // tap landing in that moment belongs to nobody.
-        guard justFound == nil, let id, var playing = round, !playing.isFinished else { return }
+    /// A tap on the map. It picks a place out and costs nothing — the score only moves
+    /// when you answer with it.
+    ///
+    /// Water, the parks, and anywhere already crossed off or already found all put the
+    /// pick down again. There is nothing to be gained by choosing a place the round has
+    /// already settled, and leaving it selectable would only invite somebody to answer
+    /// with it and wonder why nothing happened.
+    private func pick(_ id: Int?) {
+        // While the found place is on screen the round has moved on, and a tap landing
+        // in that moment belongs to nobody.
+        guard justFound == nil, let round, !round.isFinished else { return }
+
+        guard let id, !round.ruledOut.contains(id), !round.found.contains(id) else {
+            withAnimation(.easeOut(duration: 0.15)) { candidate = nil }
+            return
+        }
+        withAnimation(.easeOut(duration: 0.15)) {
+            candidate = (id == candidate) ? nil : id
+        }
+    }
+
+    /// Answering with what is picked. This is the only thing that costs anything.
+    private func answer() {
+        guard justFound == nil, let picked = candidate,
+              var playing = round, !playing.isFinished
+        else { return }
 
         // Unwrapped and put back rather than mutated through the optional, so that what
         // the round did and what the screen does next are two plain steps.
-        let answer = playing.guess(id)
+        let outcome = playing.guess(picked)
         round = playing
+        withAnimation(.easeOut(duration: 0.2)) { candidate = nil }
 
         // Setting this both shows the place with its name on and starts the pause above.
-        guard answer == .right else { return }
-        withAnimation(.easeOut(duration: 0.2)) { justFound = id }
+        guard outcome == .right else { return }
+        withAnimation(.easeOut(duration: 0.2)) { justFound = picked }
     }
 
     private func playAgain() {
         guard !names.isEmpty else { return }
         justFound = nil
+        candidate = nil
         round = QuizRound(askingAbout: Array(names.keys))
+        // A fresh round starts on the whole island. Mid-round it never does.
         opening += 1
     }
 }

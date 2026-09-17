@@ -21,6 +21,13 @@ struct ManhattanMapView: View {
     /// island fills in as a round goes on, so what you have done so far is on the map
     /// rather than in a tally somewhere.
     var settled: Set<Int> = []
+    /// The neighbourhood picked out but not yet answered with.
+    ///
+    /// Drawn in ink rather than terracotta and — this is the whole point — **never
+    /// named**. A candidate that told you what it was would hand over the game: you
+    /// could tap your way round the island reading names off until one of them matched
+    /// the question. So it shows you the shape you have your finger on and nothing else.
+    var candidate: Int?
     /// Whether a finger is on the map right now. Drawing is at its most expensive
     /// exactly when it has the least time, so a couple of things the eye cannot follow
     /// mid-drag are left until the map is still again.
@@ -115,8 +122,9 @@ struct ManhattanMapView: View {
         // atlas puts round a motorway, and it does the same job here: the line is read
         // against the paper rather than against whatever grid it happens to be crossing.
         for area in map.neighborhoods where area.bounds.intersects(onScreen) {
-            // Anything found has an unbroken line of its own coming later.
-            guard area.id != selected, !settled.contains(area.id) else { continue }
+            // Anything found or picked has an unbroken line of its own coming later.
+            guard area.id != selected, area.id != candidate, !settled.contains(area.id)
+            else { continue }
             let dash = [5 / zoom, 3.5 / zoom]
             board.stroke(
                 area.edge,
@@ -150,6 +158,18 @@ struct ManhattanMapView: View {
                 area.edge,
                 with: .color(palette.highlightInk.opacity(0.55)),
                 style: StrokeStyle(lineWidth: 2 / zoom, lineCap: .round, lineJoin: .round)
+            )
+        }
+
+        // What is picked but not yet answered with. Ink, not terracotta: terracotta on
+        // this map means found, and this is a question being asked, not one answered.
+        if let candidate, let area = drawn.neighborhoods.first(where: { $0.id == candidate }),
+           area.bounds.intersects(onScreen) {
+            board.fill(area.shape, with: .color(palette.ink.opacity(0.16)))
+            board.stroke(
+                area.edge,
+                with: .color(palette.ink),
+                style: StrokeStyle(lineWidth: 3 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
 

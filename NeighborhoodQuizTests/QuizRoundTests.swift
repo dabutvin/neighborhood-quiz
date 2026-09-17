@@ -61,7 +61,7 @@ final class QuizRoundTests: XCTestCase {
         }
         XCTAssertTrue(round.isFinished)
         XCTAssertNil(round.current)
-        XCTAssertEqual(round.taps, 10, "Ten places, ten taps, which is as well as it goes")
+        XCTAssertEqual(round.guesses, 10, "Ten places, ten guesses, which is as well as it goes")
         XCTAssertEqual(round.firstTime, 10)
     }
 
@@ -71,7 +71,7 @@ final class QuizRoundTests: XCTestCase {
         let wrong = round.questions.last(where: { $0 != wanted }) ?? (wanted + 1)
 
         XCTAssertEqual(round.guess(wrong), .wrong)
-        XCTAssertEqual(round.taps, 1)
+        XCTAssertEqual(round.guesses, 1)
         XCTAssertTrue(round.ruledOut.contains(wrong))
         XCTAssertEqual(round.current, wanted, "A wrong guess does not move the round on")
         XCTAssertEqual(round.firstTime, 0)
@@ -85,7 +85,7 @@ final class QuizRoundTests: XCTestCase {
         // A thumb landing twice on the same place is a slip, not a second opinion.
         XCTAssertEqual(round.guess(wrong), .ignored)
         XCTAssertEqual(round.guess(wrong), .ignored)
-        XCTAssertEqual(round.taps, 1)
+        XCTAssertEqual(round.guesses, 1)
     }
 
     func testFindingItAfterAMissStillMovesOnButIsNotAFirstTime() {
@@ -95,7 +95,7 @@ final class QuizRoundTests: XCTestCase {
 
         XCTAssertEqual(round.guess(wrong), .wrong)
         XCTAssertEqual(round.guess(wanted), .right)
-        XCTAssertEqual(round.taps, 2)
+        XCTAssertEqual(round.guesses, 2)
         XCTAssertEqual(round.firstTime, 0)
         XCTAssertNotEqual(round.current, wanted)
     }
@@ -180,7 +180,7 @@ final class QuizRoundTests: XCTestCase {
 
     // MARK: - The score
 
-    func testTapsCountEveryGuessAcrossTheWholeRound() {
+    func testGuessesCountEveryOneAcrossTheWholeRound() {
         var round = self.round(of: Array(0..<40))
         var expected = 0
         while let wanted = round.current {
@@ -192,14 +192,14 @@ final class QuizRoundTests: XCTestCase {
             XCTAssertEqual(round.guess(wanted), .right)
             expected += 1
         }
-        XCTAssertEqual(round.taps, expected)
-        XCTAssertEqual(round.taps, 30, "Ten questions at three taps each")
+        XCTAssertEqual(round.guesses, expected)
+        XCTAssertEqual(round.guesses, 30, "Ten questions at three guesses each")
         XCTAssertEqual(round.firstTime, 0)
     }
 
     func testTheScoreCanNeverBeatPerfect() {
         var round = self.round(of: Array(0..<40))
         while let wanted = round.current { _ = round.guess(wanted) }
-        XCTAssertGreaterThanOrEqual(round.taps, round.questions.count)
+        XCTAssertGreaterThanOrEqual(round.guesses, round.questions.count)
     }
 }
