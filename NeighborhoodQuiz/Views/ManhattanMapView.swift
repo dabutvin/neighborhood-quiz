@@ -105,7 +105,7 @@ struct ManhattanMapView: View {
                 area.edge,
                 with: .color(palette.land.opacity(0.9)),
                 style: StrokeStyle(
-                    lineWidth: CGFloat(borderWeight + 1.6) / zoom,
+                    lineWidth: CGFloat(borderWeight + 1.8) / zoom,
                     lineCap: .round,
                     lineJoin: .round,
                     dash: dash
@@ -158,14 +158,14 @@ struct ManhattanMapView: View {
     /// A little heavier when pulled back, where the borders are shortest and there is
     /// most of the island on the glass at once.
     ///
-    /// Lighter than it was, and it can be: these were made heavy twice over to fight
-    /// their way out from under the streets, and now that they are drawn over the top
-    /// with paper round them they do not have to fight anything. At the old weight the
-    /// island read as a quilt of dashes with a street map somewhere behind it, which is
-    /// the same mistake as before with the sign flipped.
+    /// Lighter than the first version over the top, which at two points and more was a
+    /// quilt of dashes with a street map somewhere behind it — the same mistake as
+    /// hiding them under the streets, with the sign flipped. Heavier than the second,
+    /// which corrected too far. This sits between the two: a line you can follow across
+    /// the island without it becoming the thing the island is made of.
     private var borderWeight: Double {
         let pulledBack = min(max((3 - camera.zoom) / 2, 0), 1)
-        return 1.0 + 0.4 * pulledBack
+        return 1.2 + 0.5 * pulledBack
     }
 
     /// How much of a road is on the page. The side streets come in over a range rather
