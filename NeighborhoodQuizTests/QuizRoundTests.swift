@@ -138,6 +138,46 @@ final class QuizRoundTests: XCTestCase {
         XCTAssertEqual(round, finished, "A finished round is finished")
     }
 
+    // MARK: - What stays on the map
+
+    func testNothingIsFoundBeforeAnythingIsFound() {
+        XCTAssertTrue(round(of: Array(0..<40)).found.isEmpty)
+    }
+
+    func testEveryPlaceFoundStaysFound() {
+        var round = self.round(of: Array(0..<40))
+        var expected: [Int] = []
+        while let wanted = round.current {
+            _ = round.guess(wanted)
+            expected.append(wanted)
+            XCTAssertEqual(round.found, expected, "The map fills in as the round goes on")
+        }
+        XCTAssertEqual(round.found, round.questions, "A finished round has the whole set")
+    }
+
+    func testAWrongGuessFindsNothing() {
+        var round = self.round(of: Array(0..<40))
+        let wrong = round.questions.last(where: { $0 != round.current }) ?? 99
+        _ = round.guess(wrong)
+        XCTAssertTrue(round.found.isEmpty, "Guessing at a place is not finding it")
+        XCTAssertFalse(round.found.contains(wrong))
+    }
+
+    /// The two lists a player sees on the map are different things and must not overlap:
+    /// crossed off is where the place is *not*, found is where it is.
+    func testWhatIsFoundIsNeverAlsoCrossedOut() {
+        var round = self.round(of: Array(0..<40))
+        while let wanted = round.current {
+            for wrong in Array(0..<40).filter({ $0 != wanted }).prefix(2) {
+                _ = round.guess(wrong)
+            }
+            for id in round.found {
+                XCTAssertFalse(round.ruledOut.contains(id), "\(id) is both found and ruled out")
+            }
+            _ = round.guess(wanted)
+        }
+    }
+
     // MARK: - The score
 
     func testTapsCountEveryGuessAcrossTheWholeRound() {

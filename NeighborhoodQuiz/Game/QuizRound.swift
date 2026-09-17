@@ -49,6 +49,14 @@ struct QuizRound: Equatable {
 
     var isFinished: Bool { current == nil }
 
+    /// Every place found so far this round, in the order they were asked for.
+    ///
+    /// No state of its own, because there is none to keep: a question is only ever left
+    /// by answering it, so the places found are exactly the questions already asked. The
+    /// map fills them in as it goes, which turns a round into something that is visibly
+    /// being assembled rather than ten unrelated questions in a row.
+    var found: [Int] { Array(questions.prefix(index)) }
+
     /// Ten of the forty, in an order nobody can predict. Takes the ids to choose from so
     /// that a test can hand it a known set and a known generator.
     init<Generator: RandomNumberGenerator>(

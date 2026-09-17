@@ -11,10 +11,10 @@ struct QuizView: View {
 
     @State private var round: QuizRound?
     @State private var names: [Int: String] = [:]
-    /// The place just found, held on screen for a moment with its name on it before the
-    /// round moves along. Also what stops a fast thumb from answering the next question
-    /// before it has read it.
-    @State private var found: Int?
+    /// The place just found, held large and with a coat of paper under it for a moment
+    /// before the round moves along and it settles in with the rest. Also what stops a
+    /// fast thumb from answering the next question before it has read it.
+    @State private var justFound: Int?
     /// Bumped between questions to send the map back to the whole island.
     @State private var opening = 0
 
@@ -36,8 +36,9 @@ struct QuizView: View {
                 ZStack {
                     MapBoard(
                         palette: palette,
-                        selected: found,
+                        selected: justFound,
                         ruledOut: round?.ruledOut ?? [],
+                        settled: Set(round?.found ?? []),
                         resetToken: opening,
                         onTap: guess,
                         onReady: start
@@ -54,11 +55,11 @@ struct QuizView: View {
         // Holding the found place on screen, then moving along. `task(id:)` rather than
         // a Task started by hand: it is cancelled for us if the view goes away or if
         // `found` changes underneath it, which is the whole of what could go wrong here.
-        .task(id: found) {
-            guard found != nil else { return }
+        .task(id: justFound) {
+            guard justFound != nil else { return }
             try? await Task.sleep(for: .seconds(1.2))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.3)) { found = nil }
+            withAnimation(.easeInOut(duration: 0.3)) { justFound = nil }
             opening += 1
         }
     }
@@ -88,7 +89,7 @@ struct QuizView: View {
 
             Text(wanted)
                 .font(MapFont.chrome(size: 30))
-                .foregroundStyle(found == nil ? palette.ink : palette.highlightInk)
+                .foregroundStyle(justFound == nil ? palette.ink : palette.highlightInk)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
@@ -180,7 +181,7 @@ struct QuizView: View {
     private func guess(_ id: Int?) {
         // While the found place is on screen the round has effectively moved on, and a
         // tap landing in that moment belongs to nobody.
-        guard found == nil, let id, var playing = round, !playing.isFinished else { return }
+        guard justFound == nil, let id, var playing = round, !playing.isFinished else { return }
 
         // Unwrapped and put back rather than mutated through the optional, so that what
         // the round did and what the screen does next are two plain steps.
@@ -189,12 +190,12 @@ struct QuizView: View {
 
         // Setting this both shows the place with its name on and starts the pause above.
         guard answer == .right else { return }
-        withAnimation(.easeOut(duration: 0.2)) { found = id }
+        withAnimation(.easeOut(duration: 0.2)) { justFound = id }
     }
 
     private func playAgain() {
         guard !names.isEmpty else { return }
-        found = nil
+        justFound = nil
         round = QuizRound(askingAbout: Array(names.keys))
         opening += 1
     }

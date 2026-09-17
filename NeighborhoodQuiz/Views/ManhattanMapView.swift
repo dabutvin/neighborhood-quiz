@@ -17,6 +17,10 @@ struct ManhattanMapView: View {
     /// Neighbourhoods guessed at and crossed off, greyed so a player can see where they
     /// have already looked.
     var ruledOut: Set<Int> = []
+    /// Neighbourhoods already found and settled. Washed and named, but quietly: the
+    /// island fills in as a round goes on, so what you have done so far is on the map
+    /// rather than in a tally somewhere.
+    var settled: Set<Int> = []
     /// Whether a finger is on the map right now. Drawing is at its most expensive
     /// exactly when it has the least time, so a couple of things the eye cannot follow
     /// mid-drag are left until the map is still again.
@@ -27,7 +31,7 @@ struct ManhattanMapView: View {
             draw(map: drawn, in: &context, size: size)
             // The picked-out name claims its paper before any street name is offered
             // one, so a street is never written across the answer.
-            let claimed = drawName(in: &context, size: size)
+            let claimed = drawNames(in: &context, size: size)
             draw(labels: drawn.labels, in: &context, size: size, claimed: claimed)
         }
         // Text drawn inside a `Canvas` is resolved against the canvas's own
@@ -111,7 +115,8 @@ struct ManhattanMapView: View {
         // atlas puts round a motorway, and it does the same job here: the line is read
         // against the paper rather than against whatever grid it happens to be crossing.
         for area in map.neighborhoods where area.bounds.intersects(onScreen) {
-            guard area.id != selected else { continue }
+            // Anything found has an unbroken line of its own coming later.
+            guard area.id != selected, !settled.contains(area.id) else { continue }
             let dash = [5 / zoom, 3.5 / zoom]
             board.stroke(
                 area.edge,
@@ -132,6 +137,19 @@ struct ManhattanMapView: View {
                     lineJoin: .round,
                     dash: dash
                 )
+            )
+        }
+
+        // The ones already found, filled and left there. No coat of paper under them —
+        // that is for the place being looked at now, and ten quieted neighborhoods would
+        // be most of the island with the life taken out of it.
+        for area in map.neighborhoods where settled.contains(area.id) && area.id != selected {
+            guard area.bounds.intersects(onScreen) else { continue }
+            board.fill(area.shape, with: .color(palette.highlight.opacity(0.22)))
+            board.stroke(
+                area.edge,
+                with: .color(palette.highlightInk.opacity(0.55)),
+                style: StrokeStyle(lineWidth: 2 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
 
@@ -191,19 +209,72 @@ struct ManhattanMapView: View {
 
     // MARK: - The names
 
-    /// Writes the picked-out neighbourhood's name across it, and hands back the paper it
-    /// took so no street name is offered the same patch.
+    /// Writes the names of every neighbourhood that has been found, and hands back the
+    /// paper they took so no street name is offered the same patch.
     ///
-    /// The name is kept on the glass rather than pinned to the shape: tap the Upper West
-    /// Side and then drag half of it off the edge and the name slides along the border
-    /// instead of leaving with it. Knowing what you have picked matters more than knowing
-    /// exactly where its middle is, and the highlight is already saying where.
-    private func drawName(in context: inout GraphicsContext, size: CGSize) -> [CGRect] {
-        guard let chosen else { return [] }
+    /// The one just found goes on last and largest, and is the only one shouldered back
+    /// onto the glass if its shape has been dragged off the edge: knowing what you have
+    /// just found matters more than knowing exactly where its middle is, and the
+    /// highlight is already saying where. The ones that have settled stay where they
+    /// belong and simply go if you look elsewhere — ten names pinned to the edges of the
+    /// screen would be a list, not a map.
+    private func drawNames(in context: inout GraphicsContext, size: CGSize) -> [CGRect] {
+        var claimed: [CGRect] = []
 
-        let text = Text(chosen.name)
-            .font(MapFont.label(size: palette.neighborhoodLabelSize))
-        let ink = context.resolve(text.foregroundStyle(palette.highlightInk))
+        for area in drawn.neighborhoods where settled.contains(area.id) && area.id != selected {
+            let point = camera.screenPoint(area.labelPoint, in: size)
+            guard CGRect(origin: .zero, size: size).contains(point) else { continue }
+            if let box = write(
+                area.name,
+                at: point,
+                size: palette.settledLabelSize,
+                ink: palette.highlightInk.opacity(0.9),
+                reach: palette.labelHaloReach,
+                in: &context,
+                on: size,
+                avoiding: claimed
+            ) {
+                claimed.append(box)
+            }
+        }
+
+        guard let chosen else { return claimed }
+
+        let point = camera.screenPoint(chosen.labelPoint, in: size)
+        if let box = write(
+            chosen.name,
+            at: point,
+            size: palette.neighborhoodLabelSize,
+            ink: palette.highlightInk,
+            reach: palette.neighborhoodHaloReach,
+            in: &context,
+            on: size,
+            avoiding: [],  // the newest name wins any argument about paper
+            keepingOnScreen: true
+        ) {
+            // Anything a settled name had claimed under it has been drawn over, so the
+            // street names are told about the new box rather than the old ones.
+            claimed.removeAll { $0.intersects(box) }
+            claimed.append(box)
+        }
+        return claimed
+    }
+
+    /// One name on the glass, in ink with paper showing through it. Hands back the patch
+    /// it took, or nothing if that patch was already spoken for.
+    private func write(
+        _ name: String,
+        at wanted: CGPoint,
+        size textSize: Double,
+        ink inkColour: Color,
+        reach: Double,
+        in context: inout GraphicsContext,
+        on size: CGSize,
+        avoiding taken: [CGRect],
+        keepingOnScreen: Bool = false
+    ) -> CGRect? {
+        let text = Text(name).font(MapFont.label(size: textSize))
+        let ink = context.resolve(text.foregroundStyle(inkColour))
         let halo = context.resolve(text.foregroundStyle(palette.labelHalo))
 
         // Every name fits on one line at the width of a phone, now that they are names
@@ -214,31 +285,32 @@ struct ManhattanMapView: View {
         let room = CGSize(width: max(size.width - 32, 40), height: 240)
         let measured = ink.measure(in: room)
 
-        let wanted = camera.screenPoint(chosen.labelPoint, in: size)
-        // Somewhere it fits: over the shape if the shape is on screen, shouldered back
-        // onto the glass if it is not. The generous margin top and bottom keeps it out
-        // from under the title and the zoom buttons.
-        let point = CGPoint(
-            x: clamp(wanted.x, measured.width / 2 + 16, size.width - measured.width / 2 - 16),
-            y: clamp(wanted.y, measured.height / 2 + 64, size.height - measured.height / 2 - 72)
-        )
+        // The generous margin top and bottom keeps a name out from under the question
+        // and the zoom buttons.
+        let point = keepingOnScreen
+            ? CGPoint(
+                x: clamp(wanted.x, measured.width / 2 + 16, size.width - measured.width / 2 - 16),
+                y: clamp(wanted.y, measured.height / 2 + 30, size.height - measured.height / 2 - 72)
+            )
+            : wanted
         let box = CGRect(
             x: point.x - measured.width / 2,
             y: point.y - measured.height / 2,
             width: measured.width,
             height: measured.height
         )
+        guard !taken.contains(where: { $0.intersects(box) }) else { return nil }
 
         // Eight passes rather than four, and further out. A street name crosses one
-        // street; this lies across a whole grid of them, and four points of compass
-        // left the corners of every letter sitting on somebody's cross street. It is
-        // one label, so the extra draws cost nothing worth counting.
-        for offset in ManhattanMapView.ringOffsets(radius: palette.neighborhoodHaloReach) {
+        // street; these lie across a whole grid of them, and four points of compass left
+        // the corners of every letter sitting on somebody's cross street. There are at
+        // most ten of them, so the extra draws cost nothing worth counting.
+        for offset in ManhattanMapView.ringOffsets(radius: reach) {
             context.draw(halo, in: box.offsetBy(dx: offset.x, dy: offset.y))
         }
         context.draw(ink, in: box)
 
-        return [box.insetBy(dx: -4, dy: -4)]
+        return box.insetBy(dx: -4, dy: -4)
     }
 
     private func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat {
