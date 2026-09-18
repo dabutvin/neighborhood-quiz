@@ -5,8 +5,34 @@ hand, in ink, on paper — with every avenue and every numbered cross street nam
 not one neighbourhood.
 
 That omission is the whole idea. Naming the neighbourhoods is the quiz, and a map that
-has already told you where SoHo is has given the game away. For now the island is
-streets, Central Park and the water round it.
+has already told you where SoHo is has given the game away.
+
+## The game
+
+A round is ten neighbourhoods. You are given a name and three goes to put your finger on
+it: five dollars if you know it straight away, three on the second go, one on the third,
+and nothing if three goes are not enough — at which point the round shows you where it
+was and moves on. Fifty dollars is a perfect round.
+
+The money is kept. It banks up across every round you ever play, and it buys the rest of
+the city:
+
+| | |
+|---|---|
+| Manhattan | free — where everyone starts |
+| Brooklyn | $200 |
+| Queens | $600 |
+| The Bronx | $1,200 |
+| Staten Island | $2,000 |
+
+Two numbers are tracked, not one. The balance is what you can spend and it goes down when
+you spend it; the career total is every dollar ever earned and it never goes down, because
+buying Brooklyn should not make it look like you played less than you did.
+
+**Only Manhattan is drawn so far.** The other four are priced and listed because knowing
+what you are saving for is most of the reason to save, but the game will not take money
+for a borough it cannot open — when the balance is there and the map is not, it says so
+and the button stays off.
 
 ## The map
 
@@ -291,8 +317,10 @@ shared identity.
 
 ## What is next
 
-The neighbourhoods. The map is deliberately silent about them, because that is what there
-will be to guess.
+Brooklyn. The economy that pays for it is built and tested; what it is waiting on is the
+map itself — the same treatment Manhattan had, which is a census-tract union from NYC Open
+Data and then a pass over the result deciding what each neighbourhood is actually called.
+That second half is not a job for a script.
 
 ## License
 

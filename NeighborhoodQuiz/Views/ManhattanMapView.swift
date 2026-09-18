@@ -173,7 +173,7 @@ struct ManhattanMapView: View {
             board.fill(area.shape, with: .color(palette.ruledOut.opacity(0.3)))
             board.stroke(
                 area.edge,
-                with: .color(palette.ruledOut.opacity(0.75)),
+                with: .color(palette.ruledOutInk.opacity(0.75)),
                 style: StrokeStyle(lineWidth: 2 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
@@ -218,7 +218,7 @@ struct ManhattanMapView: View {
             // makes it read as one shape rather than as a stain on the drawing.
             board.stroke(
                 chosen.edge,
-                with: .color(earned ? palette.highlightInk : palette.ruledOut),
+                with: .color(earned ? palette.highlightInk : palette.ruledOutInk),
                 style: StrokeStyle(lineWidth: 3 / zoom, lineCap: .round, lineJoin: .round)
             )
         }
@@ -271,7 +271,7 @@ struct ManhattanMapView: View {
                 area.name,
                 at: point,
                 size: palette.settledLabelSize,
-                ink: earned ? palette.highlightInk.opacity(0.9) : palette.ruledOut,
+                ink: earned ? palette.highlightInk.opacity(0.9) : palette.ruledOutInk,
                 reach: palette.labelHaloReach,
                 in: &context,
                 on: size,
@@ -288,7 +288,7 @@ struct ManhattanMapView: View {
             chosen.name,
             at: point,
             size: palette.neighborhoodLabelSize,
-            ink: givenAway.contains(chosen.id) ? palette.ruledOut : palette.highlightInk,
+            ink: givenAway.contains(chosen.id) ? palette.ruledOutInk : palette.highlightInk,
             reach: palette.neighborhoodHaloReach,
             in: &context,
             on: size,

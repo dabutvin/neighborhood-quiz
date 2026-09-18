@@ -50,9 +50,15 @@ struct QuizRound: Equatable {
     /// not knowing.
     private(set) var missed: [Int] = []
 
+    /// How many places were found on the first go, on the second and on the third,
+    /// indexed by the go. Together with `missed` it accounts for every question asked,
+    /// which is what lets the end of a round be read as a breakdown rather than a single
+    /// number with no working shown.
+    private(set) var foundOn = [Int](repeating: 0, count: QuizRound.tries)
+
     /// How many places were found without a single wrong guess. Not the score, but the
     /// number people actually want to hear about themselves.
-    private(set) var firstTime = 0
+    var firstTime: Int { foundOn.first ?? 0 }
 
     /// What has been guessed and ruled out on the question being asked now. Kept so the
     /// map can show a player what they have already eliminated, so that guessing the
@@ -73,6 +79,11 @@ struct QuizRound: Equatable {
 
     /// What a round of this length is worth if every place is found first go.
     var perfectScore: Int { questions.count * (QuizRound.points.first ?? 0) }
+
+    /// What a go is called, for the end-of-round breakdown.
+    static func goName(_ go: Int) -> String {
+        ["First go", "Second go", "Third go"][safe: go] ?? "Go \(go + 1)"
+    }
 
     /// Ten of the forty, in an order nobody can predict. Takes the ids to choose from so
     /// that a test can hand it a known set and a known generator.
@@ -115,8 +126,9 @@ struct QuizRound: Equatable {
         guard !ruledOut.contains(id) else { return .ignored }
 
         guard id != current else {
-            score += QuizRound.points[min(triesUsed, QuizRound.points.count - 1)]
-            if triesUsed == 0 { firstTime += 1 }
+            let go = min(triesUsed, QuizRound.tries - 1)
+            score += QuizRound.points[min(go, QuizRound.points.count - 1)]
+            foundOn[go] += 1
             found.append(current)
             moveOn()
             return .right
@@ -134,5 +146,12 @@ struct QuizRound: Equatable {
     private mutating func moveOn() {
         index += 1
         ruledOut = []
+    }
+}
+
+private extension Array {
+    /// The element at an index, or nothing if the index is not one this array has.
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

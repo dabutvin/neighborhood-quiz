@@ -248,6 +248,75 @@ final class QuizRoundTests: XCTestCase {
         XCTAssertEqual(Set(round.found).union(round.missed), Set(round.questions))
     }
 
+    // MARK: - The breakdown at the end
+
+    func testEachGoIsCountedSeparately() {
+        for used in 0..<QuizRound.tries {
+            var round = QuizRound(asking: [99])
+            for _ in 0..<used { _ = round.guess(somewhereElse(in: round)) }
+            _ = round.guess(99)
+
+            XCTAssertEqual(round.foundOn[used], 1, "Found on go \(used + 1)")
+            XCTAssertEqual(round.foundOn.reduce(0, +), 1, "And on no other go")
+        }
+    }
+
+    func testFirstTimeIsJustTheFirstGo() {
+        var round = self.round(of: Array(0..<40))
+        while let wanted = round.current {
+            _ = round.guess(wanted)
+            XCTAssertEqual(round.firstTime, round.foundOn[0], "One number, not two")
+        }
+    }
+
+    /// The end of a round shows a line per go plus one for the places never found. Every
+    /// question asked has to be on exactly one of those lines, or the breakdown is a
+    /// list that does not add up to the round it is describing.
+    func testTheBreakdownAccountsForEveryQuestion() {
+        var round = self.round(of: Array(0..<40))
+        var asked = 0
+        while let wanted = round.current {
+            switch asked % 4 {
+            case 3:
+                for _ in 0..<QuizRound.tries { _ = round.guess(somewhereElse(in: round)) }
+            default:
+                for _ in 0..<(asked % 4) { _ = round.guess(somewhereElse(in: round)) }
+                _ = round.guess(wanted)
+            }
+            asked += 1
+        }
+
+        XCTAssertEqual(
+            round.foundOn.reduce(0, +) + round.missed.count,
+            round.questions.count,
+            "Every question is on exactly one line of the breakdown"
+        )
+        XCTAssertEqual(round.foundOn.reduce(0, +), round.found.count)
+    }
+
+    /// And the points on those lines have to come to the number printed above them.
+    func testTheBreakdownPointsAddUpToTheScore() {
+        var round = self.round(of: Array(0..<40))
+        var asked = 0
+        while let wanted = round.current {
+            // Never a full three: that would end the question as a miss, and the guess
+            // below would then be aimed at whatever the round moved on to.
+            for _ in 0..<(asked % QuizRound.tries) { _ = round.guess(somewhereElse(in: round)) }
+            XCTAssertEqual(round.guess(wanted), .right)
+            asked += 1
+        }
+
+        let fromBreakdown = zip(round.foundOn, QuizRound.points).reduce(0) { $0 + $1.0 * $1.1 }
+        XCTAssertEqual(fromBreakdown, round.score, "A score with working that does not show")
+    }
+
+    func testEachGoHasAName() {
+        let names = (0..<QuizRound.tries).map(QuizRound.goName)
+        XCTAssertEqual(names, ["First go", "Second go", "Third go"])
+        XCTAssertEqual(Set(names).count, names.count)
+        XCTAssertFalse(QuizRound.goName(99).isEmpty, "Even one that should not exist")
+    }
+
     // MARK: - The score
 
     func testTheScoreIsTheSumOfWhatEachGoWasWorth() {

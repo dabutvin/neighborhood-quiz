@@ -11,6 +11,8 @@ struct NeighborhoodQuizApp: App {
                 QuizView(stage: stage)
             case .map(let opening, let showing):
                 HomeView(opening: opening, showing: showing)
+            case .boroughs(let wallet):
+                StagedBoroughs(wallet)
             }
         }
     }
@@ -29,9 +31,14 @@ struct NeighborhoodQuizApp: App {
 enum Screen: Equatable {
     case quiz(stage: QuizView.Stage?)
     case map(opening: MapBoard.Opening, showing: String?)
+    case boroughs(Wallet)
 
     init(arguments: [String]) {
-        if let stage = QuizView.Stage.allCases.first(where: { arguments.contains("-quiz-\($0.rawValue)") }) {
+        if arguments.contains("-boroughs") {
+            // Saved up for Brooklyn and a career behind it: the rung that has something
+            // to say, and the one state where the game has to explain itself.
+            self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24))
+        } else if let stage = QuizView.Stage.allCases.first(where: { arguments.contains("-quiz-\($0.rawValue)") }) {
             self = .quiz(stage: stage)
         } else if arguments.contains("-map-neighborhood") {
             // Greenwich Village: small enough to fill a phone, known to anybody who has
@@ -44,5 +51,22 @@ enum Screen: Equatable {
         } else {
             self = .quiz(stage: nil)
         }
+    }
+}
+
+
+/// The ladder on its own, for the gallery.
+///
+/// Holds its own throwaway bank so the screen can be photographed without a round being
+/// played into a real wallet first.
+private struct StagedBoroughs: View {
+    @State private var bank: Bank
+
+    init(_ wallet: Wallet) {
+        _bank = State(initialValue: .staged(wallet))
+    }
+
+    var body: some View {
+        BoroughsView(bank: bank)
     }
 }
