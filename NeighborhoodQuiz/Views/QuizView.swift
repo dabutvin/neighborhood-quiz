@@ -34,9 +34,24 @@ struct QuizView: View {
         "Upper East Side", "East Village", "Times Square", "Chinatown", "Inwood",
     ]
 
+    /// What the gallery's wallet holds before the staged round is paid for: part-way to
+    /// Brooklyn, with a career behind it, so the rows have something to say.
+    static let stagedWallet = Wallet(balance: 140, earned: 440, rounds: 11)
+
     var stage: Stage?
 
     @Environment(\.colorScheme) private var colorScheme
+
+    /// The money. A staged run gets one that remembers nothing, so the gallery shows the
+    /// same numbers every time and a photograph of the game can never spend, add to or
+    /// inherit what a real player has earned.
+    @State private var bank: Bank
+    @State private var showingBoroughs = false
+
+    init(stage: Stage? = nil) {
+        self.stage = stage
+        _bank = State(initialValue: stage == nil ? Bank() : Bank.staged(QuizView.stagedWallet))
+    }
 
     @State private var round: QuizRound?
     @State private var names: [Int: String] = [:]
@@ -108,6 +123,9 @@ struct QuizView: View {
             }
         }
         .background(palette.water)
+        .sheet(isPresented: $showingBoroughs) {
+            BoroughsView(bank: bank) { showingBoroughs = false }
+        }
         // Holding the settled place on screen, then moving along. `task(id:)` rather
         // than a Task started by hand: it is cancelled for us if the view goes away or
         // if `showing` changes underneath it, which is the whole of what could go wrong.
@@ -191,11 +209,11 @@ struct QuizView: View {
     private func verdict(for round: QuizRound) -> some View {
         switch showing {
         case .found(_, let worth):
-            Text("+\(worth)")
+            Text("+" + Money.text(worth))
                 .font(MapFont.chrome(size: 22))
                 .foregroundStyle(palette.highlightInk)
         case .missed:
-            Text("0")
+            Text(Money.text(0))
                 .font(MapFont.chrome(size: 22))
                 .foregroundStyle(palette.ruledOutInk)
         case nil:
@@ -215,7 +233,7 @@ struct QuizView: View {
     private func standing(of round: QuizRound) -> String {
         let progress = "\(asked(of: round)) of \(round.questions.count)"
         guard round.score > 0 else { return progress }
-        return "\(progress)   \(round.score) PTS"
+        return "\(progress)   \(Money.text(round.score))"
     }
 
     /// Which question the card is talking about.
@@ -232,7 +250,7 @@ struct QuizView: View {
 
     private func spoken(lead: String, name: String, round: QuizRound) -> String {
         switch showing {
-        case .found(_, let worth): return "Found \(name), worth \(worth) points."
+        case .found(_, let worth): return "Found \(name), worth \(Money.text(worth))."
         case .missed: return "Out of goes. It was \(name)."
         case nil:
             return "Find \(name). Question \(asked(of: round)) of \(round.questions.count), "
@@ -274,31 +292,24 @@ struct QuizView: View {
                 .foregroundStyle(palette.ink)
 
             VStack(spacing: 2) {
-                Text("\(round.score)")
+                Text(Money.text(round.score))
                     .font(MapFont.chrome(size: 56))
                     .foregroundStyle(palette.highlightInk)
                 Text(round.score == round.perfectScore
-                     ? "out of \(round.perfectScore) — a perfect round"
-                     : "out of \(round.perfectScore)")
+                     ? "out of \(Money.text(round.perfectScore)) — a perfect round"
+                     : "out of \(Money.text(round.perfectScore))")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(palette.inkSoft)
             }
 
             breakdown(of: round)
 
-            Button(action: playAgain) {
-                Text("Play again")
-                    .font(MapFont.chrome(size: 20))
-                    .foregroundStyle(palette.ink)
-                    .padding(.horizontal, 26)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(palette.land)
-                            .overlay(Capsule().strokeBorder(palette.inkSoft, lineWidth: 1.8))
-                    )
+            takings
+
+            HStack(spacing: 10) {
+                pill("Play again", action: playAgain)
+                pill("Boroughs") { showingBoroughs = true }
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 28)
@@ -311,6 +322,86 @@ struct QuizView: View {
                 )
         )
         .padding(28)
+    }
+
+    /// What the round did to the wallet.
+    ///
+    /// The money has already moved by the time this is on screen — it was paid the
+    /// moment the last question was answered — so this is not a receipt to approve, it
+    /// is the bar going up, which is the whole reason to play another one.
+    @ViewBuilder
+    private var takings: some View {
+        let wallet = bank.wallet
+
+        VStack(spacing: 7) {
+            Rectangle()
+                .fill(palette.inkSoft.opacity(0.28))
+                .frame(height: 1)
+                .padding(.bottom, 1)
+
+            HStack(spacing: 8) {
+                Text("WALLET")
+                    .font(.system(size: 9, weight: .semibold))
+                    .kerning(1.4)
+                    .foregroundStyle(palette.inkSoft)
+                Spacer(minLength: 8)
+                Text(Money.text(wallet.balance))
+                    .font(MapFont.chrome(size: 24))
+                    .foregroundStyle(palette.ink)
+                    .monospacedDigit()
+            }
+
+            if let saving = wallet.saving {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(palette.inkSoft.opacity(0.22))
+                        Capsule()
+                            .fill(palette.highlight)
+                            .frame(width: max(geometry.size.width * wallet.progress,
+                                              wallet.progress > 0 ? 6 : 0))
+                    }
+                }
+                .frame(height: 8)
+
+                Text(saved(for: saving))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(wallet.canAfford(saving) ? palette.highlightInk : palette.inkSoft)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Wallet, \(Money.text(wallet.balance))."
+                + (wallet.saving.map { " \(saved(for: $0))" } ?? "")
+        )
+    }
+
+    /// The one line under the bar. Three things it can say, and the third is the honest
+    /// one: the money is there and the map is not, which is true of every borough today.
+    private func saved(for borough: Borough) -> String {
+        let wallet = bank.wallet
+        guard wallet.canAfford(borough) else {
+            return "\(borough.name) at \(Money.text(borough.price))"
+        }
+        return borough.isDrawn
+            ? "\(borough.name) — ready to unlock"
+            : "\(borough.name) — saved up, map still being drawn"
+    }
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(MapFont.chrome(size: 20))
+                .foregroundStyle(palette.ink)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(palette.land)
+                        .overlay(Capsule().strokeBorder(palette.inkSoft, lineWidth: 1.8))
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     /// Where the score came from, a line per go.
@@ -354,7 +445,7 @@ struct QuizView: View {
                 .foregroundStyle(spent ? ink : palette.inkSoft.opacity(0.45))
                 .monospacedDigit()
                 .frame(minWidth: 16, alignment: .trailing)
-            Text(points > 0 ? "\(points) pts" : "—")
+            Text(points > 0 ? Money.text(points) : "—")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(palette.inkSoft.opacity(spent ? 0.9 : 0.45))
                 .monospacedDigit()
@@ -363,7 +454,7 @@ struct QuizView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(label): \(count) \(count == 1 ? "place" : "places")"
-                + (points > 0 ? ", \(points) points" : "")
+                + (points > 0 ? ", \(Money.text(points))" : "")
         )
     }
 
@@ -379,6 +470,10 @@ struct QuizView: View {
         }
         var staged = QuizRound(asking: QuizView.showcase.compactMap { map.neighborhood(named: $0)?.id })
         play(&staged, to: stage, on: map)
+        // A staged round that reached the end is paid like any other, so the wallet on
+        // the card agrees with the breakdown above it. The bank is a throwaway, so this
+        // goes nowhere near a real player's money.
+        if staged.isFinished { bank.earn(staged.score) }
         round = staged
     }
 
@@ -415,6 +510,13 @@ struct QuizView: View {
         let outcome = playing.guess(picked)
         round = playing
         withAnimation(.easeOut(duration: 0.2)) { candidate = nil }
+
+        // Paid here rather than where the summary is drawn. This runs once, when the
+        // last question is answered; a view body runs whenever SwiftUI feels like it,
+        // and paying from one would pay again on every redraw.
+        if playing.isFinished {
+            bank.earn(playing.score)
+        }
 
         // Setting this shows the place with its name on and starts the pause above.
         switch outcome {
