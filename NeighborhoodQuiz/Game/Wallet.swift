@@ -58,6 +58,13 @@ struct Wallet: Equatable, Codable {
         return min(Double(balance) / Double(saving.price), 1)
     }
 
+    /// How much of a borough's price is covered so far, which is never more than the
+    /// price. The balance itself can be more, and saying so out loud reads as a mistake:
+    /// "$240 of $200" is not a thing anybody has ever said about saving up.
+    func saved(towards borough: Borough) -> Int {
+        min(balance, borough.price)
+    }
+
     /// Whether there is enough money for it. Says nothing about whether it is drawn.
     func canAfford(_ borough: Borough) -> Bool {
         !has(borough) && balance >= borough.price

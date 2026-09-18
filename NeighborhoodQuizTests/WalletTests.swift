@@ -144,6 +144,17 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(Wallet(balance: Borough.brooklyn.price * 10).progress, 1, "never past full")
     }
 
+    /// What the ladder prints under the bar. Once the money is there the bar is full, and
+    /// the count beside it has to agree with the bar rather than with the balance —
+    /// "$240 of $200" reads as a bug even though both numbers are true.
+    func testWhatIsSavedTowardsSomethingNeverExceedsItsPrice() {
+        XCTAssertEqual(Wallet(balance: 0).saved(towards: .brooklyn), 0)
+        XCTAssertEqual(Wallet(balance: 140).saved(towards: .brooklyn), 140)
+        XCTAssertEqual(Wallet(balance: 200).saved(towards: .brooklyn), 200)
+        XCTAssertEqual(Wallet(balance: 240).saved(towards: .brooklyn), 200, "not $240 of $200")
+        XCTAssertEqual(Wallet(balance: 9_999).saved(towards: .brooklyn), Borough.brooklyn.price)
+    }
+
     // MARK: - How long the first one takes
 
     /// Not a rule so much as the tuning written down. A perfect round is fifty dollars,

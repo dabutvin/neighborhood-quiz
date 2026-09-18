@@ -169,7 +169,7 @@ struct BoroughsView: View {
             .frame(height: 9)
 
             HStack(spacing: 8) {
-                Text("\(Money.text(wallet.balance)) of \(Money.text(borough.price))")
+                Text("\(Money.text(wallet.saved(towards: borough))) of \(Money.text(borough.price))")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(palette.inkSoft)
                     .monospacedDigit()
