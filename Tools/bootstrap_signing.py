@@ -51,7 +51,15 @@ CAPABILITIES: list[str] = []
 
 
 class Failure(Exception):
-    """Something the user needs to fix, reported without a traceback."""
+    """Something the user needs to fix, reported without a traceback.
+
+    Carries the HTTP status when it came from App Store Connect, because a few of
+    them mean "already done" rather than "stop".
+    """
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def openssl(*args: str, stdin: bytes | None = None) -> bytes:
@@ -137,7 +145,7 @@ class AppStoreConnect:
             with urllib.request.urlopen(request, timeout=60) as response:
                 raw = response.read()
         except urllib.error.HTTPError as error:
-            raise Failure(self._describe(error)) from None
+            raise Failure(self._describe(error), status=error.code) from None
         except urllib.error.URLError as error:
             raise Failure(f"could not reach {API_ROOT}: {error.reason}") from None
         return json.loads(raw) if raw else {}
@@ -413,12 +421,37 @@ def command_list(api: AppStoreConnect, args: argparse.Namespace) -> None:
 
 def command_revoke(api: AppStoreConnect, args: argparse.Namespace) -> None:
     for certificate_id in args.certificate_id:
-        api.request("DELETE", f"/v1/certificates/{certificate_id}")
-        print(f"Revoked {certificate_id}")
+        retire(api, certificate_id)
     print(
         "\nAny build still signing with a revoked certificate will fail, so re-run "
         "`bootstrap_signing.py create` if you revoked the one CI was using."
     )
+
+
+def retire(api: AppStoreConnect, certificate_id: str) -> bool:
+    """Revoke a certificate, treating one that is already past revoking as done.
+
+    App Store Connect answers 409 for a certificate that is not in an "issued"
+    state — one already revoked, or expired on its own. Both mean the thing this
+    call wanted is already true, so failing the build over it would be refusing to
+    deploy because the tidying had nothing to tidy. That is exactly what happened:
+    a stale certificate from an earlier run sat there turning every TestFlight
+    upload red, and the app it was refusing to ship was fine.
+
+    Anything else is still fatal. Losing the ability to revoke certificates for a
+    real reason is worth stopping for.
+
+    Returns whether this call is what retired it.
+    """
+    try:
+        api.request("DELETE", f"/v1/certificates/{certificate_id}")
+    except Failure as failure:
+        if failure.status != 409:
+            raise
+        print(f"Certificate {certificate_id} was already past revoking")
+        return False
+    print(f"Revoked certificate {certificate_id}")
+    return True
 
 
 def command_cleanup(api: AppStoreConnect, args: argparse.Namespace) -> None:
@@ -457,13 +490,14 @@ def command_cleanup(api: AppStoreConnect, args: argparse.Namespace) -> None:
             kept += 1
             print(f"Keeping {describe_certificate(certificate)}")
 
+    revoked = 0
     for certificate_id in sorted(doomed):
-        api.request("DELETE", f"/v1/certificates/{certificate_id}")
-        print(f"Revoked certificate {certificate_id}")
+        if retire(api, certificate_id):
+            revoked += 1
 
     remaining = distribution_certificates(api)
     print(
-        f"{len(doomed)} certificate(s) revoked, {kept} kept by serial, "
+        f"{revoked} certificate(s) revoked, {kept} kept by serial, "
         f"{len(remaining)} left on the account."
     )
 
