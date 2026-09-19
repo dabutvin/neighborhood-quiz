@@ -64,6 +64,7 @@ struct MapBoard: View {
 
     @State private var grab: Grab?
 
+
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
@@ -196,7 +197,13 @@ struct MapBoard: View {
                 // pan feel like it hit something: at the limit the map stopped answering
                 // the thumb while the thumb kept going.
                 moved.resistPan(in: size)
-                camera = moved
+
+                // Explicitly not animated. The map is animatable now, and under the
+                // thumb it must not be: interpolating towards the finger instead of
+                // arriving at it is exactly the lag this is all meant to remove.
+                var immediate = Transaction()
+                immediate.disablesAnimations = true
+                withTransaction(immediate) { camera = moved }
             }
             .onEnded { value in
                 let grabbed = anchor(for: value)

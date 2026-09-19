@@ -8,9 +8,12 @@ import SwiftUI
 /// than swelling into a band as you come in on it. The names are drawn afterwards, in
 /// screen coordinates, so they keep their size too — pulling the map in shows *more*
 /// street names rather than bigger ones.
-struct ManhattanMapView: View {
+/// The conformance is isolated to the main actor because a `View`'s members already are,
+/// while `Animatable`'s requirement is not. SwiftUI drives animation on the main actor,
+/// so this is the truth rather than a way round the compiler.
+struct ManhattanMapView: View, @MainActor Animatable {
     let drawn: DrawnMap
-    let camera: MapCamera
+    var camera: MapCamera
     let palette: MapPalette
     /// Which neighbourhood is picked out, if any, by `DrawnNeighborhood.id`.
     var selected: Int?
@@ -37,6 +40,32 @@ struct ManhattanMapView: View {
     /// exactly when it has the least time, so a couple of things the eye cannot follow
     /// mid-drag are left until the map is still again.
     var interacting: Bool = false
+
+    /// What lets the map actually *move* when the camera is animated.
+    ///
+    /// A canvas draws inside a closure, and SwiftUI cannot interpolate a closure. With
+    /// nothing animatable between a camera and the drawing it produces, `withAnimation`
+    /// around a camera change had nothing to work with and the change landed in a single
+    /// step — so every animated camera move in the app was a jump wearing the word
+    /// "animation": the coast after a flick, the spring back from an edge pulled past
+    /// its leash, the zoom buttons, and the pull-back to the whole island between
+    /// rounds. The last two had been jumping since the day they were written.
+    ///
+    /// Handing SwiftUI the three numbers a camera is made of gives it something it can
+    /// interpolate. It runs `body` again at each step with the values in between, which
+    /// is what a moving map is.
+    var animatableData: AnimatablePair<Double, AnimatablePair<Double, Double>> {
+        get {
+            AnimatablePair(
+                camera.zoom,
+                AnimatablePair(Double(camera.pan.width), Double(camera.pan.height))
+            )
+        }
+        set {
+            camera.zoom = newValue.first
+            camera.pan = CGSize(width: newValue.second.first, height: newValue.second.second)
+        }
+    }
 
     var body: some View {
         Canvas { context, size in
