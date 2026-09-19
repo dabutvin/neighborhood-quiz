@@ -6,8 +6,10 @@ import SwiftUI
 /// a game about saving up has to show you what you are saving for. A locked row still
 /// carries its price.
 ///
-/// One row is different: the one being saved for gets the bar. Only that row can change
-/// today, so only that row is worth drawing in detail.
+/// One row is different: the one being saved for gets the bar, and whatever can be done
+/// about it. The rows above it are the ones already open, and each of those says either
+/// that you are there or offers to take you — which is the other thing this screen can
+/// do now that there is more than one place to be.
 struct BoroughsView: View {
     let bank: Bank
     var onClose: () -> Void = {}
@@ -140,10 +142,24 @@ struct BoroughsView: View {
         .accessibilityLabel(spoken(for: borough, owned: owned, next: next))
     }
 
+    /// What the right-hand end of a row says.
+    ///
+    /// Owned and drawn: "playing" if you are there, otherwise a way to go there. Owned
+    /// and not drawn: "bought", which is a state the game can reach only by a build
+    /// that has stopped drawing something — the button never sells a blank page — but
+    /// a wallet is a preference on a phone and outlives the build that wrote it.
     @ViewBuilder
     private func status(for borough: Borough, owned: Bool, next: Bool) -> some View {
-        if owned {
-            Text(borough.isDrawn ? "open" : "bought")
+        if owned, borough.isDrawn {
+            if wallet.current == borough {
+                Text("playing")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(palette.highlightInk)
+            } else {
+                play(borough)
+            }
+        } else if owned {
+            Text("bought")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(palette.highlightInk)
         } else {
@@ -177,6 +193,29 @@ struct BoroughsView: View {
                 buy(borough)
             }
         }
+    }
+
+    /// Go and play a borough that is open. The same shape as the Unlock button so the
+    /// eye reads the two as the same kind of thing, but outlined in ink rather than
+    /// filled in terracotta: unlocking spends money and moving spends nothing. The
+    /// sheet closes behind it, because the map you asked for is underneath.
+    private func play(_ borough: Borough) -> some View {
+        Button {
+            bank.play(borough)
+            onClose()
+        } label: {
+            Text("Play")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(palette.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(palette.land)
+                        .overlay(Capsule().strokeBorder(palette.ink, lineWidth: 1.5))
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     /// Three things this can say, and they are not interchangeable.
@@ -214,7 +253,10 @@ struct BoroughsView: View {
 
     private func spoken(for borough: Borough, owned: Bool, next: Bool) -> String {
         guard !owned else {
-            return borough.isDrawn ? "\(borough.name), open" : "\(borough.name), bought, map not drawn yet"
+            guard borough.isDrawn else { return "\(borough.name), bought, map not drawn yet" }
+            return wallet.current == borough
+                ? "\(borough.name), open, playing"
+                : "\(borough.name), open, tap to play"
         }
         guard next else { return "\(borough.name), locked, \(Money.text(borough.price))" }
         guard wallet.canAfford(borough) else {

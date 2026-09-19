@@ -13,7 +13,9 @@ import XCTest
 final class MapSpokenTests: XCTestCase {
     func testAMapWithNothingOnItJustSaysWhatItIs() {
         XCTAssertEqual(
-            ManhattanMapView.spoken(showing: nil, picked: false, found: 0, missed: 0),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: nil, picked: false, found: 0, missed: 0
+            ),
             "Map of Manhattan"
         )
     }
@@ -21,7 +23,9 @@ final class MapSpokenTests: XCTestCase {
     /// A found neighbourhood is written on the map, so it is said out loud too.
     func testAFoundPlaceIsNamed() {
         XCTAssertEqual(
-            ManhattanMapView.spoken(showing: "Harlem", picked: false, found: 3, missed: 0),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: "Harlem", picked: false, found: 3, missed: 0
+            ),
             "Map of Manhattan, showing Harlem. 3 found"
         )
     }
@@ -31,7 +35,9 @@ final class MapSpokenTests: XCTestCase {
     /// same reason. Somebody tapping their way round the island must not be able to
     /// listen for the answer.
     func testAPickedPlaceIsNeverNamed() {
-        let said = ManhattanMapView.spoken(showing: nil, picked: true, found: 0, missed: 0)
+        let said = BoroughMapView.spoken(
+            borough: "Manhattan", showing: nil, picked: true, found: 0, missed: 0
+        )
         XCTAssertEqual(said, "Map of Manhattan, with a neighborhood picked but not named")
         XCTAssertFalse(said.contains("Harlem"))
     }
@@ -40,18 +46,42 @@ final class MapSpokenTests: XCTestCase {
     /// arrives with the answer and not before it.
     func testAnsweringIsWhatNamesIt() {
         XCTAssertEqual(
-            ManhattanMapView.spoken(showing: "Harlem", picked: true, found: 0, missed: 0),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: "Harlem", picked: true, found: 0, missed: 0
+            ),
             "Map of Manhattan, showing Harlem"
+        )
+    }
+
+    /// The borough is said, not assumed. This was "Map of Manhattan" written into the
+    /// sentence until Brooklyn arrived, which is exactly the kind of thing that survives
+    /// a rename and quietly tells every Brooklyn player they are looking at Manhattan.
+    func testItNamesTheBoroughItIsActuallyShowing() {
+        for borough in Borough.allCases {
+            let said = BoroughMapView.spoken(
+                borough: borough.name, showing: nil, picked: false, found: 0, missed: 0
+            )
+            XCTAssertEqual(said, "Map of \(borough.name)")
+        }
+        XCTAssertEqual(
+            BoroughMapView.spoken(
+                borough: "Brooklyn", showing: "Park Slope", picked: false, found: 2, missed: 0
+            ),
+            "Map of Brooklyn, showing Park Slope. 2 found"
         )
     }
 
     func testTheTallyCountsBothWaysARoundGoes() {
         XCTAssertEqual(
-            ManhattanMapView.spoken(showing: nil, picked: false, found: 7, missed: 2),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: nil, picked: false, found: 7, missed: 2
+            ),
             "Map of Manhattan. 7 found, 2 given away"
         )
         XCTAssertEqual(
-            ManhattanMapView.spoken(showing: nil, picked: true, found: 4, missed: 1),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: nil, picked: true, found: 4, missed: 1
+            ),
             "Map of Manhattan, with a neighborhood picked but not named. 4 found, 1 given away"
         )
     }
@@ -59,8 +89,12 @@ final class MapSpokenTests: XCTestCase {
     /// Nothing at zero. A round that has just started should not open with "0 found".
     func testAnEmptyTallyIsNotSaid() {
         for said in [
-            ManhattanMapView.spoken(showing: nil, picked: false, found: 0, missed: 0),
-            ManhattanMapView.spoken(showing: "SoHo", picked: false, found: 0, missed: 0),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: nil, picked: false, found: 0, missed: 0
+            ),
+            BoroughMapView.spoken(
+                borough: "Manhattan", showing: "SoHo", picked: false, found: 0, missed: 0
+            ),
         ] {
             XCTAssertFalse(said.contains("0"), said)
         }

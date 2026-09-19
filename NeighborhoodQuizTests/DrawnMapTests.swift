@@ -2,10 +2,13 @@ import SwiftUI
 import XCTest
 @testable import NeighborhoodQuiz
 
+/// The drawing, built from Manhattan's data unless a test says otherwise. Brooklyn gets
+/// one test of its own at the bottom; everything the two share is checked on the one.
 @MainActor
 final class DrawnMapTests: XCTestCase {
     private let size = CGSize(width: 393, height: 852)  // an iPhone, near enough
-    private lazy var map = DrawnMap.build(size: size)
+    private let data = BoroughMap.of(.manhattan)
+    private lazy var map = DrawnMap.build(borough: .manhattan, size: size)
 
     func testTheIslandTheGreensAndTheStreetsAreAllDrawn() {
         XCTAssertFalse(map.land.isEmpty)
@@ -13,7 +16,8 @@ final class DrawnMapTests: XCTestCase {
         XCTAssertFalse(map.parks.isEmpty)
         XCTAssertFalse(map.parkEdge.isEmpty)
         XCTAssertEqual(map.size, size)
-        XCTAssertEqual(map.roads.count, ManhattanMapData.roads.count)
+        XCTAssertEqual(map.borough, .manhattan)
+        XCTAssertEqual(map.roads.count, data.roads.count)
     }
 
     func testTheGreensAreInsideTheIsland() {
@@ -46,7 +50,7 @@ final class DrawnMapTests: XCTestCase {
     }
 
     func testEveryStreetIsOfferedItsNameExactlyOnce() {
-        XCTAssertEqual(map.labels.count, ManhattanMapData.roads.filter(\.carriesName).count)
+        XCTAssertEqual(map.labels.count, data.roads.filter(\.carriesName).count)
         let texts = map.labels.map(\.text)
         XCTAssertEqual(Set(texts).count, texts.count, "A street is offered its name once")
     }
@@ -100,7 +104,7 @@ final class DrawnMapTests: XCTestCase {
     }
 
     func testTheMapIsDrawnTheSameWayTwice() {
-        let again = DrawnMap.build(size: size)
+        let again = DrawnMap.build(borough: .manhattan, size: size)
         XCTAssertEqual(map.land, again.land)
         XCTAssertEqual(map.roads.count, again.roads.count)
         XCTAssertEqual(map.roads.first?.path, again.roads.first?.path)
@@ -109,7 +113,7 @@ final class DrawnMapTests: XCTestCase {
     }
 
     func testADifferentSizeRedrawsRatherThanRescales() {
-        let wide = DrawnMap.build(size: CGSize(width: 820, height: 1_180))
+        let wide = DrawnMap.build(borough: .manhattan, size: CGSize(width: 820, height: 1_180))
         XCTAssertEqual(wide.size, CGSize(width: 820, height: 1_180))
         XCTAssertNotEqual(wide.land, map.land)
         XCTAssertGreaterThan(wide.land.boundingRect.height, map.land.boundingRect.height)
@@ -157,21 +161,76 @@ final class DrawnMapTests: XCTestCase {
     }
 
     func testTheScreenshotArgumentsAskForTheMap() {
-        XCTAssertEqual(Screen(arguments: ["x", "-map"]), .map(opening: .island, showing: nil))
-        XCTAssertEqual(Screen(arguments: ["x", "-map-zoomed"]), .map(opening: .midtown, showing: nil))
+        XCTAssertEqual(
+            Screen(arguments: ["x", "-map"]),
+            .map(borough: .manhattan, opening: .island, showing: nil)
+        )
+        XCTAssertEqual(
+            Screen(arguments: ["x", "-map-zoomed"]),
+            .map(borough: .manhattan, opening: .midtown, showing: nil)
+        )
         XCTAssertEqual(
             Screen(arguments: ["x", "-map-neighborhood"]),
-            .map(opening: .neighborhood("Greenwich Village"), showing: "Greenwich Village")
+            .map(borough: .manhattan, opening: .neighborhood("Greenwich Village"), showing: "Greenwich Village")
+        )
+        // Its own argument rather than a flag on `-map`, so the gallery's capture
+        // lines stay one word per shot.
+        XCTAssertEqual(
+            Screen(arguments: ["x", "-map-brooklyn"]),
+            .map(borough: .brooklyn, opening: .island, showing: nil)
         )
     }
 
     /// The shot that shows a highlight names a real place, and a rename in the data
     /// would otherwise turn it into a screenshot of nothing picked out at all.
     func testTheHighlightShotNamesAPlaceThatExists() {
-        guard case .map(_, let showing) = Screen(arguments: ["x", "-map-neighborhood"]),
+        guard case .map(_, _, let showing) = Screen(arguments: ["x", "-map-neighborhood"]),
               let showing else {
             return XCTFail("That argument should ask for a neighborhood")
         }
         XCTAssertNotNil(map.neighborhood(named: showing), "\(showing) is not on the map")
+    }
+
+    // MARK: - The other borough
+
+    /// Brooklyn goes through the same builder as Manhattan and comes out whole: every
+    /// road and every neighbourhood in its file is on the page, and it knows whose map
+    /// it is. And it is drawn north-up — the projection was built with no turn — which
+    /// is checked against a street rather than a number: Atlantic Avenue runs west to
+    /// east across the borough, and unturned it should lie close to flat.
+    func testBrooklynDrawsToo() throws {
+        let brooklynData = BoroughMap.of(.brooklyn)
+        let brooklyn = DrawnMap.build(borough: .brooklyn, size: size)
+
+        XCTAssertEqual(brooklyn.borough, .brooklyn)
+        XCTAssertEqual(brooklyn.size, size)
+        XCTAssertFalse(brooklyn.land.isEmpty)
+        XCTAssertEqual(brooklyn.roads.count, brooklynData.roads.count)
+        XCTAssertEqual(brooklyn.neighborhoods.count, brooklynData.neighborhoods.count)
+
+        let paper = CGRect(origin: .zero, size: size)
+        for label in brooklyn.labels {
+            XCTAssertTrue(paper.contains(label.position), "\(label.text) is written off the page")
+        }
+
+        XCTAssertEqual(Borough.brooklyn.gridBearingDegrees, 0, "Brooklyn is drawn as it sits")
+        let atlantic = try XCTUnwrap(
+            brooklyn.labels.first { $0.text == "Atlantic Avenue" },
+            "Atlantic Avenue should be on the map and carry its name"
+        )
+        XCTAssertEqual(atlantic.angle, 0, accuracy: 0.35, "Atlantic Avenue runs west to east, so north-up it lies flat")
+    }
+
+    /// The two boroughs are different drawings with different places on them. The
+    /// obvious thing, but it is what the cache in `BoroughMap.of` and the borough check
+    /// in `MapBoard` both rest on, so it is worth one line saying so.
+    func testTheTwoBoroughsAreNotTheSameMap() {
+        let brooklyn = DrawnMap.build(borough: .brooklyn, size: size)
+        let here = Set(map.neighborhoods.map(\.name))
+        let there = Set(brooklyn.neighborhoods.map(\.name))
+        XCTAssertNotEqual(here, there)
+        XCTAssertTrue(here.contains("SoHo"))
+        XCTAssertTrue(there.contains("Park Slope"))
+        XCTAssertFalse(there.contains("SoHo"))
     }
 }

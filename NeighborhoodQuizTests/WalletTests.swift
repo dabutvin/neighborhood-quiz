@@ -73,14 +73,15 @@ final class WalletTests: XCTestCase {
     }
 
     func testBuyingOpensItForPlayingOnceItIsDrawn() {
-        let city: Set<Borough> = [.manhattan, .brooklyn]
         var wallet = Wallet(balance: 500)
-        XCTAssertTrue(wallet.buy(.brooklyn, drawn: city))
+        XCTAssertTrue(wallet.buy(.brooklyn))
 
-        // `playable` asks the real city, where Brooklyn still has no map: it is owned,
-        // but there is nowhere to go until it is drawn.
+        // `playable` asks the real city, and Brooklyn is drawn in it now: bought means
+        // there is somewhere to go. It is not *where you are* until you go there,
+        // which is the next section.
         XCTAssertTrue(wallet.has(.brooklyn))
-        XCTAssertEqual(wallet.playable, [.manhattan])
+        XCTAssertEqual(wallet.playable, [.manhattan, .brooklyn])
+        XCTAssertEqual(wallet.current, .manhattan, "buying is not moving")
     }
 
     func testWhatCannotBeAffordedCannotBeBought() {
@@ -94,13 +95,15 @@ final class WalletTests: XCTestCase {
 
     /// The guard that matters most.
     ///
-    /// Every borough but Manhattan is priced and visible, and none of them is drawn yet.
-    /// A player can therefore reach the money for Brooklyn today — and if the button took
-    /// it, they would have paid two hundred dollars for a blank page. Affordable and
-    /// buyable are two different questions for exactly this reason.
+    /// Every borough is priced and visible, and from Queens on none of them is drawn
+    /// yet. A player can reach the money for Queens — and if the button took it, they
+    /// would have paid six hundred dollars for a blank page. Affordable and buyable are
+    /// two different questions for exactly this reason.
     ///
-    /// When a borough does get a map, this test stops applying to it and applies to the
-    /// next one along; when they are all drawn it has nothing left to guard and says so.
+    /// This picks the first undrawn borough rather than naming one, so when a borough
+    /// does get a map it stops applying to it and applies to the next one along — it
+    /// moved from Brooklyn to Queens without being touched — and when they are all
+    /// drawn it has nothing left to guard and says so.
     func testMoneyIsNeverTakenForABoroughWithNoMapBehindIt() {
         guard let undrawn = Borough.forSale.first(where: { !$0.isDrawn }) else {
             return  // every borough is drawn; there is nothing left to protect against
@@ -113,6 +116,55 @@ final class WalletTests: XCTestCase {
         XCTAssertFalse(wallet.buy(undrawn))
         XCTAssertEqual(wallet.balance, undrawn.price * 2, "not a dollar of it was taken")
         XCTAssertFalse(wallet.has(undrawn))
+    }
+
+    // MARK: - Where the player is
+
+    func testAFreshWalletIsInManhattan() {
+        XCTAssertEqual(Wallet().playing, .manhattan)
+        XCTAssertEqual(Wallet().current, .manhattan)
+    }
+
+    /// The two halves of the guard: not yours, and not drawn. Either one refuses, and
+    /// a refusal leaves the player where they were.
+    func testYouCannotGoSomewhereYouDoNotOwnOrThatIsNotDrawn() {
+        var wallet = Wallet(balance: 5_000)
+
+        XCTAssertFalse(wallet.play(.brooklyn), "drawn, but not bought")
+        XCTAssertEqual(wallet.current, .manhattan)
+
+        guard let undrawn = Borough.forSale.first(where: { !$0.isDrawn }) else { return }
+        wallet = Wallet(balance: 0, bought: [undrawn])
+        XCTAssertTrue(wallet.has(undrawn), "owned, however that happened")
+        XCTAssertFalse(wallet.play(undrawn), "but there is no map to play it on")
+        XCTAssertEqual(wallet.current, .manhattan)
+    }
+
+    func testBrooklynCanBePlayedOnceItIsBought() {
+        var wallet = Wallet(balance: 500)
+        XCTAssertTrue(wallet.buy(.brooklyn))
+        XCTAssertTrue(wallet.play(.brooklyn))
+
+        XCTAssertEqual(wallet.playing, .brooklyn)
+        XCTAssertEqual(wallet.current, .brooklyn)
+        XCTAssertTrue(wallet.play(.manhattan), "and back again, which is always allowed")
+        XCTAssertEqual(wallet.current, .manhattan)
+    }
+
+    /// A wallet can say Brooklyn and not be able to mean it. There are two ways there:
+    /// written by a build in which Brooklyn was drawn and read by one in which it is
+    /// not, or a purchase that has since been erased. Both look the same to the wallet —
+    /// `playing` names a borough `playable` does not hold — and both land the player in
+    /// Manhattan rather than nowhere. Reached through the decoder because it is the
+    /// only door: `play` will not put the wallet in this state on purpose.
+    func testCurrentFallsBackToManhattanWhenPlayingIsNotPlayable() throws {
+        let json = """
+        {"balance": 0, "earned": 500, "rounds": 12, "bought": [], "playing": "brooklyn"}
+        """
+        let wallet = try JSONDecoder().decode(Wallet.self, from: Data(json.utf8))
+
+        XCTAssertEqual(wallet.playing, .brooklyn, "what was written down is kept")
+        XCTAssertEqual(wallet.current, .manhattan, "but not honoured")
     }
 
     // MARK: - The ladder
@@ -180,6 +232,37 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(read.balance, 178)
         XCTAssertEqual(read.earned, 478)
         XCTAssertEqual(read.rounds, 12)
+    }
+
+    /// Every wallet saved before Brooklyn was drawn has no `playing` in it, and they are
+    /// all filed under the same `wallet.v1` key the new ones are. A decoder that refused
+    /// the old shape would have the bank read it as nothing saved, and a player would
+    /// open the update to an empty balance. So the field is optional on the way in and
+    /// means Manhattan when it is missing, which is where everybody was.
+    func testAWalletWrittenBeforeBrooklynStillReads() throws {
+        let json = """
+        {"balance": 140, "earned": 440, "rounds": 11, "bought": []}
+        """
+        let wallet = try JSONDecoder().decode(Wallet.self, from: Data(json.utf8))
+
+        XCTAssertEqual(wallet.balance, 140)
+        XCTAssertEqual(wallet.earned, 440)
+        XCTAssertEqual(wallet.rounds, 11)
+        XCTAssertTrue(wallet.bought.isEmpty)
+        XCTAssertEqual(wallet.playing, .manhattan)
+        XCTAssertEqual(wallet.current, .manhattan)
+    }
+
+    func testWhereThePlayerIsSurvivesTheTripToo() throws {
+        var wallet = Wallet(balance: 500)
+        wallet.buy(.brooklyn)
+        wallet.play(.brooklyn)
+
+        let data = try JSONEncoder().encode(wallet)
+        let read = try JSONDecoder().decode(Wallet.self, from: data)
+
+        XCTAssertEqual(read, wallet)
+        XCTAssertEqual(read.current, .brooklyn)
     }
 
     /// A career total below the balance would mean spending money that was never earned.

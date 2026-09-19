@@ -82,10 +82,10 @@ final class DrawnNeighborhoodTests: XCTestCase {
     // MARK: - The city's own shapes
 
     private let size = CGSize(width: 393, height: 852)
-    private lazy var map = DrawnMap.build(size: size)
+    private lazy var map = DrawnMap.build(borough: .manhattan, size: size)
 
     func testEveryNeighborhoodIsDrawnAndCanBeTouched() {
-        XCTAssertEqual(map.neighborhoods.count, ManhattanMapData.neighborhoods.count)
+        XCTAssertEqual(map.neighborhoods.count, BoroughMap.of(.manhattan).neighborhoods.count)
 
         for area in map.neighborhoods {
             XCTAssertFalse(area.shape.isEmpty, "\(area.name) has nothing to fill")
@@ -167,6 +167,7 @@ final class DrawnNeighborhoodTests: XCTestCase {
 
     func testANeighborhoodCanBeFoundByName() {
         XCTAssertEqual(map.neighborhood(named: "SoHo")?.name, "SoHo")
+        // Brooklyn Heights is on a map now, but not on this one.
         XCTAssertNil(map.neighborhood(named: "Brooklyn Heights"))
     }
 

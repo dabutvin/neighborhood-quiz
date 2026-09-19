@@ -14,7 +14,7 @@ import XCTest
 @MainActor
 final class RoadSheetTests: XCTestCase {
     private let size = CGSize(width: 393, height: 852)
-    private lazy var map = DrawnMap.build(size: size)
+    private lazy var map = DrawnMap.build(borough: .manhattan, size: size)
 
     /// The load-bearing one. A rank fades in as a rank; no road inside it is ever a
     /// different shade from its neighbours, which is what lets them share a stroke.

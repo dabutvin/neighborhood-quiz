@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The island, drawn.
+/// The borough, drawn.
 ///
 /// Everything below the labels happens inside one `Canvas`: the paths are built once
 /// for the view's size and then re-stroked under whatever transform the camera is
@@ -11,7 +11,7 @@ import SwiftUI
 /// The conformance is isolated to the main actor because a `View`'s members already are,
 /// while `Animatable`'s requirement is not. SwiftUI drives animation on the main actor,
 /// so this is the truth rather than a way round the compiler.
-struct ManhattanMapView: View, @MainActor Animatable {
+struct BoroughMapView: View, @MainActor Animatable {
     let drawn: DrawnMap
     var camera: MapCamera
     let palette: MapPalette
@@ -21,7 +21,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
     /// have already looked.
     var ruledOut: Set<Int> = []
     /// Neighbourhoods already found and settled. Washed and named, but quietly: the
-    /// island fills in as a round goes on, so what you have done so far is on the map
+    /// borough fills in as a round goes on, so what you have done so far is on the map
     /// rather than in a tally somewhere.
     var settled: Set<Int> = []
     /// Neighbourhoods three goes were not enough for, which the round showed the player
@@ -33,7 +33,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
     ///
     /// Drawn in ink rather than terracotta and — this is the whole point — **never
     /// named**. A candidate that told you what it was would hand over the game: you
-    /// could tap your way round the island reading names off until one of them matched
+    /// could tap your way round the borough reading names off until one of them matched
     /// the question. So it shows you the shape you have your finger on and nothing else.
     var candidate: Int?
     /// Whether a finger is on the map right now. Drawing is at its most expensive
@@ -64,7 +64,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
     /// around a camera change had nothing to work with and the change landed in a single
     /// step — so every animated camera move in the app was a jump wearing the word
     /// "animation": the coast after a flick, the spring back from an edge pulled past
-    /// its leash, the zoom buttons, and the pull-back to the whole island between
+    /// its leash, the zoom buttons, and the pull-back to the whole borough between
     /// rounds. The last two had been jumping since the day they were written.
     ///
     /// Handing SwiftUI the three numbers a camera is made of gives it something it can
@@ -105,7 +105,8 @@ struct ManhattanMapView: View, @MainActor Animatable {
         // people actually spend their time on.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            ManhattanMapView.spoken(
+            BoroughMapView.spoken(
+                borough: drawn.borough.name,
                 showing: chosen?.name,
                 picked: candidate != nil,
                 found: settled.count,
@@ -118,19 +119,25 @@ struct ManhattanMapView: View, @MainActor Animatable {
     /// What the map says to somebody who is not looking at it.
     ///
     /// A canvas has no structure for VoiceOver to walk, so SwiftUI offers it the only
-    /// thing it can find in one: every piece of text drawn into it. On this map that is
-    /// nine hundred street names read out one after another, which is no way to find
-    /// anything — and through the accessibility annotations behind it, it was also what
-    /// took the app down. The street names are of use on the glass. They are of none in
-    /// a list.
+    /// thing it can find in one: every piece of text drawn into it. On a borough that is
+    /// most of a thousand street names read out one after another, which is no way to
+    /// find anything — and through the accessibility annotations behind it, it was also
+    /// what took the app down. The street names are of use on the glass. They are of
+    /// none in a list.
     ///
     /// What it says is exactly what the map shows and not a word more. A neighbourhood
     /// that has been found is written on the map, so it is named here. One that has
     /// only been picked is deliberately *not* written on the map — naming it would hand
     /// over the game — so it is not named here either. The quiz has to be as hard to
     /// listen to as it is to look at.
-    static func spoken(showing: String?, picked: Bool, found: Int, missed: Int) -> String {
-        var said = "Map of Manhattan"
+    static func spoken(
+        borough: String,
+        showing: String?,
+        picked: Bool,
+        found: Int,
+        missed: Int
+    ) -> String {
+        var said = "Map of \(borough)"
         if let showing {
             said += ", showing \(showing)"
         } else if picked {
@@ -231,7 +238,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
 
         // The ones already found, filled and left there. No coat of paper under them —
         // that is for the place being looked at now, and ten quieted neighborhoods would
-        // be most of the island with the life taken out of it.
+        // be most of the borough with the life taken out of it.
         for area in map.neighborhoods where settled.contains(area.id) && area.id != selected {
             guard area.bounds.intersects(onScreen) else { continue }
             board.fill(area.shape, with: .color(palette.highlight.opacity(0.22)))
@@ -302,13 +309,13 @@ struct ManhattanMapView: View, @MainActor Animatable {
     /// How heavy a border is drawn, in points on screen.
     ///
     /// A little heavier when pulled back, where the borders are shortest and there is
-    /// most of the island on the glass at once.
+    /// most of the borough on the glass at once.
     ///
     /// Lighter than the first version over the top, which at two points and more was a
     /// quilt of dashes with a street map somewhere behind it — the same mistake as
     /// hiding them under the streets, with the sign flipped. Heavier than the second,
     /// which corrected too far. This sits between the two: a line you can follow across
-    /// the island without it becoming the thing the island is made of.
+    /// the borough without it becoming the thing the borough is made of.
     private var borderWeight: Double {
         let pulledBack = min(max((3 - camera.zoom) / 2, 0), 1)
         return 1.2 + 0.5 * pulledBack
@@ -317,10 +324,10 @@ struct ManhattanMapView: View, @MainActor Animatable {
     /// The streets.
     ///
     /// There are two ways to put them down and which is cheaper depends entirely on how
-    /// much of the island is on the glass. Pulled back, nothing is off the edge, so
+    /// much of the borough is on the glass. Pulled back, nothing is off the edge, so
     /// skipping what cannot be seen finds nothing to skip and every road pays for a
     /// stroke of its own — four hundred of them at the view the app opens on. Pulled in,
-    /// nineteen twentieths of the island is off the glass and skipping it is the whole
+    /// nineteen twentieths of the borough is off the glass and skipping it is the whole
     /// game.
     ///
     /// So: when most of a rank is showing, stroke the single path holding all of it;
@@ -471,7 +478,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
         // street; these lie across a whole grid of them, and four points of compass left
         // the corners of every letter sitting on somebody's cross street. There are at
         // most ten of them, so the extra draws cost nothing worth counting.
-        for offset in ManhattanMapView.ringOffsets(radius: reach) {
+        for offset in BoroughMapView.ringOffsets(radius: reach) {
             context.draw(halo, in: box.offsetBy(dx: offset.x, dy: offset.y))
         }
         context.draw(ink, in: box)
@@ -502,7 +509,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
         // through "96th Street" at the widest zoom.
         var taken: [CGRect] = claimed
         // Worked out once for the whole pass rather than once per name.
-        let offsets = ManhattanMapView.crossOffsets(radius: palette.labelHaloReach)
+        let offsets = BoroughMapView.crossOffsets(radius: palette.labelHaloReach)
 
         for label in labels where camera.zoom >= label.minZoom {
             let point = camera.screenPoint(label.position, in: size)

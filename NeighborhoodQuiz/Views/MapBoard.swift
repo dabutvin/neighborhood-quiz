@@ -9,14 +9,21 @@ import SwiftUI
 struct MapBoard: View {
     /// Where the map starts. The screenshot runs ask for the pulled-in ones so the
     /// gallery shows cross street names, and a neighborhood picked out, as well as the
-    /// whole island.
+    /// whole borough.
     enum Opening: Equatable {
+        /// The whole borough — the name is from when there was only the one, and an
+        /// island at that.
         case island
+        /// Times Square, close in. Manhattan only: it is a spot on one borough's map,
+        /// and nothing but the screenshot runs asks for it.
         case midtown
         case neighborhood(String)
     }
 
     let palette: MapPalette
+    /// Which borough to draw. Change it and the drawing is built again from that
+    /// borough's file, and the camera goes home — it is a different map, not a move.
+    let borough: Borough
     var opening: Opening = .island
     /// Filled and named. The quiz uses it for the place you have just found; the map
     /// on its own uses it for whatever you last touched.
@@ -29,8 +36,8 @@ struct MapBoard: View {
     var givenAway: Set<Int> = []
     /// Picked out but not yet answered with — outlined, and deliberately not named.
     var candidate: Int?
-    /// Change this and the map goes back to the whole island. The quiz bumps it between
-    /// questions, because arriving at Inwood still zoomed into SoHo is no use to
+    /// Change this and the map goes back to the whole borough. The quiz bumps it at the
+    /// start of a round, because arriving at Inwood still zoomed into SoHo is no use to
     /// anybody.
     var resetToken: Int = 0
     /// Which neighborhood was touched, or nothing for the water and the parks.
@@ -70,8 +77,8 @@ struct MapBoard: View {
             let size = geometry.size
 
             ZStack {
-                if let drawn, drawn.size == size {
-                    ManhattanMapView(
+                if let drawn, drawn.size == size, drawn.borough == borough {
+                    BoroughMapView(
                         drawn: drawn,
                         camera: live(in: size),
                         palette: palette,
@@ -98,6 +105,13 @@ struct MapBoard: View {
             .onChange(of: size) { _, newSize in prepare(for: newSize) }
             .onChange(of: resetToken) { _, _ in
                 withAnimation(.easeOut(duration: 0.35)) { camera = MapCamera() }
+            }
+            // A new borough is a new drawing, so the camera is put back rather than
+            // animated: there is nothing for a move from Inwood to Coney Island to
+            // travel across.
+            .onChange(of: borough) { _, _ in
+                camera = MapCamera()
+                prepare(for: size)
             }
         }
     }
@@ -241,9 +255,9 @@ struct MapBoard: View {
 
     private func prepare(for size: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
-        guard drawn?.size != size else { return }
+        guard drawn?.size != size || drawn?.borough != borough else { return }
 
-        let map = DrawnMap.build(size: size)
+        let map = DrawnMap.build(borough: borough, size: size)
         drawn = map
         onReady(map)
 
@@ -258,7 +272,9 @@ struct MapBoard: View {
             camera = MapCamera()
         case .midtown:
             // Times Square, far enough in that the numbered cross streets have their
-            // names on — which is the point of the shot.
+            // names on — which is the point of the shot. A Manhattan coordinate on
+            // whichever borough is drawn; only the `-map-zoomed` screenshot asks for
+            // it, and that one asks for Manhattan.
             let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
             camera = MapCamera.centred(on: midtown, zoom: 4.2, in: size)
             camera.clampPan(in: size)
