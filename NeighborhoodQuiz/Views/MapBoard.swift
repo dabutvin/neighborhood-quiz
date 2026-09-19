@@ -64,10 +64,6 @@ struct MapBoard: View {
 
     @State private var grab: Grab?
 
-    /// Whether the map is still coasting after the finger has gone. The drawing is at
-    /// its most expensive exactly when it is moving, so a glide counts as a hand on the
-    /// map even though there is none.
-    @State private var gliding = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -84,7 +80,7 @@ struct MapBoard: View {
                         settled: settled,
                         givenAway: givenAway,
                         candidate: candidate,
-                        interacting: pinch != 1 || grab != nil || gliding
+                        interacting: pinch != 1 || grab != nil
                     )
                     .contentShape(Rectangle())
                     // The tap is asked first. A drag has ten points of slop to travel
@@ -228,12 +224,7 @@ struct MapBoard: View {
                 // home by the same spring that does the coasting.
                 settled.clampPan(in: size)
 
-                gliding = true
-                withAnimation(MapBoard.glide) {
-                    camera = settled
-                } completion: {
-                    gliding = false
-                }
+                withAnimation(MapBoard.glide) { camera = settled }
             }
     }
 

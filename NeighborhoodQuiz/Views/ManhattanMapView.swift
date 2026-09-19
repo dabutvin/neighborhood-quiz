@@ -8,7 +8,10 @@ import SwiftUI
 /// than swelling into a band as you come in on it. The names are drawn afterwards, in
 /// screen coordinates, so they keep their size too — pulling the map in shows *more*
 /// street names rather than bigger ones.
-struct ManhattanMapView: View, Animatable {
+/// The conformance is isolated to the main actor because a `View`'s members already are,
+/// while `Animatable`'s requirement is not. SwiftUI drives animation on the main actor,
+/// so this is the truth rather than a way round the compiler.
+struct ManhattanMapView: View, @MainActor Animatable {
     let drawn: DrawnMap
     var camera: MapCamera
     let palette: MapPalette
