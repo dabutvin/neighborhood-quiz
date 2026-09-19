@@ -13,6 +13,8 @@ struct NeighborhoodQuizApp: App {
                 HomeView(opening: opening, showing: showing)
             case .boroughs(let wallet):
                 StagedBoroughs(wallet)
+            case .settings(let wallet):
+                StagedSettings(wallet)
             }
         }
     }
@@ -32,9 +34,14 @@ enum Screen: Equatable {
     case quiz(stage: QuizView.Stage?)
     case map(opening: MapBoard.Opening, showing: String?)
     case boroughs(Wallet)
+    case settings(Wallet)
 
     init(arguments: [String]) {
-        if arguments.contains("-boroughs") {
+        if arguments.contains("-settings") {
+            // A wallet with a career behind it, so the row has something to describe
+            // rather than offering to delete nothing.
+            self = .settings(Wallet(balance: 140, earned: 440, rounds: 11))
+        } else if arguments.contains("-boroughs") {
             // Saved up for Brooklyn and a career behind it: the rung that has something
             // to say, and the one state where the game has to explain itself.
             self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24))
@@ -68,5 +75,19 @@ private struct StagedBoroughs: View {
 
     var body: some View {
         BoroughsView(bank: bank)
+    }
+}
+
+/// Settings on its own, for the gallery, with a throwaway bank behind it — so a
+/// photograph of the delete button can never be pointed at real money.
+private struct StagedSettings: View {
+    @State private var bank: Bank
+
+    init(_ wallet: Wallet) {
+        _bank = State(initialValue: .staged(wallet))
+    }
+
+    var body: some View {
+        SettingsView(bank: bank)
     }
 }

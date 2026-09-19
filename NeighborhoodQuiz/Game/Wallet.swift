@@ -35,6 +35,10 @@ struct Wallet: Equatable, Codable {
         self.bought = bought
     }
 
+    /// Whether there is anything here worth keeping. What settings asks before it
+    /// offers to throw it away.
+    var isEmpty: Bool { self == Wallet() }
+
     /// Whether a borough is open. Free ones always are.
     func has(_ borough: Borough) -> Bool {
         borough.price == 0 || bought.contains(borough)
