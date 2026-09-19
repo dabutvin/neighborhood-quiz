@@ -396,7 +396,6 @@ struct ManhattanMapView: View, @MainActor Animatable {
     ) -> CGRect? {
         let text = Text(name).font(MapFont.label(size: textSize))
         let ink = context.resolve(text.foregroundStyle(inkColour))
-        let halo = context.resolve(text.foregroundStyle(palette.labelHalo))
 
         // Every name fits on one line at the width of a phone, now that they are names
         // people say rather than the city's compound ones. Measuring inside the width it
@@ -422,14 +421,11 @@ struct ManhattanMapView: View, @MainActor Animatable {
         )
         guard !taken.contains(where: { $0.intersects(box) }) else { return nil }
 
-        // Eight passes rather than four, and further out. A street name crosses one
-        // street; these lie across a whole grid of them, and four points of compass left
-        // the corners of every letter sitting on somebody's cross street. There are at
-        // most ten of them, so the extra draws cost nothing worth counting.
-        for offset in ManhattanMapView.ringOffsets(radius: reach) {
-            context.draw(halo, in: box.offsetBy(dx: offset.x, dy: offset.y))
-        }
-        context.draw(ink, in: box)
+        // One draw, with the paper cast behind it, rather than nine draws of the same
+        // word in a ring. See `halo(_:reach:)` for why the count, not the cost, is what matters.
+        var paper = context
+        paper.addFilter(ManhattanMapView.halo(palette.labelHalo, reach: reach))
+        paper.draw(ink, in: box)
 
         return box.insetBy(dx: -4, dy: -4)
     }
@@ -457,7 +453,8 @@ struct ManhattanMapView: View, @MainActor Animatable {
         // through "96th Street" at the widest zoom.
         var taken: [CGRect] = claimed
         // Worked out once for the whole pass rather than once per name.
-        let offsets = ManhattanMapView.crossOffsets(radius: palette.labelHaloReach)
+        let paper = ManhattanMapView.halo(palette.labelHalo, reach: palette.labelHaloReach)
+        let quiet = interacting || moving
 
         for label in labels where camera.zoom >= label.minZoom {
             let point = camera.screenPoint(label.position, in: size)
@@ -478,51 +475,42 @@ struct ManhattanMapView: View, @MainActor Animatable {
             let ink = context.resolve(text.foregroundStyle(palette.label))
 
             // The paper showing through a name is what keeps it readable where it
-            // crosses its own street: the same word laid down four times just off the
-            // mark in the colour of the page, and then once more in ink.
-            //
-            // It is also four fifths of what a name costs to draw, and while a finger is
-            // down that is four fifths of the work for something nobody is reading. So
-            // the halo is left off mid-gesture and comes back the moment the map is let
-            // go of — the names stay put either way, which is far less distracting than
-            // having them disappear.
-            let halo = interacting || moving
-                ? nil
-                : context.resolve(text.foregroundStyle(palette.labelHalo))
-
+            // crosses its own street. It is cast behind the one draw now rather than
+            // being four more draws of the same word, and it is still left off while
+            // the map is moving, where it is four fifths of the work for something
+            // nobody is reading.
             context.drawLayer { layer in
                 layer.translateBy(x: point.x, y: point.y)
                 layer.rotate(by: .radians(label.angle))
-                if let halo {
-                    for offset in offsets {
-                        layer.draw(halo, at: offset, anchor: .center)
-                    }
-                }
+                if !quiet { layer.addFilter(paper) }
                 layer.draw(ink, at: .zero, anchor: .center)
             }
         }
     }
 
-    /// Four points round a circle. What a street name gets: it crosses one street, and
-    /// there are a thousand of them to draw.
-    private static func crossOffsets(radius: Double) -> [CGPoint] {
-        [
-            CGPoint(x: -radius, y: 0), CGPoint(x: radius, y: 0),
-            CGPoint(x: 0, y: -radius), CGPoint(x: 0, y: radius),
-        ]
-    }
-
-    /// Eight points round a circle — the four compass points and the four corners —
-    /// which is enough passes that the paper showing through a name has no notches in
-    /// it at the corners of the letters.
-    private static func ringOffsets(radius: Double) -> [CGPoint] {
-        let corner = radius * 0.7071
-        return [
-            CGPoint(x: -radius, y: 0), CGPoint(x: radius, y: 0),
-            CGPoint(x: 0, y: -radius), CGPoint(x: 0, y: radius),
-            CGPoint(x: -corner, y: -corner), CGPoint(x: corner, y: -corner),
-            CGPoint(x: -corner, y: corner), CGPoint(x: corner, y: corner),
-        ]
+    /// The paper behind a name, cast rather than stamped.
+    ///
+    /// This used to be the same word drawn four more times (eight, for a neighbourhood)
+    /// just off the mark in the colour of the page. It looked right and it was very
+    /// nearly free to rasterise, and it was still the thing that killed the app.
+    ///
+    /// A crash report said so in as many words: the watchdog, for a scene update that
+    /// ran past ten seconds of wall clock, inside
+    /// `+[AXUIContextDrawingAnnotation addLabel:boundingRect:withContext:]` doing
+    /// `-[NSMutableArray removeObject:]` — a linear scan — with the registers sitting at
+    /// index twenty-four thousand of a forty-six thousand element array. Every piece of
+    /// text drawn into a canvas is registered with accessibility as a label and a
+    /// bounding rect, and the sweep that clears them is quadratic. Nine hundred names at
+    /// five draws each, every frame, is four and a half thousand registrations a frame,
+    /// and the sweep never catches up.
+    ///
+    /// So what matters here is not how much work a halo is to draw. It is how many draws
+    /// it is. A shadow with no offset is a halo that costs one, which is also one label
+    /// in the accessibility tree instead of five copies of the same street name.
+    private static func halo(_ colour: Color, reach: Double) -> GraphicsContext.Filter {
+        // `disablesGroup` keeps it from compositing through a transparency layer first,
+        // which for a single run of text is a layer that would hold exactly that text.
+        .shadow(color: colour, radius: CGFloat(reach), options: .disablesGroup)
     }
 
     /// The upright box a rotated name sits in. A name written up an avenue is measured
