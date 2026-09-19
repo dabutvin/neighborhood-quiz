@@ -181,3 +181,96 @@ final class MapCameraTests: XCTestCase {
         XCTAssertEqual(MapCamera.framing(CGRect(x: 0, y: 0, width: 10, height: 10), in: .zero), MapCamera())
     }
 }
+
+/// The edges, and what a pan does when it reaches them.
+///
+/// Clamping mid-drag is what made panning feel harsh: at the limit the map simply
+/// stopped answering the thumb while the thumb kept going. These pin the curve that
+/// replaced it.
+final class MapPanEdgeTests: XCTestCase {
+    private let size = CGSize(width: 393, height: 852)
+
+    // MARK: - The leash
+
+    func testThereIsMoreRoomToRoamTheFurtherIn() {
+        let close = MapCamera(zoom: 1).slack(in: size)
+        let closer = MapCamera(zoom: 6).slack(in: size)
+
+        XCTAssertGreaterThan(closer.width, close.width)
+        XCTAssertGreaterThan(closer.height, close.height)
+        XCTAssertGreaterThan(close.width, 0, "even pulled right back there is some give")
+    }
+
+    func testClampingKeepsThePanInsideTheLeash() {
+        var camera = MapCamera(zoom: 1)
+        let slack = camera.slack(in: size)
+        camera.pan = CGSize(width: 10_000, height: -10_000)
+        camera.clampPan(in: size)
+
+        XCTAssertEqual(Double(camera.pan.width), Double(slack.width), accuracy: 0.001)
+        XCTAssertEqual(Double(camera.pan.height), -Double(slack.height), accuracy: 0.001)
+    }
+
+    // MARK: - The give
+
+    func testInsideTheLeashTheMapFollowsTheThumbExactly() {
+        XCTAssertEqual(MapCamera.resisted(0, limit: 200, give: 100), 0)
+        XCTAssertEqual(MapCamera.resisted(150, limit: 200, give: 100), 150)
+        XCTAssertEqual(MapCamera.resisted(-150, limit: 200, give: 100), -150)
+        XCTAssertEqual(MapCamera.resisted(200, limit: 200, give: 100), 200, "and right up to the edge")
+    }
+
+    /// The whole point: past the edge it keeps moving, but less than the pull, and never
+    /// so far that the island could be dragged out of sight.
+    func testPastTheLeashItGivesButNeverLetsGo() {
+        let (limit, give) = (200.0, 100.0)
+
+        for pull in [1.0, 10, 50, 200, 1_000, 100_000] {
+            let out = MapCamera.resisted(limit + pull, limit: limit, give: give)
+            XCTAssertGreaterThan(out, limit, "still moving at a pull of \(pull)")
+            XCTAssertLessThan(out, limit + give, "never off the leash at a pull of \(pull)")
+            XCTAssertLessThan(out - limit, pull, "always less than the pull")
+        }
+    }
+
+    func testTheGiveIsTheSameInBothDirections() {
+        let there = MapCamera.resisted(250, limit: 200, give: 100)
+        let back = MapCamera.resisted(-250, limit: 200, give: 100)
+        XCTAssertEqual(there, -back, accuracy: 0.000_001)
+    }
+
+    /// No step at the edge and no step anywhere after it. A jump of even a point or two
+    /// as the limit is crossed would be felt as a catch, which is the thing being fixed.
+    func testTheEdgeIsCrossedWithoutAStep() {
+        let (limit, give) = (200.0, 100.0)
+        var last = MapCamera.resisted(0, limit: limit, give: give)
+
+        for step in 1...600 {
+            let now = MapCamera.resisted(Double(step), limit: limit, give: give)
+            XCTAssertGreaterThanOrEqual(now, last, "went backwards at \(step)")
+            XCTAssertLessThanOrEqual(now - last, 1.01, "caught at \(step)")
+            last = now
+        }
+    }
+
+    /// Resisting leaves anything already inside the leash alone, so an ordinary drag is
+    /// untouched by any of this.
+    func testResistingDoesNothingToAMapThatIsNowhereNearTheEdge() {
+        var camera = MapCamera(zoom: 3)
+        camera.pan = CGSize(width: 12, height: -30)
+        let before = camera.pan
+        camera.resistPan(in: size)
+        XCTAssertEqual(camera.pan, before)
+    }
+
+    func testResistingHoldsAFarPullJustOutsideTheLeash() {
+        var camera = MapCamera(zoom: 1)
+        let slack = camera.slack(in: size)
+        let give = MapCamera.give(in: size)
+        camera.pan = CGSize(width: 100_000, height: 0)
+        camera.resistPan(in: size)
+
+        XCTAssertGreaterThan(Double(camera.pan.width), Double(slack.width))
+        XCTAssertLessThan(Double(camera.pan.width), Double(slack.width) + Double(give.width))
+    }
+}

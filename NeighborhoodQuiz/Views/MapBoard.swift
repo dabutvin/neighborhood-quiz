@@ -46,7 +46,23 @@ struct MapBoard: View {
     @State private var hasOpened = false
 
     @GestureState private var pinch: CGFloat = 1
-    @GestureState private var drag: CGSize = .zero
+
+    /// Where a drag started, and where the map was when it started.
+    ///
+    /// A pan is driven straight into `camera` rather than held in a `@GestureState`,
+    /// which would be tidier but cannot carry momentum. Gesture state snaps back to
+    /// nothing the instant a finger lifts, so animating the camera from `onEnded` would
+    /// animate it from where the drag *began* — the map would jump back across the
+    /// screen and then glide forward from there.
+    ///
+    /// Keyed on where the finger went down, so a drag that is cancelled rather than
+    /// ended cannot leave a stale anchor behind for the next one to jump from.
+    private struct Grab: Equatable {
+        var finger: CGPoint
+        var pan: CGSize
+    }
+
+    @State private var grab: Grab?
 
     var body: some View {
         GeometryReader { geometry in
@@ -63,7 +79,7 @@ struct MapBoard: View {
                         settled: settled,
                         givenAway: givenAway,
                         candidate: candidate,
-                        interacting: pinch != 1 || drag != .zero
+                        interacting: pinch != 1 || grab != nil
                     )
                     .contentShape(Rectangle())
                     // The tap is asked first. A drag has ten points of slop to travel
@@ -134,28 +150,74 @@ struct MapBoard: View {
 
     // MARK: - Gestures
 
-    /// The camera as it stands *plus* whatever gesture is in flight, which is what the
-    /// map is drawn against while a finger is down.
+    /// How much of a flick to carry after the finger has gone.
+    ///
+    /// `predictedEndTranslation` is where UIKit reckons a scroll view would have come to
+    /// rest, which is a long way — it is tuned for lists that are meant to fly. Half of
+    /// it gives a map that coasts to a stop rather than either stopping dead under the
+    /// thumb or sliding out from under it.
+    private static let coast = 0.5
+
+    /// What settles the map after a flick, and what pulls it home when it has been
+    /// dragged past its leash. Almost no bounce: a map that wobbles as it lands reads as
+    /// loose rather than smooth.
+    private static let glide = Animation.spring(response: 0.5, dampingFraction: 0.9)
+
+    /// The camera as it stands *plus* whatever pinch is in flight. A drag is already in
+    /// `camera` by the time this is asked.
     private func live(in size: CGSize) -> MapCamera {
+        guard pinch != 1 else { return camera }
         var live = camera
         live.setZoom(camera.zoom * Double(pinch))
-        live.pan = CGSize(
-            width: live.pan.width + drag.width,
-            height: live.pan.height + drag.height
-        )
         live.clampPan(in: size)
         return live
     }
 
+    /// Where the map was when this drag took hold of it. A gesture is recognised by
+    /// where the finger went down, so the anchor for a new one is never the leftovers
+    /// of an old one.
+    private func anchor(for value: DragGesture.Value) -> Grab {
+        if let grab, grab.finger == value.startLocation { return grab }
+        return Grab(finger: value.startLocation, pan: camera.pan)
+    }
+
     private func pan(in size: CGSize) -> some Gesture {
         DragGesture()
-            .updating($drag) { value, state, _ in state = value.translation }
-            .onEnded { value in
-                camera.pan = CGSize(
-                    width: camera.pan.width + value.translation.width,
-                    height: camera.pan.height + value.translation.height
+            .onChanged { value in
+                let grabbed = anchor(for: value)
+                grab = grabbed
+
+                var moved = camera
+                moved.pan = CGSize(
+                    width: grabbed.pan.width + value.translation.width,
+                    height: grabbed.pan.height + value.translation.height
                 )
-                camera.clampPan(in: size)
+                // Springy at the edges rather than solid. Clamping here is what made a
+                // pan feel like it hit something: at the limit the map stopped answering
+                // the thumb while the thumb kept going.
+                moved.resistPan(in: size)
+                camera = moved
+            }
+            .onEnded { value in
+                let grabbed = anchor(for: value)
+                grab = nil
+
+                // What the flick still had in it when the finger left.
+                let fling = CGSize(
+                    width: (value.predictedEndTranslation.width - value.translation.width) * MapBoard.coast,
+                    height: (value.predictedEndTranslation.height - value.translation.height) * MapBoard.coast
+                )
+
+                var settled = camera
+                settled.pan = CGSize(
+                    width: grabbed.pan.width + value.translation.width + fling.width,
+                    height: grabbed.pan.height + value.translation.height + fling.height
+                )
+                // Back inside the leash, so a drag that ended past the edge is pulled
+                // home by the same spring that does the coasting.
+                settled.clampPan(in: size)
+
+                withAnimation(MapBoard.glide) { camera = settled }
             }
     }
 

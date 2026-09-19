@@ -33,15 +33,59 @@ struct MapCamera: Equatable {
         zoom = clamped
     }
 
-    /// Stop the island being pushed off the edge of the glass altogether. There is more
-    /// room to roam the further in you are, since there is more drawing to roam over.
-    mutating func clampPan(in size: CGSize) {
-        let slackX = Double(size.width) * max(zoom - 1, 0) / 2 + Double(size.width) / 3
-        let slackY = Double(size.height) * max(zoom - 1, 0) / 2 + Double(size.height) / 3
-        pan = CGSize(
-            width: min(max(Double(pan.width), -slackX), slackX),
-            height: min(max(Double(pan.height), -slackY), slackY)
+    /// How far the map may be pushed in each direction before it is off its leash.
+    /// There is more room to roam the further in you are, since there is more drawing
+    /// to roam over.
+    func slack(in size: CGSize) -> CGSize {
+        CGSize(
+            width: Double(size.width) * max(zoom - 1, 0) / 2 + Double(size.width) / 3,
+            height: Double(size.height) * max(zoom - 1, 0) / 2 + Double(size.height) / 3
         )
+    }
+
+    /// Stop the island being pushed off the edge of the glass altogether.
+    mutating func clampPan(in size: CGSize) {
+        let slack = slack(in: size)
+        pan = CGSize(
+            width: min(max(Double(pan.width), -Double(slack.width)), Double(slack.width)),
+            height: min(max(Double(pan.height), -Double(slack.height)), Double(slack.height))
+        )
+    }
+
+    /// How far past the leash a pull may stretch before it is all resistance and no
+    /// movement. A quarter of the glass: enough to feel like give, not so much that the
+    /// island can be dragged out of sight.
+    static func give(in size: CGSize) -> CGSize {
+        CGSize(width: Double(size.width) / 4, height: Double(size.height) / 4)
+    }
+
+    /// The same pan with springy edges instead of solid ones.
+    ///
+    /// Clamping mid-drag is what made a pan feel like it hit something: at the limit the
+    /// map simply stopped answering the thumb, while the thumb kept going. This keeps
+    /// the two together — less and less of the pull gets through, but never none of it.
+    mutating func resistPan(in size: CGSize) {
+        let slack = slack(in: size)
+        let give = MapCamera.give(in: size)
+        pan = CGSize(
+            width: MapCamera.resisted(Double(pan.width), limit: Double(slack.width), give: Double(give.width)),
+            height: MapCamera.resisted(Double(pan.height), limit: Double(slack.height), give: Double(give.height))
+        )
+    }
+
+    static func resisted(_ value: Double, limit: Double, give: Double) -> Double {
+        if value > limit { return limit + stretch(value - limit, give: give) }
+        if value < -limit { return -limit - stretch(-value - limit, give: give) }
+        return value
+    }
+
+    /// UIKit's own curve for pulling past an edge. The first little way answers the
+    /// finger at a bit over half speed and it stiffens from there, approaching `give`
+    /// however hard you pull — so there is always somewhere further to go and never
+    /// anywhere much further.
+    private static func stretch(_ past: Double, give: Double) -> Double {
+        guard past > 0, give > 0 else { return max(past, 0) }
+        return (1 - 1 / (past * 0.55 / give + 1)) * give
     }
 
     /// Which part of the drawing is under a given spot on the glass — `screenPoint`
