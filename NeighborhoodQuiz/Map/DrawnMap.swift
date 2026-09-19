@@ -1,6 +1,33 @@
 import CoreGraphics
 import SwiftUI
 
+/// The size each street name takes on the page, worked out once and kept.
+///
+/// Measuring text is laying it out, and it is the expensive half of writing a name.
+/// The answer does not depend on where the camera is — the same name at the same size
+/// fills the same box on every frame — so doing it afresh for every name on every
+/// frame of a drag was a few thousand text layouts a second, all of them arriving at
+/// the answer they arrived at last time.
+///
+/// A class so that every copy of the map shares the one cache. Read and written only
+/// from the drawing pass, which SwiftUI runs on a single thread here because the
+/// canvas does not render asynchronously.
+final class LabelMetrics {
+    private var known: [Int: CGSize] = [:]
+
+    func size(of label: DrawnLabel, palette: MapPalette, in context: GraphicsContext) -> CGSize {
+        if let measured = known[label.id] { return measured }
+        let text = Text(label.text).font(MapFont.label(size: palette.labelSize(for: label.kind)))
+        let measured = context.resolve(text).measure(in: CGSize(width: 600, height: 200))
+        known[label.id] = measured
+        return measured
+    }
+
+    /// How many names have been measured so far. For the tests, and for anybody
+    /// wondering whether the cache is doing anything.
+    var count: Int { known.count }
+}
+
 /// A street name, already placed: where it sits on the drawing, which way it is
 /// written, and how far the map has to be pulled in before it appears at all.
 struct DrawnLabel: Identifiable {
@@ -51,6 +78,19 @@ struct DrawnMap {
     /// lines are never broken by the light ones crossing them.
     let roads: [DrawnRoad]
     let labels: [DrawnLabel]
+
+    /// Every road of a kind gathered into one path, indexed by `RoadKind.rawValue`.
+    ///
+    /// Each road of a kind is drawn in the same colour at the same weight — they share
+    /// a `minZoom`, so they fade in together and there is never a frame where two side
+    /// streets want different ink. That means a view showing most of them can put them
+    /// down in one stroke instead of a thousand, which is what the whole island at
+    /// once used to cost: nothing is off the glass at that zoom, so nothing was culled
+    /// and every road paid its own call.
+    let roadSheets: [Path]
+
+    /// The measured size of every street name, filled in as each is first drawn.
+    let metrics = LabelMetrics()
 
     static func build(size: CGSize) -> DrawnMap {
         let islands = ManhattanMapData.land
@@ -130,7 +170,7 @@ struct DrawnMap {
                 id: index,
                 path: path,
                 kind: road.kind,
-                minZoom: road.kind == .side ? sideStreetZoom : 1,
+                minZoom: minZoom(for: road.kind),
                 bounds: path.boundingRect
             ))
 
@@ -150,6 +190,11 @@ struct DrawnMap {
         // the only thing the drawing cares about.
         roads.sort { $0.kind.rawValue > $1.kind.rawValue }
 
+        var sheets = [Path](repeating: Path(), count: RoadKind.allCases.count)
+        for road in roads {
+            sheets[road.kind.rawValue].addPath(road.path)
+        }
+
         return DrawnMap(
             size: size,
             projection: projection,
@@ -159,7 +204,8 @@ struct DrawnMap {
             parkEdge: parkEdge,
             neighborhoods: neighborhoods,
             roads: roads,
-            labels: labels
+            labels: labels,
+            roadSheets: sheets
         )
     }
 
@@ -174,6 +220,32 @@ struct DrawnMap {
 
     func neighborhood(named name: String) -> DrawnNeighborhood? {
         neighborhoods.first { $0.name == name }
+    }
+
+    /// How far in the map must be before a road of this rank is drawn at all.
+    ///
+    /// Of the rank, not of the road: every road of a rank shares this, so they fade in
+    /// together and always carry the same ink. That is the fact the drawing leans on
+    /// when it puts a whole rank down in one stroke.
+    static func minZoom(for kind: RoadKind) -> Double {
+        kind == .side ? sideStreetZoom : 1
+    }
+
+    /// How much of a rank is on the page at a given zoom, from nothing to all of it.
+    ///
+    /// The side streets come in over a range rather than at a threshold, so pinching
+    /// fills the grid in instead of snapping it on. The avenues and the major streets
+    /// are simply always there.
+    ///
+    /// This lives here rather than in the drawing because two things depend on it and
+    /// they must not disagree: what shade a rank is drawn in, and whether it is allowed
+    /// to go down as one stroke. The second is only safe at full ink.
+    static func presence(of kind: RoadKind, at zoom: Double) -> Double {
+        let start = minZoom(for: kind)
+        guard start > 1 else { return 1 }
+        let span = sideStreetFullZoom - start
+        guard span > 0 else { return zoom >= start ? 1 : 0 }
+        return min(max((zoom - start) / span, 0), 1)
     }
 
     /// How far in the map must be before a name of this rank is written. The avenues

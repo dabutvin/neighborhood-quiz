@@ -9,6 +9,10 @@ has already told you where SoHo is has given the game away.
 
 ## The game
 
+The app opens on a menu: what you have to spend, how far off the next borough is, and
+one button to start. A round can be left part-way from the same menu — though a round
+pays when it is played out, so walking away from one banks nothing.
+
 A round is ten neighbourhoods. You are given a name and three goes to put your finger on
 it: five dollars if you know it straight away, three on the second go, one on the third,
 and nothing if three goes are not enough — at which point the round shows you where it

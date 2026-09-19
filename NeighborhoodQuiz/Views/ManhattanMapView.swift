@@ -86,24 +86,8 @@ struct ManhattanMapView: View {
             style: StrokeStyle(lineWidth: 1.2 / zoom, lineCap: .round, lineJoin: .round)
         )
 
-        // Only the roads on the glass. A stroke that lands entirely off the edge costs
-        // the same as one you can see, and at four times in almost all of them do.
         let onScreen = camera.visibleRect(in: size, margin: 8)
-
-        for road in map.roads {
-            guard road.bounds.intersects(onScreen) else { continue }
-            let ink = presence(of: road)
-            guard ink > 0.01 else { continue }
-            board.stroke(
-                road.path,
-                with: .color(palette.colour(for: road.kind).opacity(ink)),
-                style: StrokeStyle(
-                    lineWidth: CGFloat(palette.weight(for: road.kind)) / zoom,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-        }
+        draw(roads: map, in: &board, onScreen: onScreen, zoom: zoom)
 
         // Crossed off. Over the streets like the highlight, and before the borders, so
         // that a greyed neighborhood still has a line round it saying where it ends.
@@ -239,14 +223,61 @@ struct ManhattanMapView: View {
         return 1.2 + 0.5 * pulledBack
     }
 
-    /// How much of a road is on the page. The side streets come in over a range rather
-    /// than at a threshold, so pinching fills the grid in instead of snapping it on.
-    private func presence(of road: DrawnRoad) -> Double {
-        guard road.minZoom > 1 else { return 1 }
-        let span = DrawnMap.sideStreetFullZoom - road.minZoom
-        guard span > 0 else { return camera.zoom >= road.minZoom ? 1 : 0 }
-        return min(max((camera.zoom - road.minZoom) / span, 0), 1)
+    /// The streets.
+    ///
+    /// There are two ways to put them down and which is cheaper depends entirely on how
+    /// much of the island is on the glass. Pulled back, nothing is off the edge, so
+    /// skipping what cannot be seen finds nothing to skip and every road pays for a
+    /// stroke of its own — four hundred of them at the view the app opens on. Pulled in,
+    /// nineteen twentieths of the island is off the glass and skipping it is the whole
+    /// game.
+    ///
+    /// So: when most of a rank is showing, stroke the single path holding all of it;
+    /// when little of it is, stroke the few that are. A third is roughly where one stops
+    /// being the obvious choice.
+    ///
+    /// The sheet is only allowed once a rank is fully in, and that restriction is the
+    /// whole of what keeps the two paths drawing the same picture. Half-transparent
+    /// strokes laid down one at a time build up where they cross; the same lines in one
+    /// path are composited once and do not. So a fading rank drawn as a sheet has paler
+    /// crossings, and switching between the two part-way through a pinch would show it —
+    /// a flicker in the middle of the gesture this is all meant to smooth out. At full
+    /// ink there is no difference to see.
+    private func draw(
+        roads map: DrawnMap,
+        in board: inout GraphicsContext,
+        onScreen: CGRect,
+        zoom: CGFloat
+    ) {
+        var showing = [Int](repeating: 0, count: RoadKind.allCases.count)
+        var held = [Int](repeating: 0, count: RoadKind.allCases.count)
+        for road in map.roads {
+            held[road.kind.rawValue] += 1
+            if road.bounds.intersects(onScreen) { showing[road.kind.rawValue] += 1 }
+        }
+
+        // Light lines under heavy ones, which is the order the roads themselves are in.
+        for kind in [RoadKind.side, .major, .avenue] {
+            let ink = DrawnMap.presence(of: kind, at: camera.zoom)
+            guard ink > 0.01, showing[kind.rawValue] > 0 else { continue }
+
+            let colour = GraphicsContext.Shading.color(palette.colour(for: kind).opacity(ink))
+            let style = StrokeStyle(
+                lineWidth: CGFloat(palette.weight(for: kind)) / zoom,
+                lineCap: .round,
+                lineJoin: .round
+            )
+
+            if ink >= 1, showing[kind.rawValue] * 3 >= held[kind.rawValue] {
+                board.stroke(map.roadSheets[kind.rawValue], with: colour, style: style)
+            } else {
+                for road in map.roads where road.kind == kind && road.bounds.intersects(onScreen) {
+                    board.stroke(road.path, with: colour, style: style)
+                }
+            }
+        }
     }
+
 
     // MARK: - The names
 
@@ -385,13 +416,19 @@ struct ManhattanMapView: View {
             let point = camera.screenPoint(label.position, in: size)
             guard visible.contains(point) else { continue }
 
+            // Measured from the cache, which knows the answer after the first frame a
+            // name is offered on. Deciding whether there is room for a name used to mean
+            // laying it out first, so every name the grid was too crowded to fit paid in
+            // full for the privilege of being left off — and at four times in, where all
+            // seven hundred side street names are on offer, most of them are left off.
+            let measured = drawn.metrics.size(of: label, palette: palette, in: context)
+            let box = footprint(measured, at: point, angle: label.angle)
+            if taken.contains(where: { $0.intersects(box) }) { continue }
+            taken.append(box)
+
             let text = Text(label.text)
                 .font(MapFont.label(size: palette.labelSize(for: label.kind)))
             let ink = context.resolve(text.foregroundStyle(palette.label))
-
-            let box = footprint(of: ink, at: point, angle: label.angle)
-            if taken.contains(where: { $0.intersects(box) }) { continue }
-            taken.append(box)
 
             // The paper showing through a name is what keeps it readable where it
             // crosses its own street: the same word laid down four times just off the
@@ -443,12 +480,7 @@ struct ManhattanMapView: View {
 
     /// The upright box a rotated name sits in. A name written up an avenue is measured
     /// lying down and then stood up, which is what the sine and cosine are doing.
-    private func footprint(
-        of text: GraphicsContext.ResolvedText,
-        at point: CGPoint,
-        angle: Double
-    ) -> CGRect {
-        let measured = text.measure(in: CGSize(width: 600, height: 200))
+    private func footprint(_ measured: CGSize, at point: CGPoint, angle: Double) -> CGRect {
         let across = abs(cos(angle))
         let down = abs(sin(angle))
         // A point of air either side, so two names never quite touch.

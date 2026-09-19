@@ -93,8 +93,12 @@ jobs:
           # read the colour scheme out of the environment, so flipping the
           # simulator under a running app re-draws it, and the two shots then show
           # the same map rather than two rolls of the dice. The launch arguments
-          # are the ones `Screen` understands. No argument at all is what a person
-          # gets: a fresh round, shot first because it is the app.
+          # are the ones `Screen` understands.
+          #
+          # No argument at all is what a person gets, which is now the menu with
+          # whatever they have actually earned. The gallery asks for `-quiz-menu`
+          # instead, which is the same screen with a wallet part-way to Brooklyn,
+          # so the shot has something on it on a simulator that has never played.
           #
           # The `-quiz-*` runs play a fixed round forward to each state the game
           # can be in — picked and waiting on the button, two goes gone, the
@@ -172,16 +176,17 @@ jobs:
             exit 1
           }
 
-          capture  1 quiz
-          capture  3 quiz_picked     -quiz-picked
-          capture  5 quiz_narrowing  -quiz-narrowing
-          capture  7 quiz_filling    -quiz-filling
-          capture  9 quiz_missed     -quiz-missed
-          capture 11 quiz_over       -quiz-over
-          capture 13 map             -map
-          capture 15 map_zoomed      -map-zoomed
-          capture 17 map_neighborhood -map-neighborhood
-          capture 19 boroughs        -boroughs
+          capture  1 menu            -quiz-menu
+          capture  3 quiz            -quiz-asking
+          capture  5 quiz_picked     -quiz-picked
+          capture  7 quiz_narrowing  -quiz-narrowing
+          capture  9 quiz_filling    -quiz-filling
+          capture 11 quiz_missed     -quiz-missed
+          capture 13 quiz_over       -quiz-over
+          capture 15 map             -map
+          capture 17 map_zoomed      -map-zoomed
+          capture 19 map_neighborhood -map-neighborhood
+          capture 21 boroughs        -boroughs
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true

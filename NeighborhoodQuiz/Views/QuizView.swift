@@ -13,6 +13,8 @@ struct QuizView: View {
     /// Only reachable by launch argument. A person playing gets `nil` and a round of
     /// ten drawn at random.
     enum Stage: String, CaseIterable {
+        /// The menu the app opens on, with a wallet part-way to Brooklyn.
+        case menu
         /// A fresh question, nothing picked.
         case asking
         /// Somewhere picked, waiting on the button.
@@ -113,10 +115,16 @@ struct QuizView: View {
                         onReady: start
                     )
                     PaperTexture(palette: palette)
+
+                    if let round, !round.isFinished {
+                        quitButton
+                    }
                 }
             }
 
-            if let round, round.isFinished, showing == nil {
+            if round == nil {
+                menu
+            } else if let round, round.isFinished, showing == nil {
                 summary(of: round)
             } else if candidate != nil, showing == nil {
                 answerButton
@@ -306,22 +314,100 @@ struct QuizView: View {
 
             takings
 
-            HStack(spacing: 10) {
-                pill("Play again", action: playAgain)
-                pill("Boroughs") { showingBoroughs = true }
+            VStack(spacing: 10) {
+                pill("Play again", action: startRound)
+                HStack(spacing: 10) {
+                    pill("Boroughs") { showingBoroughs = true }
+                    pill("Menu", action: leave)
+                }
             }
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 28)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(palette.land.opacity(0.97))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(palette.inkSoft, lineWidth: 2)
-                )
-        )
+        .background(card)
         .padding(28)
+    }
+
+    /// The paper a card is on. The menu and the end of a round are the same kind of
+    /// moment — the map behind, the money on it, one thing to press — so they wear the
+    /// same thing.
+    private var card: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(palette.land.opacity(0.97))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(palette.inkSoft, lineWidth: 2)
+            )
+    }
+
+    // MARK: - The menu
+
+    /// Where the app opens, and where quitting a round puts you back.
+    private var menu: some View {
+        VStack(spacing: 16) {
+            Text("NYC Quiz")
+                .font(MapFont.chrome(size: 32))
+                .foregroundStyle(palette.ink)
+
+            VStack(spacing: 1) {
+                Text(Money.text(bank.wallet.balance))
+                    .font(MapFont.chrome(size: 46))
+                    .foregroundStyle(palette.highlightInk)
+                    .monospacedDigit()
+                Text("TO SPEND")
+                    .font(.system(size: 9, weight: .semibold))
+                    .kerning(1.3)
+                    .foregroundStyle(palette.inkSoft)
+            }
+
+            savingBar
+
+            VStack(spacing: 10) {
+                pill("Start", action: startRound)
+                pill("Boroughs") { showingBoroughs = true }
+            }
+            .padding(.top, 2)
+
+            Text(career)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(palette.inkSoft.opacity(0.9))
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 34)
+        .padding(.vertical, 28)
+        .background(card)
+        .padding(28)
+    }
+
+    /// What the wallet has to say about itself when there is no round to talk about.
+    private var career: String {
+        let wallet = bank.wallet
+        guard wallet.rounds > 0 else { return "no rounds played yet" }
+        let rounds = wallet.rounds == 1 ? "1 round" : "\(wallet.rounds) rounds"
+        return "\(rounds) · \(Money.text(wallet.earned)) earned in all"
+    }
+
+    /// Leaving a round part-way.
+    ///
+    /// In the same hand as the zoom buttons and tucked into the opposite corner, so it
+    /// reads as part of the map's furniture rather than as part of the question.
+    private var quitButton: some View {
+        Button(action: leave) {
+            Text("\u{00D7}")
+                .font(MapFont.chrome(size: 22))
+                .foregroundStyle(palette.ink)
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle()
+                        .fill(palette.land.opacity(0.92))
+                        .overlay(Circle().strokeBorder(palette.inkSoft, lineWidth: 1.8))
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 14)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityLabel("Leave this round")
     }
 
     /// What the round did to the wallet.
@@ -351,7 +437,23 @@ struct QuizView: View {
                     .monospacedDigit()
             }
 
-            if let saving = wallet.saving {
+            savingBar
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Wallet, \(Money.text(wallet.balance))."
+                + (wallet.saving.map { " \(saved(for: $0))" } ?? "")
+        )
+    }
+
+    /// How far along to the next borough, and what it is for. On the menu and again at
+    /// the end of a round, which are the two moments anybody looks at it.
+    @ViewBuilder
+    private var savingBar: some View {
+        let wallet = bank.wallet
+
+        if let saving = wallet.saving {
+            VStack(spacing: 7) {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
@@ -369,11 +471,6 @@ struct QuizView: View {
                     .foregroundStyle(wallet.canAfford(saving) ? palette.highlightInk : palette.inkSoft)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "Wallet, \(Money.text(wallet.balance))."
-                + (wallet.saving.map { " \(saved(for: $0))" } ?? "")
-        )
     }
 
     /// The one line under the bar. Three things it can say, and the third is the honest
@@ -464,10 +561,10 @@ struct QuizView: View {
         names = Dictionary(uniqueKeysWithValues: map.neighborhoods.map { ($0.id, $0.name) })
         guard round == nil else { return }
 
-        guard let stage else {
-            round = QuizRound(askingAbout: map.neighborhoods.map(\.id))
-            return
-        }
+        // Nothing is a round until Start is pressed: the app opens on the menu, and so
+        // does the gallery's shot of it.
+        guard let stage, stage != .menu else { return }
+
         var staged = QuizRound(asking: QuizView.showcase.compactMap { map.neighborhood(named: $0)?.id })
         play(&staged, to: stage, on: map)
         // A staged round that reached the end is paid like any other, so the wallet on
@@ -508,8 +605,15 @@ struct QuizView: View {
         // the round did and what the screen does next are two plain steps.
         let worth = QuizRound.points[min(playing.triesUsed, QuizRound.points.count - 1)]
         let outcome = playing.guess(picked)
-        round = playing
-        withAnimation(.easeOut(duration: 0.2)) { candidate = nil }
+
+        // What the card will say about the question that just ended, decided before any
+        // of it reaches the screen.
+        let settled: Shown?
+        switch outcome {
+        case .right: settled = .found(picked, worth: worth)
+        case .missed: settled = playing.missed.last.map(Shown.missed)
+        case .wrong, .ignored: settled = nil
+        }
 
         // Paid here rather than where the summary is drawn. This runs once, when the
         // last question is answered; a view body runs whenever SwiftUI feels like it,
@@ -518,24 +622,44 @@ struct QuizView: View {
             bank.earn(playing.score)
         }
 
-        // Setting this shows the place with its name on and starts the pause above.
-        switch outcome {
-        case .right:
-            withAnimation(.easeOut(duration: 0.2)) { showing = .found(picked, worth: worth) }
-        case .missed:
-            guard let given = playing.missed.last else { return }
-            withAnimation(.easeOut(duration: 0.2)) { showing = .missed(given) }
-        case .wrong, .ignored:
-            break
+        // One change, not three.
+        //
+        // `guess` has already moved the round on to the next question, and `showing` is
+        // what holds the last one on screen while its answer is read. Set apart, there
+        // is a frame in between where the round has moved and nothing is explaining why,
+        // and the screen drew it: mid-round the card read out the *next* place before
+        // you had been told you found the last one, and on the tenth answer the card
+        // went altogether and the end-of-round summary flashed up underneath it.
+        //
+        // Both were the same frame. Neither can happen while these land together.
+        withAnimation(.easeOut(duration: 0.2)) {
+            round = playing
+            candidate = nil
+            showing = settled
         }
     }
 
-    private func playAgain() {
+    private func startRound() {
         guard !names.isEmpty else { return }
         showing = nil
         candidate = nil
         round = QuizRound(askingAbout: Array(names.keys))
         // A fresh round starts on the whole island. Mid-round it never does.
+        opening += 1
+    }
+
+    /// Back to the menu, from the end of a round or from the middle of one.
+    ///
+    /// A round part-way through is simply dropped, and nothing it had earned is banked.
+    /// A round pays when it is played out — paying for an abandoned one would make
+    /// answering the three you knew and walking away a better rate than finishing,
+    /// which is the opposite of what the money is for.
+    private func leave() {
+        withAnimation(.easeOut(duration: 0.25)) {
+            round = nil
+            showing = nil
+            candidate = nil
+        }
         opening += 1
     }
 
@@ -561,7 +685,7 @@ struct QuizView: View {
         }
 
         switch stage {
-        case .asking:
+        case .menu, .asking:
             break
         case .picked:
             candidate = map.neighborhood(named: "SoHo")?.id
