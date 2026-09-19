@@ -41,6 +41,22 @@ struct ManhattanMapView: View, @MainActor Animatable {
     /// mid-drag are left until the map is still again.
     var interacting: Bool = false
 
+    /// Whether this frame is a step of a move rather than the map sitting still.
+    ///
+    /// Nobody passes this in. It is set by the animator and by nothing else: SwiftUI
+    /// interpolates by handing each step to `animatableData` on a copy of the view and
+    /// then drawing that copy, so a view that finds its camera was *put* there rather
+    /// than passed in is, by that fact alone, mid-move.
+    ///
+    /// Which matters because the halo is four fifths of what a street name costs, and
+    /// until the map was made animatable a coast after a flick was a single frame — an
+    /// unanimated camera change lands in one step, so the whole cost of it was paid
+    /// once. It is now every frame of half a second, each one laying four extra passes
+    /// of paper behind every name on a map sliding past too fast to read one of them:
+    /// the most expensive thing on the screen, spent at the one moment there is least
+    /// room for it, on something nobody can see.
+    var moving: Bool = false
+
     /// What lets the map actually *move* when the camera is animated.
     ///
     /// A canvas draws inside a closure, and SwiftUI cannot interpolate a closure. With
@@ -64,6 +80,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
         set {
             camera.zoom = newValue.first
             camera.pan = CGSize(width: newValue.second.first, height: newValue.second.second)
+            moving = true
         }
     }
 
@@ -278,17 +295,18 @@ struct ManhattanMapView: View, @MainActor Animatable {
         onScreen: CGRect,
         zoom: CGFloat
     ) {
-        var showing = [Int](repeating: 0, count: RoadKind.allCases.count)
-        var held = [Int](repeating: 0, count: RoadKind.allCases.count)
-        for road in map.roads {
-            held[road.kind.rawValue] += 1
-            if road.bounds.intersects(onScreen) { showing[road.kind.rawValue] += 1 }
-        }
-
         // Light lines under heavy ones, which is the order the roads themselves are in.
         for kind in [RoadKind.side, .major, .avenue] {
             let ink = DrawnMap.presence(of: kind, at: camera.zoom)
-            guard ink > 0.01, showing[kind.rawValue] > 0 else { continue }
+            // A rank with no ink in it is not counted, never mind drawn. Pulled back
+            // to the whole island, that is a thousand side streets passed over before
+            // anything asks where any of them is.
+            guard ink > 0.01 else { continue }
+
+            let rank = map.roadsByKind[kind.rawValue]
+            var showing = 0
+            for road in rank where road.bounds.intersects(onScreen) { showing += 1 }
+            guard showing > 0 else { continue }
 
             let colour = GraphicsContext.Shading.color(palette.colour(for: kind).opacity(ink))
             let style = StrokeStyle(
@@ -297,10 +315,10 @@ struct ManhattanMapView: View, @MainActor Animatable {
                 lineJoin: .round
             )
 
-            if ink >= 1, showing[kind.rawValue] * 3 >= held[kind.rawValue] {
+            if ink >= 1, showing * 3 >= rank.count {
                 board.stroke(map.roadSheets[kind.rawValue], with: colour, style: style)
             } else {
-                for road in map.roads where road.kind == kind && road.bounds.intersects(onScreen) {
+                for road in rank where road.bounds.intersects(onScreen) {
                     board.stroke(road.path, with: colour, style: style)
                 }
             }
@@ -468,7 +486,7 @@ struct ManhattanMapView: View, @MainActor Animatable {
             // the halo is left off mid-gesture and comes back the moment the map is let
             // go of — the names stay put either way, which is far less distracting than
             // having them disappear.
-            let halo = interacting
+            let halo = interacting || moving
                 ? nil
                 : context.resolve(text.foregroundStyle(palette.labelHalo))
 
