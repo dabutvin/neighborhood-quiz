@@ -64,6 +64,11 @@ struct MapBoard: View {
 
     @State private var grab: Grab?
 
+    /// Whether the map is still coasting after the finger has gone. The drawing is at
+    /// its most expensive exactly when it is moving, so a glide counts as a hand on the
+    /// map even though there is none.
+    @State private var gliding = false
+
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
@@ -79,7 +84,7 @@ struct MapBoard: View {
                         settled: settled,
                         givenAway: givenAway,
                         candidate: candidate,
-                        interacting: pinch != 1 || grab != nil
+                        interacting: pinch != 1 || grab != nil || gliding
                     )
                     .contentShape(Rectangle())
                     // The tap is asked first. A drag has ten points of slop to travel
@@ -196,7 +201,13 @@ struct MapBoard: View {
                 // pan feel like it hit something: at the limit the map stopped answering
                 // the thumb while the thumb kept going.
                 moved.resistPan(in: size)
-                camera = moved
+
+                // Explicitly not animated. The map is animatable now, and under the
+                // thumb it must not be: interpolating towards the finger instead of
+                // arriving at it is exactly the lag this is all meant to remove.
+                var immediate = Transaction()
+                immediate.disablesAnimations = true
+                withTransaction(immediate) { camera = moved }
             }
             .onEnded { value in
                 let grabbed = anchor(for: value)
@@ -217,7 +228,12 @@ struct MapBoard: View {
                 // home by the same spring that does the coasting.
                 settled.clampPan(in: size)
 
-                withAnimation(MapBoard.glide) { camera = settled }
+                gliding = true
+                withAnimation(MapBoard.glide) {
+                    camera = settled
+                } completion: {
+                    gliding = false
+                }
             }
     }
 
