@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import SwiftUI
 
 /// The size each street name takes on the page, worked out once and kept.
@@ -9,23 +10,45 @@ import SwiftUI
 /// frame of a drag was a few thousand text layouts a second, all of them arriving at
 /// the answer they arrived at last time.
 ///
-/// A class so that every copy of the map shares the one cache. Read and written only
-/// from the drawing pass, which SwiftUI runs on a single thread here because the
-/// canvas does not render asynchronously.
+/// A class so that every copy of the map shares the one cache.
+///
+/// Locked, because the claim it used to carry — that the drawing pass is the only
+/// thread there is, the canvas not rendering asynchronously — is a claim about
+/// SwiftUI's internals rather than anything this code can hold it to. A Swift
+/// dictionary read while another thread is growing it does not return the wrong
+/// answer; it takes the process down, which is a poor thing to be wrong about. The
+/// lock is uncontended if the claim was true, and the difference does not show up
+/// against the text layout it is there to save.
+///
+/// Held for the dictionary and never across the measuring, so a name being laid out
+/// cannot hold up a name being looked up. Two threads arriving on the same unmeasured
+/// name simply both measure it and write down the same answer.
 final class LabelMetrics {
+    private let lock = NSLock()
     private var known: [Int: CGSize] = [:]
 
     func size(of label: DrawnLabel, palette: MapPalette, in context: GraphicsContext) -> CGSize {
-        if let measured = known[label.id] { return measured }
+        lock.lock()
+        let remembered = known[label.id]
+        lock.unlock()
+        if let remembered { return remembered }
+
         let text = Text(label.text).font(MapFont.label(size: palette.labelSize(for: label.kind)))
         let measured = context.resolve(text).measure(in: CGSize(width: 600, height: 200))
+
+        lock.lock()
         known[label.id] = measured
+        lock.unlock()
         return measured
     }
 
     /// How many names have been measured so far. For the tests, and for anybody
     /// wondering whether the cache is doing anything.
-    var count: Int { known.count }
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return known.count
+    }
 }
 
 /// A street name, already placed: where it sits on the drawing, which way it is
@@ -94,6 +117,15 @@ struct DrawnMap {
     /// once used to cost: nothing is off the glass at that zoom, so nothing was culled
     /// and every road paid its own call.
     let roadSheets: [Path]
+
+    /// The same roads again, split by rank.
+    ///
+    /// The drawing goes rank by rank — light lines under heavy ones — and asking the
+    /// whole list each time meant walking fifteen hundred roads to find the hundred
+    /// avenues, three times over, on every frame. That was affordable when a frame
+    /// happened because a finger moved. It stopped being affordable when the map
+    /// started animating, because now a single flick is sixty of them.
+    let roadsByKind: [[DrawnRoad]]
 
     /// The measured size of every street name, filled in as each is first drawn.
     let metrics = LabelMetrics()
@@ -200,8 +232,10 @@ struct DrawnMap {
         roads.sort { $0.kind.rawValue > $1.kind.rawValue }
 
         var sheets = [Path](repeating: Path(), count: RoadKind.allCases.count)
+        var byKind = [[DrawnRoad]](repeating: [], count: RoadKind.allCases.count)
         for road in roads {
             sheets[road.kind.rawValue].addPath(road.path)
+            byKind[road.kind.rawValue].append(road)
         }
 
         return DrawnMap(
@@ -215,7 +249,8 @@ struct DrawnMap {
             neighborhoods: neighborhoods,
             roads: roads,
             labels: labels,
-            roadSheets: sheets
+            roadSheets: sheets,
+            roadsByKind: byKind
         )
     }
 

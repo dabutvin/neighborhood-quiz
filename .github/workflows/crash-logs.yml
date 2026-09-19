@@ -1,0 +1,61 @@
+name: Crash Logs
+
+# What killed the app, from the phone rather than from a reading of the code.
+#
+# A crash report says in its first ten lines whether the app was shot by the
+# watchdog for hanging, reclaimed for using too much memory, or brought down by
+# its own code. From the outside those are identical — the app vanishes — and as
+# bugs they have nothing to do with each other, so guessing between them from the
+# source is a poor way to spend a fix.
+#
+# Run it from the Actions tab. Nothing here signs anything, so it does not queue
+# behind the release workflows and cannot disturb the certificates.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: How many of the most recent crashes to fetch
+        required: false
+        default: '10'
+
+jobs:
+  crashes:
+    name: Fetch TestFlight crashes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch and read the crash reports
+        run: |
+          Tools/testflight_crashes.py \
+            --limit "${{ github.event.inputs.limit || '10' }}" \
+            --out-dir crashes \
+            --summary crashes/summary.md
+
+      # The readable version goes on the run itself, so the answer is on screen
+      # rather than inside a zip somebody has to download first.
+      - name: Post the summary
+        if: always()
+        run: |
+          if [ -f crashes/summary.md ]; then
+            cat crashes/summary.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No summary was written — see the step above for why." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # The raw reports, unredacted, for anything the summary flattened out.
+      - name: Keep the raw reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reports
+          path: crashes/
+          if-no-files-found: ignore
+          retention-days: 30

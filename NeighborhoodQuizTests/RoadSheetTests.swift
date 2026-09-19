@@ -33,6 +33,29 @@ final class RoadSheetTests: XCTestCase {
         XCTAssertGreaterThan(DrawnMap.sideStreetZoom, 1)
     }
 
+    /// The split list is the same roads, in the same order, just filed by rank.
+    ///
+    /// The drawing trusts it for two separate things: which roads to stroke when a
+    /// rank is mostly off the glass, and — through its count — whether the rank is
+    /// mostly on the glass in the first place. A split that dropped a road would
+    /// quietly make the sheet look like the better choice sooner than it is.
+    func testTheSplitHoldsEveryRoadAndOnlyItsOwn() {
+        XCTAssertEqual(map.roadsByKind.count, RoadKind.allCases.count)
+
+        var total = 0
+        for kind in RoadKind.allCases {
+            let rank = map.roadsByKind[kind.rawValue]
+            let expected = map.roads.filter { $0.kind == kind }
+
+            XCTAssertFalse(rank.isEmpty, "\(kind) has no roads at all")
+            XCTAssertEqual(rank.count, expected.count, "\(kind) lost or gained roads")
+            XCTAssertEqual(rank.map(\.id), expected.map(\.id), "\(kind) is out of order")
+            XCTAssertTrue(rank.allSatisfy { $0.kind == kind }, "\(kind) holds another rank")
+            total += rank.count
+        }
+        XCTAssertEqual(total, map.roads.count, "The split is not the whole map")
+    }
+
     func testThereIsOneSheetPerRank() {
         XCTAssertEqual(map.roadSheets.count, RoadKind.allCases.count)
         for kind in RoadKind.allCases {

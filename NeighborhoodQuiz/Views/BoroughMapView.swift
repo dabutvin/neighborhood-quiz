@@ -41,6 +41,22 @@ struct BoroughMapView: View, @MainActor Animatable {
     /// mid-drag are left until the map is still again.
     var interacting: Bool = false
 
+    /// Whether this frame is a step of a move rather than the map sitting still.
+    ///
+    /// Nobody passes this in. It is set by the animator and by nothing else: SwiftUI
+    /// interpolates by handing each step to `animatableData` on a copy of the view and
+    /// then drawing that copy, so a view that finds its camera was *put* there rather
+    /// than passed in is, by that fact alone, mid-move.
+    ///
+    /// Which matters because the halo is four fifths of what a street name costs, and
+    /// until the map was made animatable a coast after a flick was a single frame — an
+    /// unanimated camera change lands in one step, so the whole cost of it was paid
+    /// once. It is now every frame of half a second, each one laying four extra passes
+    /// of paper behind every name on a map sliding past too fast to read one of them:
+    /// the most expensive thing on the screen, spent at the one moment there is least
+    /// room for it, on something nobody can see.
+    var moving: Bool = false
+
     /// What lets the map actually *move* when the camera is animated.
     ///
     /// A canvas draws inside a closure, and SwiftUI cannot interpolate a closure. With
@@ -64,6 +80,7 @@ struct BoroughMapView: View, @MainActor Animatable {
         set {
             camera.zoom = newValue.first
             camera.pan = CGSize(width: newValue.second.first, height: newValue.second.second)
+            moving = true
         }
     }
 
@@ -81,6 +98,58 @@ struct BoroughMapView: View, @MainActor Animatable {
         // neighbourhood name wrapping onto a second line — and does nothing at all to
         // the street names, which are a line each.
         .multilineTextAlignment(.center)
+        // One element, described below, rather than nine hundred street names.
+        //
+        // Here rather than at the two places this view is used, because one of them had
+        // it and the other did not, and the one that did not is the quiz — the screen
+        // people actually spend their time on.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            BoroughMapView.spoken(
+                borough: drawn.borough.name,
+                showing: chosen?.name,
+                picked: candidate != nil,
+                found: settled.count,
+                missed: givenAway.count
+            )
+        )
+        .accessibilityHint("Drag to move the map, pinch to zoom, tap a neighborhood to pick it")
+    }
+
+    /// What the map says to somebody who is not looking at it.
+    ///
+    /// A canvas has no structure for VoiceOver to walk, so SwiftUI offers it the only
+    /// thing it can find in one: every piece of text drawn into it. On a borough that is
+    /// most of a thousand street names read out one after another, which is no way to
+    /// find anything — and through the accessibility annotations behind it, it was also
+    /// what took the app down. The street names are of use on the glass. They are of
+    /// none in a list.
+    ///
+    /// What it says is exactly what the map shows and not a word more. A neighbourhood
+    /// that has been found is written on the map, so it is named here. One that has
+    /// only been picked is deliberately *not* written on the map — naming it would hand
+    /// over the game — so it is not named here either. The quiz has to be as hard to
+    /// listen to as it is to look at.
+    static func spoken(
+        borough: String,
+        showing: String?,
+        picked: Bool,
+        found: Int,
+        missed: Int
+    ) -> String {
+        var said = "Map of \(borough)"
+        if let showing {
+            said += ", showing \(showing)"
+        } else if picked {
+            said += ", with a neighborhood picked but not named"
+        }
+
+        var tally: [String] = []
+        if found > 0 { tally.append("\(found) found") }
+        if missed > 0 { tally.append("\(missed) given away") }
+        if !tally.isEmpty { said += ". " + tally.joined(separator: ", ") }
+
+        return said
     }
 
     /// The picked-out neighbourhood. Held by identity rather than by position, so a map
@@ -278,17 +347,18 @@ struct BoroughMapView: View, @MainActor Animatable {
         onScreen: CGRect,
         zoom: CGFloat
     ) {
-        var showing = [Int](repeating: 0, count: RoadKind.allCases.count)
-        var held = [Int](repeating: 0, count: RoadKind.allCases.count)
-        for road in map.roads {
-            held[road.kind.rawValue] += 1
-            if road.bounds.intersects(onScreen) { showing[road.kind.rawValue] += 1 }
-        }
-
         // Light lines under heavy ones, which is the order the roads themselves are in.
         for kind in [RoadKind.side, .major, .avenue] {
             let ink = DrawnMap.presence(of: kind, at: camera.zoom)
-            guard ink > 0.01, showing[kind.rawValue] > 0 else { continue }
+            // A rank with no ink in it is not counted, never mind drawn. Pulled back
+            // to the whole island, that is a thousand side streets passed over before
+            // anything asks where any of them is.
+            guard ink > 0.01 else { continue }
+
+            let rank = map.roadsByKind[kind.rawValue]
+            var showing = 0
+            for road in rank where road.bounds.intersects(onScreen) { showing += 1 }
+            guard showing > 0 else { continue }
 
             let colour = GraphicsContext.Shading.color(palette.colour(for: kind).opacity(ink))
             let style = StrokeStyle(
@@ -297,10 +367,10 @@ struct BoroughMapView: View, @MainActor Animatable {
                 lineJoin: .round
             )
 
-            if ink >= 1, showing[kind.rawValue] * 3 >= held[kind.rawValue] {
+            if ink >= 1, showing * 3 >= rank.count {
                 board.stroke(map.roadSheets[kind.rawValue], with: colour, style: style)
             } else {
-                for road in map.roads where road.kind == kind && road.bounds.intersects(onScreen) {
+                for road in rank where road.bounds.intersects(onScreen) {
                     board.stroke(road.path, with: colour, style: style)
                 }
             }
@@ -468,7 +538,7 @@ struct BoroughMapView: View, @MainActor Animatable {
             // the halo is left off mid-gesture and comes back the moment the map is let
             // go of — the names stay put either way, which is far less distracting than
             // having them disappear.
-            let halo = interacting
+            let halo = interacting || moving
                 ? nil
                 : context.resolve(text.foregroundStyle(palette.labelHalo))
 
@@ -487,6 +557,26 @@ struct BoroughMapView: View, @MainActor Animatable {
 
     /// Four points round a circle. What a street name gets: it crosses one street, and
     /// there are a thousand of them to draw.
+    ///
+    /// These passes are not free in the way they look. Every piece of text drawn into a
+    /// canvas is registered with accessibility as a label and a bounding rect, and the
+    /// sweep that clears those registrations scans the whole list per entry — so the
+    /// cost of them is quadratic in how many there are. That is what killed the app:
+    /// the watchdog, ten seconds into a scene update, inside
+    /// `+[AXUIContextDrawingAnnotation addLabel:boundingRect:withContext:]` with
+    /// forty-six thousand of them queued up.
+    ///
+    /// A shadow with no offset is the same halo for one draw, and it was tried. It is
+    /// not the same halo to look at: a blur spreads its opacity out, and a street line
+    /// ran straight through the middle of "West 50th Street" where the ring had broken
+    /// it cleanly. The ring stays.
+    ///
+    /// What makes it safe is the `interacting || moving` guard above, and it is worth
+    /// being explicit about why. Registrations only pile up while frames are being
+    /// produced continuously, which is to say while the map is being pushed about — and
+    /// that is exactly when the halo is already off. A map standing still draws a frame
+    /// and then stops. Four passes on a frame that happens once cost nothing; four
+    /// passes on every frame of a flick are what cost the app.
     private static func crossOffsets(radius: Double) -> [CGPoint] {
         [
             CGPoint(x: -radius, y: 0), CGPoint(x: radius, y: 0),

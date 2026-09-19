@@ -36,9 +36,6 @@ struct HomeView: View {
                     }
                 }
             )
-            .accessibilityElement()
-            .accessibilityLabel("Map of \(borough.name)")
-            .accessibilityHint("Drag to move the map, pinch to zoom in, tap a neighborhood to name it")
             .sensoryFeedback(.selection, trigger: selected)
 
             PaperTexture(palette: palette)
