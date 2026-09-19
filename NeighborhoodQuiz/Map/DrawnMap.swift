@@ -193,7 +193,8 @@ struct DrawnMap {
                 edge: edge,
                 rings: rings,
                 bounds: box,
-                labelPoint: anchor
+                labelPoint: anchor,
+                cross: DrawnMap.cross(at: anchor, across: box, seed: UInt32(21_001 &+ index &* 11))
             ))
         }
 
@@ -252,6 +253,37 @@ struct DrawnMap {
             roadSheets: sheets,
             roadsByKind: byKind
         )
+    }
+
+    /// The two strokes that cross a place off, centred where its name would go.
+    ///
+    /// Sized from the place rather than fixed, because the neighbourhoods are not one
+    /// size and a mark that ignored that would swallow the small ones whole and get lost
+    /// on the big ones. Clamped at both ends for the same reason: the smallest of them
+    /// still needs a mark you can see, and the largest does not need one you can see
+    /// from the next borough.
+    ///
+    /// Two separate strokes rather than one four-point path, so the pen lifts between
+    /// them — an X is two movements of the hand, and a single unbroken one would join
+    /// the arms at the bottom and read as a tick.
+    static func cross(at centre: CGPoint, across box: CGRect, seed: UInt32) -> Path {
+        let arm = min(max(min(box.width, box.height) * 0.22, 7), 26)
+        let style = PenStyle(roughness: 0.9, bowing: 0.55, reach: 1.5, seed: seed)
+        var other = style
+        other.seed = seed &+ 1
+
+        var cross = Path()
+        cross.addPath(Pen.stroke(
+            [CGPoint(x: centre.x - arm, y: centre.y - arm),
+             CGPoint(x: centre.x + arm, y: centre.y + arm)],
+            style: style
+        ))
+        cross.addPath(Pen.stroke(
+            [CGPoint(x: centre.x + arm, y: centre.y - arm),
+             CGPoint(x: centre.x - arm, y: centre.y + arm)],
+            style: other
+        ))
+        return cross
     }
 
     /// Which neighbourhood a point of the drawing falls in, if any.
