@@ -323,6 +323,34 @@ Local development needs none of this: `project.yml` keeps `CODE_SIGN_STYLE: Auto
 Xcode signs with your personal team, and only the release workflows override it with the
 shared identity.
 
+## When it crashes
+
+Actions → **Crash Logs** → *Run workflow*. It pulls what testers sent from TestFlight and
+puts the reading on the run's summary page, with the raw reports in an artifact.
+
+What it is for is the first ten lines rather than the stack. An app that is shot by the
+watchdog for hanging the main thread, one reclaimed for holding too much memory, and one
+that reached for memory it did not own all look the same from the outside — the app
+vanishes — and as bugs they have nothing to do with each other. The summary names which of
+those it was, so a fix starts from the right end. Reasoning it out from the source instead
+has a poor record.
+
+The one thing it cannot do is conjure a report nobody sent. A TestFlight crash reaches App
+Store Connect only if the tester shares it, and the prompt after a crash is easy to dismiss,
+so an empty run means *not shared* rather than *did not crash*. On the phone: TestFlight →
+the app → turn sharing on, then reproduce it and tap Share when iOS offers.
+
+Stack frames come back as names rather than addresses because every TestFlight build now
+keeps its `dSYMs` as an artifact for ninety days. Builds from before that change are the
+exception, and their reports will have bare hex where the app's own frames should be.
+
+Locally, with the same three credentials the signing script uses:
+
+```bash
+Tools/testflight_crashes.py --out-dir crashes
+Tools/testflight_crashes.py --report-file crashes/crash-01.ips   # re-read a saved one
+```
+
 ## What is next
 
 Brooklyn. The economy that pays for it is built and tested; what it is waiting on is the

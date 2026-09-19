@@ -124,6 +124,21 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.profile-name }}" \
             CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }}
 
+      # The debug symbols, kept for as long as the build is likely to be on
+      # anybody's phone. A crash report arrives as a list of addresses, and the
+      # thing that turns those into the names of functions is the dSYM built
+      # alongside the binary — which until now went into the bin with the archive
+      # at the end of the job. Apple symbolicates what it can on its side, but
+      # only for what it was given, and a stack of bare hex is a crash you can see
+      # and cannot read.
+      - name: Keep the debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsyms-${{ env.BUILD_NUMBER }}
+          path: ${{ runner.temp }}/NeighborhoodQuiz.xcarchive/dSYMs
+          if-no-files-found: warn
+          retention-days: 90
+
       - name: Configure export options
         env:
           IDENTITY: ${{ steps.signing.outputs.identity }}
