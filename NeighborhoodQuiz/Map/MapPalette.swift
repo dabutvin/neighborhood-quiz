@@ -17,10 +17,11 @@ extension Color {
 /// Warm paper, soft ink, sage green: the palette the Park Slope map is drawn in,
 /// brought over whole, with a night version added underneath it.
 ///
-/// Manhattan is an island, so the two are used differently from the way the Brooklyn
+/// Manhattan is an island, so the two are used differently from the way the Park Slope
 /// map uses them. There, paper is the background and the neighbourhood is a lighter
 /// patch on it. Here the background is the water and the paper is the land, which is
-/// what makes the shape read from across the room.
+/// what makes the shape read from across the room — and Brooklyn, drawn on the same
+/// palette, reads the same way, because it too is land with water round three sides.
 struct MapPalette {
     var water: Color
     var waterInk: Color

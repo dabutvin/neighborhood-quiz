@@ -4,14 +4,15 @@ import XCTest
 
 final class MapProjectionTests: XCTestCase {
     private let size = CGSize(width: 400, height: 800)
-    private var island: [Coordinate] { ManhattanMapData.land.flatMap { $0 } }
+    private let manhattan = BoroughMap.of(.manhattan)
+    private var island: [Coordinate] { manhattan.land.flatMap { $0 } }
 
     private func fitted(padding: Double = 10) -> MapProjection {
         MapProjection(
             fitting: island,
             in: size,
             padding: padding,
-            rotation: -ManhattanGeometry.gridBearingDegrees
+            rotation: -Borough.manhattan.gridBearingDegrees
         )
     }
 
@@ -20,7 +21,7 @@ final class MapProjectionTests: XCTestCase {
     /// and now it is checked against a real avenue rather than a generated one.
     func testTurningThePlaneStandsTheAvenuesUp() {
         let projection = fitted()
-        let fifth = ManhattanMapData.roads.first { $0.name == "Fifth Avenue" && $0.carriesName }
+        let fifth = manhattan.roads.first { $0.name == "Fifth Avenue" && $0.carriesName }
         let points = projection.points(fifth?.coordinates ?? [])
         XCTAssertGreaterThanOrEqual(points.count, 2, "Fifth Avenue is missing from the map")
 
@@ -30,7 +31,7 @@ final class MapProjectionTests: XCTestCase {
 
     func testTurningThePlaneLaysTheCrossStreetsFlat() {
         let projection = fitted()
-        let street = ManhattanMapData.roads.first { $0.name == "East 42nd Street" && $0.carriesName }
+        let street = manhattan.roads.first { $0.name == "East 42nd Street" && $0.carriesName }
         let points = projection.points(street?.coordinates ?? [])
         XCTAssertGreaterThanOrEqual(points.count, 2, "42nd Street is missing from the map")
 

@@ -25,6 +25,18 @@ struct Wallet: Equatable, Codable {
     /// sale — which is why `has(_:)` asks about the price rather than about this set.
     private(set) var bought: Set<Borough> = []
 
+    /// Where the player is: the borough the next round will ask about.
+    ///
+    /// Kept in the wallet rather than somewhere of its own because the wallet is the one
+    /// thing the app writes down, and "where they have been" is already its business —
+    /// the doc comment at the top says so. A player who bought Brooklyn and moved there
+    /// should open the app in Brooklyn, and a second preference to remember that would
+    /// be a second thing for settings to promise to delete.
+    ///
+    /// Read through `current`, not directly: this is what was asked for, and `current`
+    /// is what can actually be had.
+    private(set) var playing: Borough = .manhattan
+
     init() {}
 
     /// A wallet part-way through, for tests and for the screenshot runs.
@@ -47,6 +59,18 @@ struct Wallet: Equatable, Codable {
     /// Everywhere that can be played right now: open, and with a map behind it.
     var playable: [Borough] {
         Borough.allCases.filter { has($0) && $0.isDrawn }
+    }
+
+    /// The borough being played, checked against what is playable.
+    ///
+    /// `playing` is what the player last chose; this is what the game can honour. The
+    /// two come apart in exactly one way — a wallet that says Brooklyn when Brooklyn is
+    /// not on the list — and there are two roads to it: a wallet written by a build in
+    /// which Brooklyn was drawn and read by one in which it is not, or a purchase that
+    /// has since been erased. Either way the player is put back in Manhattan, which is
+    /// always open, rather than stranded in a borough the map cannot show.
+    var current: Borough {
+        playable.contains(playing) ? playing : .manhattan
     }
 
     /// The next thing being saved for — the cheapest one not yet owned. Nothing once
@@ -79,9 +103,10 @@ struct Wallet: Equatable, Codable {
     /// button still says the map is coming.
     ///
     /// `drawn` is a parameter rather than a lookup so that the spending rules can be
-    /// tested against a city where something other than Manhattan exists. Today nothing
-    /// else does, and a test that could only ever watch a purchase fail would not be
-    /// testing buying at all.
+    /// tested against a city of the test's choosing. It dates from when nothing but
+    /// Manhattan was drawn and a test that could only ever watch a purchase fail would
+    /// not have been testing buying at all; it stays because the same will be true of
+    /// Queens until it is drawn, and of whatever comes after.
     func canBuy(_ borough: Borough, drawn: Set<Borough> = Borough.drawn) -> Bool {
         canAfford(borough) && drawn.contains(borough)
     }
@@ -104,5 +129,39 @@ struct Wallet: Equatable, Codable {
         balance -= borough.price
         bought.insert(borough)
         return true
+    }
+
+    /// Go and play a borough. Returns whether the move was allowed.
+    ///
+    /// Two things have to be true: it is open — bought, or Manhattan — and there is a
+    /// map behind it. Buying does not move the player there on its own; that is a
+    /// choice, and the menu offers it.
+    @discardableResult
+    mutating func play(_ borough: Borough) -> Bool {
+        guard has(borough), borough.isDrawn else { return false }
+        playing = borough
+        return true
+    }
+
+    // MARK: - Reading it back
+
+    private enum CodingKeys: String, CodingKey {
+        case balance, earned, rounds, bought, playing
+    }
+
+    /// Written by hand so that a wallet saved before `playing` existed still reads.
+    ///
+    /// The saved copy lives under `wallet.v1`, and every wallet written before Brooklyn
+    /// was drawn has no `playing` in it. The synthesised decoder would refuse the whole
+    /// thing over the missing key, the bank would treat that as nothing saved, and a
+    /// player would open the update to an empty balance. A missing field means
+    /// Manhattan, which is where everybody was. Encoding is still the compiler's.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        balance = try container.decode(Int.self, forKey: .balance)
+        earned = try container.decode(Int.self, forKey: .earned)
+        rounds = try container.decode(Int.self, forKey: .rounds)
+        bought = try container.decode(Set<Borough>.self, forKey: .bought)
+        playing = try container.decodeIfPresent(Borough.self, forKey: .playing) ?? .manhattan
     }
 }

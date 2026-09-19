@@ -108,10 +108,15 @@ jobs:
           #
           # The `-map-*` runs ask for the map on its own, where a regression in
           # the drawing shows up plainly with nothing else on the screen.
+          # `-map-brooklyn` is the second borough, drawn north-up rather than
+          # turned to its grid, because it has half a dozen grids and no one of
+          # them is the borough; a regression in the loader or the projection
+          # that only the other file would catch is what this shot is for.
           #
           # `-boroughs` is the ladder, seeded with enough money for Brooklyn so
-          # the shot shows the rung that has something to say — and the one
-          # place the game has to admit that the map behind it is not built.
+          # the shot shows the rung that has something to say — a live Unlock
+          # button now that Brooklyn is drawn, where it used to be the one
+          # place the game had to admit the map behind it was not built.
           #
           # Every shot is checked before it counts, because one of these came
           # back as a white launch screen once and went up on the pull request
@@ -186,8 +191,9 @@ jobs:
           capture 15 map             -map
           capture 17 map_zoomed      -map-zoomed
           capture 19 map_neighborhood -map-neighborhood
-          capture 21 boroughs        -boroughs
-          capture 23 settings        -settings
+          capture 25 map_brooklyn    -map-brooklyn
+          capture 27 boroughs        -boroughs
+          capture 29 settings        -settings
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true

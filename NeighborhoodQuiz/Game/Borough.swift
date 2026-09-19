@@ -9,10 +9,10 @@ import Foundation
 /// winter.
 ///
 /// `isDrawn` is the honest part. A borough in this list is somewhere the game intends to
-/// go; a borough that is drawn is somewhere it can actually take you. Only Manhattan is
-/// drawn today. The rest are priced and visible on purpose — knowing what you are saving
-/// for is most of why saving is worth doing — but the game says plainly that their maps
-/// are not built yet rather than taking money for a blank page.
+/// go; a borough that is drawn is somewhere it can actually take you. Manhattan and
+/// Brooklyn are drawn today. The rest are priced and visible on purpose — knowing what
+/// you are saving for is most of why saving is worth doing — but the game says plainly
+/// that their maps are not built yet rather than taking money for a blank page.
 enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
     case manhattan
     case brooklyn
@@ -43,12 +43,46 @@ enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    /// The ones with a map behind them. One entry today; this is the line that grows
-    /// as each borough gets drawn, and the only line that has to change to open one.
-    static let drawn: Set<Borough> = [.manhattan]
+    /// The ones with a map behind them. Two entries today; this is the line that grows
+    /// as each borough gets drawn. A file in `Resources/` and a cache line in
+    /// `BoroughMap.of` go with it, and nothing else has to change to open one.
+    static let drawn: Set<Borough> = [.manhattan, .brooklyn]
 
     /// Whether there is a map behind it yet.
     var isDrawn: Bool { Borough.drawn.contains(self) }
+
+    /// The file its map is read from, without the `.json`. Only the drawn ones exist;
+    /// the rest are named here so that drawing one is a matter of writing the file.
+    var mapFile: String {
+        switch self {
+        case .manhattan: return "manhattan"
+        case .brooklyn: return "brooklyn"
+        case .queens: return "queens"
+        case .bronx: return "bronx"
+        case .statenIsland: return "staten-island"
+        }
+    }
+
+    /// How far the borough's grid runs east of north, in degrees. The projection turns
+    /// the plane back by this much before drawing, which is what makes the drawing read
+    /// as a drawing rather than as a satellite photograph.
+    ///
+    /// Manhattan is the one this is for. The streets themselves come from the city now,
+    /// but the 1811 grid still runs about twenty-nine degrees east of north, and turning
+    /// the plane back by that much stands the avenues upright and lays the cross streets
+    /// flat — which is how every hand-drawn map of the island has ever been drawn.
+    ///
+    /// Brooklyn is north-up, and not for want of a grid: it has half a dozen of them,
+    /// at different angles — Williamsburg's, Bushwick's, Park Slope's, Bay Ridge's, the
+    /// Flatbush avenues — and no one of them is the borough. There is no turn that stands
+    /// Brooklyn's streets up the way the twenty-nine degrees stands Manhattan's; whichever
+    /// grid you chose, the others would lean. North-up is how a Brooklyn map is drawn.
+    var gridBearingDegrees: Double {
+        switch self {
+        case .manhattan: return 29
+        case .brooklyn, .queens, .bronx, .statenIsland: return 0
+        }
+    }
 
     /// The ones that cost something, which is everywhere the money is for.
     static var forSale: [Borough] { allCases.filter { $0.price > 0 } }

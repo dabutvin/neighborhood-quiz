@@ -5,7 +5,8 @@ hand, in ink, on paper — with every avenue and every numbered cross street nam
 not one neighbourhood.
 
 That omission is the whole idea. Naming the neighbourhoods is the quiz, and a map that
-has already told you where SoHo is has given the game away.
+has already told you where SoHo is has given the game away. Brooklyn is drawn the same
+way, and is what the first two hundred dollars buy.
 
 ## The game
 
@@ -37,24 +38,27 @@ Two numbers are tracked, not one. The balance is what you can spend and it goes 
 you spend it; the career total is every dollar ever earned and it never goes down, because
 buying Brooklyn should not make it look like you played less than you did.
 
-**Only Manhattan is drawn so far.** The other four are priced and listed because knowing
-what you are saving for is most of the reason to save, but the game will not take money
-for a borough it cannot open — when the balance is there and the map is not, it says so
-and the button stays off.
+**Manhattan and Brooklyn are drawn so far.** Buying Brooklyn opens it; the menu then
+offers both, and the one you are playing is written down with the money so the app opens
+where you left it. The other three are priced and listed because knowing what you are
+saving for is most of the reason to save, but the game will not take money for a borough
+it cannot open — when the balance is there and the map is not, it says so and the button
+stays off.
 
 ## The map
 
 The map is not a tile server and not an `MKMapView`, but nor is it invented. It is the
 City of New York's own street centreline file, drawn by hand.
 
-`Tools/fetch_map_data.py` pulls three datasets from [NYC Open Data](https://data.cityofnewyork.us)
-and writes `NeighborhoodQuiz/Resources/manhattan.json`, which is committed:
+`Tools/fetch_map_data.py` takes a borough, pulls three datasets from
+[NYC Open Data](https://data.cityofnewyork.us) and writes one file per borough —
+`NeighborhoodQuiz/Resources/manhattan.json`, `brooklyn.json` — which are committed:
 
 | Dataset | What it gives |
 |---|---|
-| Centerline (`inkn-q76z`) | every street segment in Manhattan, with its name |
+| Centerline (`inkn-q76z`) | every street segment in the borough, with its name |
 | Borough Boundaries (`gthc-hcne`) | the real shoreline, piers and all |
-| Parks Properties (`enfh-gkve`) | the greens, Central Park chief among them |
+| Parks Properties (`enfh-gkve`) | the greens, Central Park chief among Manhattan's |
 
 It runs on demand, never at build time and never at runtime. CI does not touch the
 network and neither does a shipped build.
@@ -80,14 +84,31 @@ What comes back is not drawable as it stands, and most of the tool is the differ
   tool backs the tolerance off until the ring stops folding over itself, because a
   tolerance that smooths a pier off Manhattan pinches Wards Island into a bow tie.
 
-The result is 216 KB, 967 streets and four islands. Everything below Houston Street is
-there, because it is there in the data; Washington Heights is laid out the way it was
-actually laid out rather than the way the 1811 grid would have continued.
+The result, for Manhattan, is 216 KB, 967 streets and four islands. Everything below
+Houston Street is there, because it is there in the data; Washington Heights is laid out
+the way it was actually laid out rather than the way the 1811 grid would have continued.
 
 The one thing left of that grid is its bearing. Manhattan runs about twenty-nine degrees
 east of north, and turning the projected plane back by that much is what stands the
 avenues upright and lays the cross streets flat — the difference between a drawing and a
 satellite photograph.
+
+### Brooklyn
+
+The same tool, the same treatment, a different borough on the command line — and one
+thing done differently, which is that Brooklyn is drawn north-up. It is not for want of a
+grid: Brooklyn has half a dozen of them, at different angles — Williamsburg's, Bushwick's,
+Park Slope's, Bay Ridge's, the Flatbush avenues — and no one of them is the borough.
+There is no turn that stands Brooklyn's streets up the way the twenty-nine degrees stands
+Manhattan's; whichever grid you chose, the others would lean. North-up is how a Brooklyn
+map is drawn, so that is how this one is.
+
+Its numbered avenues are in figures, because that is how Brooklyn writes them: 4th
+Avenue and 18th Avenue, where Manhattan has Fifth — a borough whose avenues run to 28th
+cannot switch from words to figures at Twelfth without it showing. And its
+neighbourhoods are the same census-tract treatment Manhattan's had — the city's compounds
+taken apart and the split ones put back together — which comes to about fifty places a
+player would actually call something.
 
 ### Why it wobbles
 
@@ -108,7 +129,7 @@ drawn; against fifteen hundred real ones the same numbers read as a shake rather
 style, and Broadway wavered where Broadway does not. At a third of that stray the
 doubled stroke and the soft corners carry the hand, which is where it shows anyway.
 
-Manhattan is an island, so the palette is used the other way up from the Brooklyn map:
+Manhattan is an island, so the palette is used the other way up from the Park Slope map:
 there, paper is the background and the neighbourhood is a lighter patch on it; here the
 background is the water and the paper is the land, which is what makes the shape read
 from across the room. There is a night palette too — the same drawing after dark.
@@ -128,20 +149,30 @@ then the long names, then every side street.
 NeighborhoodQuiz/
 ├── App/
 │   └── NeighborhoodQuizApp.swift   # App entry point, and the launch arguments CI shoots with
+├── Game/
+│   ├── Borough.swift               # The five, their prices, which are drawn, and how each is turned
+│   ├── Wallet.swift                # The money, the boroughs bought, and where the player is
+│   ├── Bank.swift                  # The one wallet the app plays with, written down after every change
+│   └── QuizRound.swift             # Ten places, three goes each, and what the goes are worth
 ├── Map/
 │   ├── Geography.swift             # A coordinate, and a Mercator turned so the avenues stand up
-│   ├── ManhattanMapData.swift      # Reads manhattan.json: the island, the greens, the streets
+│   ├── BoroughMap.swift            # Reads a borough's .json: the land, the greens, the streets
 │   ├── Polyline.swift              # Measuring along a line: length, middle, which way a name goes
 │   ├── Pen.swift                   # The unsteady hand: seeded wobble, after rough.js
-│   ├── DrawnMap.swift              # Builds the whole drawing once for a given size
+│   ├── DrawnMap.swift              # Builds the whole drawing of one borough once for a given size
 │   ├── MapCamera.swift             # How far in, how far pushed about, and what is on the glass
 │   └── MapPalette.swift            # Paper, ink, sage — day and night — and the hand it is lettered in
 ├── Views/
-│   ├── HomeView.swift              # The screen: the map, the header, the zoom buttons, the gestures
-│   ├── ManhattanMapView.swift      # One Canvas: the island under the transform, the names over it
+│   ├── QuizView.swift              # The game: the question, the map, the menu, the end of a round
+│   ├── MapBoard.swift              # The map you can push about, and what a tap on it means
+│   ├── BoroughMapView.swift        # One Canvas: the borough under the transform, the names over it
+│   ├── BoroughsView.swift          # The ladder: what you have, what you are saving for
+│   ├── HomeView.swift              # The map on its own, for the screenshot runs
+│   ├── SettingsView.swift          # The version, and the one destructive thing the app can do
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette
 └── Resources/
     ├── manhattan.json              # The city's Manhattan, written by Tools/fetch_map_data.py
+    ├── brooklyn.json               # And its Brooklyn, from the same tool
     ├── Assets.xcassets             # App icon (drawn from the same data) and accent colour
     └── PrivacyInfo.xcprivacy       # Nothing collected, nothing sent
 ```
@@ -179,8 +210,9 @@ project.
 ### Refreshing the map
 
 ```bash
-python3 Tools/fetch_map_data.py       # re-reads NYC Open Data
-python3 Tools/generate_app_icon.py    # the icon is the same map, so it follows
+python3 Tools/fetch_map_data.py manhattan   # re-reads NYC Open Data, one borough at a time
+python3 Tools/fetch_map_data.py brooklyn
+python3 Tools/generate_app_icon.py          # the icon is the Manhattan map, so it follows
 ```
 
 Commit whatever changes. There is no list of streets to maintain: a street the city adds
@@ -190,7 +222,10 @@ from the lengths.
 `ManhattanMapDataTests` is the check on a re-fetch — that the island is still an island
 and has not folded over itself, that every street is named exactly once, that the
 speller did not meet an abbreviation it does not know, that ramps stayed out, and that
-the streets below Houston are still there.
+the streets below Houston are still there. `BrooklynMapDataTests` is its twin for the
+other file, with Brooklyn's own particulars: that the Belt Parkway did not rank as an
+avenue, that Prospect Park is among the greens, and that the neighbourhoods came out as
+places rather than as the city's hyphenated compounds.
 
 ### App icon
 
@@ -325,10 +360,12 @@ shared identity.
 
 ## What is next
 
-Brooklyn. The economy that pays for it is built and tested; what it is waiting on is the
-map itself — the same treatment Manhattan had, which is a census-tract union from NYC Open
+Queens. The economy that pays for it is built and tested, and the app is borough-aware
+now — a third file in `Resources/`, a line in `Borough.drawn` and a cache line in
+`BoroughMap.of` is all the code asks for. What it is waiting on is the map itself: the
+same treatment Manhattan and Brooklyn had, which is a census-tract union from NYC Open
 Data and then a pass over the result deciding what each neighbourhood is actually called.
-That second half is not a job for a script.
+That second half is not a job for a script, and Queens has more of them than either.
 
 ## License
 
