@@ -29,6 +29,10 @@ the city:
 | The Bronx | $1,200 |
 | Staten Island | $2,000 |
 
+All of that lives in one preference on the phone and nowhere else — there is no account
+and no server — and Settings will delete it, which is the only destructive thing the app
+can do.
+
 Two numbers are tracked, not one. The balance is what you can spend and it goes down when
 you spend it; the career total is every dollar ever earned and it never goes down, because
 buying Brooklyn should not make it look like you played less than you did.

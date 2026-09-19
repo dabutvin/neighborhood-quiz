@@ -48,7 +48,16 @@ struct QuizView: View {
     /// same numbers every time and a photograph of the game can never spend, add to or
     /// inherit what a real player has earned.
     @State private var bank: Bank
-    @State private var showingBoroughs = false
+    /// The two screens that come up over the game. One piece of state rather than a
+    /// flag each: stacking two `.sheet` modifiers on the same view is a long-standing
+    /// way to have one of them quietly never appear.
+    enum Overlay: String, Identifiable {
+        case boroughs
+        case settings
+        var id: String { rawValue }
+    }
+
+    @State private var overlay: Overlay?
 
     init(stage: Stage? = nil) {
         self.stage = stage
@@ -131,8 +140,11 @@ struct QuizView: View {
             }
         }
         .background(palette.water)
-        .sheet(isPresented: $showingBoroughs) {
-            BoroughsView(bank: bank) { showingBoroughs = false }
+        .sheet(item: $overlay) { which in
+            switch which {
+            case .boroughs: BoroughsView(bank: bank) { overlay = nil }
+            case .settings: SettingsView(bank: bank) { overlay = nil }
+            }
         }
         // Holding the settled place on screen, then moving along. `task(id:)` rather
         // than a Task started by hand: it is cancelled for us if the view goes away or
@@ -317,7 +329,7 @@ struct QuizView: View {
             VStack(spacing: 10) {
                 pill("Play again", action: startRound)
                 HStack(spacing: 10) {
-                    pill("Boroughs") { showingBoroughs = true }
+                    pill("Boroughs") { overlay = .boroughs }
                     pill("Menu", action: leave)
                 }
             }
@@ -364,7 +376,10 @@ struct QuizView: View {
 
             VStack(spacing: 10) {
                 pill("Start", action: startRound)
-                pill("Boroughs") { showingBoroughs = true }
+                HStack(spacing: 10) {
+                    pill("Boroughs") { overlay = .boroughs }
+                    pill("Settings") { overlay = .settings }
+                }
             }
             .padding(.top, 2)
 

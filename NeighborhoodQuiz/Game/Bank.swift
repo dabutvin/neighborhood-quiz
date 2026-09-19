@@ -43,6 +43,19 @@ final class Bank {
         return bought
     }
 
+    /// Forget all of it: the money, the career, the boroughs bought.
+    ///
+    /// The saved copy is removed rather than overwritten with an empty one, because the
+    /// promise settings makes is that the data is gone, not that it has been set back to
+    /// nought. After this the app is in the state it was in before it was ever played.
+    ///
+    /// This wallet is the only thing the app keeps anywhere, so this really is all of
+    /// it — no file, no keychain entry, nothing on a server.
+    func erase() {
+        wallet = Wallet()
+        defaults?.removeObject(forKey: key)
+    }
+
     // MARK: - Reading and writing
 
     /// Anything unreadable is treated as nothing saved.

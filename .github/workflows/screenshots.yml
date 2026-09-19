@@ -187,6 +187,7 @@ jobs:
           capture 17 map_zoomed      -map-zoomed
           capture 19 map_neighborhood -map-neighborhood
           capture 21 boroughs        -boroughs
+          capture 23 settings        -settings
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true
