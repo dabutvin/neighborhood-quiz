@@ -199,7 +199,14 @@ struct BoroughMapView: View, @MainActor Animatable {
             for area in map.neighborhoods where ruledOut.contains(area.id) {
                 guard area.bounds.intersects(onScreen) else { continue }
                 board.fill(area.shape, with: .color(palette.ruledOut.opacity(0.42)))
-                board.stroke(
+
+                // Kept inside the place it crosses off. The arms are sized from the
+                // bounding box, and a neighborhood is not a rectangle — on an awkward
+                // shape a diagonal can leave it and land on the one next door, which
+                // is the one thing this mark must never look like it is saying.
+                var marked = board
+                marked.clip(to: area.shape)
+                marked.stroke(
                     area.cross,
                     with: .color(palette.ruledOutInk.opacity(0.9)),
                     style: StrokeStyle(lineWidth: 2.6 / zoom, lineCap: .round, lineJoin: .round)
