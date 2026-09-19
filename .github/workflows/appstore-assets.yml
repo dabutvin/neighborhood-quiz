@@ -82,6 +82,7 @@ jobs:
           SCREENS=(
             "map:-map:Manhattan, drawn by hand"
             "streets:-map-zoomed:Every avenue, every cross street"
+            "brooklyn:-map-brooklyn:Brooklyn, when you have earned it"
           )
 
           # Pick the first simulator on offer whose name matches one we want, and

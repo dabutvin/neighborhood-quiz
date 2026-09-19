@@ -52,13 +52,15 @@ struct DrawnRoad: Identifiable {
     let bounds: CGRect
 }
 
-/// The whole map, drawn once for a given size and then only ever re-transformed.
+/// The whole map of one borough, drawn once for a given size and then only ever
+/// re-transformed.
 ///
 /// Building this is the expensive part — fifteen hundred runs of road, the shoreline
 /// and ninety-six greens, each redrawn twice with a wobbling pen. It happens when the
 /// view first gets its size and never again while the map is being pushed about, which
 /// is why panning and zooming stay smooth and why the wobble never shifts under your
-/// finger: what moves is the transform, not the drawing.
+/// finger: what moves is the transform, not the drawing. Changing borough is the one
+/// other thing that builds it again, because that is a different drawing altogether.
 struct DrawnMap {
     /// Where the side streets start to appear, and the zoom by which they are all the
     /// way in. Fading them across a range rather than switching them on at a threshold
@@ -66,13 +68,17 @@ struct DrawnMap {
     static let sideStreetZoom = 1.5
     static let sideStreetFullZoom = 2.3
 
+    /// Which borough this is a drawing of. The board checks it against the one it has
+    /// been asked for, the same way it checks the size.
+    let borough: Borough
     let size: CGSize
     let projection: MapProjection
     let land: Path
     let landEdge: Path
     let parks: Path
     let parkEdge: Path
-    /// The forty tappable shapes, in the order the data holds them.
+    /// The tappable shapes — forty in Manhattan, fifty-odd in Brooklyn — in the order
+    /// the data holds them.
     let neighborhoods: [DrawnNeighborhood]
     /// Side streets first, then the major ones, then the avenues on top, so the heavy
     /// lines are never broken by the light ones crossing them.
@@ -84,7 +90,7 @@ struct DrawnMap {
     /// Each road of a kind is drawn in the same colour at the same weight — they share
     /// a `minZoom`, so they fade in together and there is never a frame where two side
     /// streets want different ink. That means a view showing most of them can put them
-    /// down in one stroke instead of a thousand, which is what the whole island at
+    /// down in one stroke instead of a thousand, which is what the whole borough at
     /// once used to cost: nothing is off the glass at that zoom, so nothing was culled
     /// and every road paid its own call.
     let roadSheets: [Path]
@@ -92,14 +98,17 @@ struct DrawnMap {
     /// The measured size of every street name, filled in as each is first drawn.
     let metrics = LabelMetrics()
 
-    static func build(size: CGSize) -> DrawnMap {
-        let islands = ManhattanMapData.land
+    static func build(borough: Borough, size: CGSize) -> DrawnMap {
+        let data = BoroughMap.of(borough)
+        let islands = data.land
         // Turning the plane back by the grid's own bearing stands the avenues upright.
+        // Manhattan's is twenty-nine degrees; Brooklyn's is nought, and is drawn as it
+        // sits — see `Borough.gridBearingDegrees` for why.
         let projection = MapProjection(
             fitting: islands.flatMap { $0 },
             in: size,
             padding: 14,
-            rotation: -ManhattanGeometry.gridBearingDegrees
+            rotation: -borough.gridBearingDegrees
         )
 
         var land = Path()
@@ -113,7 +122,7 @@ struct DrawnMap {
 
         var parks = Path()
         var parkEdge = Path()
-        for (index, park) in ManhattanMapData.parks.enumerated() {
+        for (index, park) in data.parks.enumerated() {
             let points = projection.points(park.ring)
             guard points.count >= 3 else { continue }
             let seed = UInt32(401 &+ index &* 7)
@@ -122,7 +131,7 @@ struct DrawnMap {
         }
 
         var neighborhoods: [DrawnNeighborhood] = []
-        for (index, area) in ManhattanMapData.neighborhoods.enumerated() {
+        for (index, area) in data.neighborhoods.enumerated() {
             let rings = area.rings.map(projection.points).filter { $0.count >= 3 }
             guard !rings.isEmpty else { continue }
 
@@ -161,7 +170,7 @@ struct DrawnMap {
 
         // The data arrives longest street first, which is the order names are offered
         // in: whichever reaches a patch of paper first keeps it.
-        for (index, road) in ManhattanMapData.roads.enumerated() {
+        for (index, road) in data.roads.enumerated() {
             let points = projection.points(road.coordinates)
             guard points.count >= 2 else { continue }
 
@@ -196,6 +205,7 @@ struct DrawnMap {
         }
 
         return DrawnMap(
+            borough: borough,
             size: size,
             projection: projection,
             land: land,
@@ -211,9 +221,9 @@ struct DrawnMap {
 
     /// Which neighbourhood a point of the drawing falls in, if any.
     ///
-    /// The areas tile the island without overlapping, so the first one that claims the
-    /// point is the only one that would — but the water, and the two holes the parks
-    /// leave in the coverage, belong to nobody, and a tap there is a tap on nothing.
+    /// The areas tile the borough without overlapping, so the first one that claims the
+    /// point is the only one that would — but the water, and the holes the parks leave
+    /// in the coverage, belong to nobody, and a tap there is a tap on nothing.
     func neighborhood(at point: CGPoint) -> DrawnNeighborhood? {
         neighborhoods.first { $0.contains(point) }
     }
@@ -276,14 +286,4 @@ struct DrawnMap {
         case .side: return PenStyle(roughness: 0.28, bowing: 0.2, reach: 0.7, seed: seed)
         }
     }
-}
-
-/// The one thing the 1811 grid is still needed for.
-///
-/// The streets themselves come from the city now, but Manhattan's grid still runs
-/// about twenty-nine degrees east of north, and turning the projected plane back by
-/// that much is what stands the avenues upright and lays the cross streets flat. It is
-/// the difference between a drawing and a satellite photograph.
-enum ManhattanGeometry {
-    static let gridBearingDegrees = 29.0
 }

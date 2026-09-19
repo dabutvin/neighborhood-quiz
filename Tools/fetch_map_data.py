@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Fetch the map the app draws from NYC Open Data and write it into the app bundle.
+"""Fetch the maps the app draws from NYC Open Data and write them into the app bundle.
 
 Run on demand, never at build time and never at runtime:
 
-    python3 Tools/fetch_map_data.py
+    python3 Tools/fetch_map_data.py             # every borough the tool knows
+    python3 Tools/fetch_map_data.py brooklyn    # just the one
 
-It writes NeighborhoodQuiz/Resources/manhattan.json, which is committed. The app
-reads that file and nothing else; CI never touches the network and neither does a
-shipped build. This is the same arrangement the Park Slope map uses.
+It writes NeighborhoodQuiz/Resources/<borough>.json — manhattan.json, brooklyn.json —
+which are committed. The app reads those files and nothing else; CI never touches the
+network and neither does a shipped build. This is the same arrangement the Park Slope
+map uses.
 
-Four datasets, all from data.cityofnewyork.us:
+Five datasets, all from data.cityofnewyork.us:
 
   Centerline (inkn-q76z)          every street segment in the city, with its name
   Borough Boundaries (gthc-hcne)  the real shoreline, piers and all
-  Parks Properties (enfh-gkve)    the greens, Central Park chief among them
+  Parks Properties (enfh-gkve)    the greens, Central Park and Prospect Park chief among them
   2020 NTAs (9nt8-h7nd)           the neighborhoods the city recognises
   2020 Census Tracts (63ge-mke6)  what those are built out of, and what ours are
 
@@ -23,6 +25,11 @@ clipped upper case ("1 AVE", "E  HOUSTON ST") and interleaved with ramps and
 service roads that are not streets at all. So this joins the segments back into
 whole streets, spells the names the way a person writes them, throws the plumbing
 away, and thins the geometry down to what a map drawn with a shaky pen can show.
+
+Everything that differs between one borough and the next — the codes the city files
+it under, how many streets carry a name at the widest zoom, whether a numbered avenue
+is written in words, and above all what its neighborhoods are — lives in one
+`Borough` record. The pipeline is the same for all of them.
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ import json
 import math
 import re
 import sys
+import textwrap
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -39,13 +47,12 @@ from typing import NamedTuple
 
 DOMAIN = "https://data.cityofnewyork.us/resource"
 CENTERLINE = "inkn-q76z"
-BOROUGHS = "gthc-hcne"
+BOUNDARIES = "gthc-hcne"
 PARKS = "enfh-gkve"
 NEIGHBORHOODS = "9nt8-h7nd"
 TRACTS = "63ge-mke6"
-MANHATTAN = "1"
 
-OUT = Path(__file__).resolve().parents[1] / "NeighborhoodQuiz/Resources/manhattan.json"
+RESOURCES = Path(__file__).resolve().parents[1] / "NeighborhoodQuiz/Resources"
 
 # Roadway types worth drawing: an ordinary street, a highway, a bridge. The rest of
 # the table is ramps, driveways, ferry routes, u-turns and "non-physical" segments
@@ -63,7 +70,8 @@ STREET_TOLERANCE = 0.00004
 SHORE_TOLERANCE = 0.00025
 PARK_TOLERANCE = 0.00006
 
-# Rings smaller than this are piers and mooring dolphins rather than land.
+# Rings smaller than this are piers and mooring dolphins rather than land. The marsh
+# islands in Jamaica Bay clear it, and they are Brooklyn, so they stay.
 MIN_RING_AREA = 1e-5
 # A green is filtered by its acreage instead, so this only throws out rings that are
 # degenerate rather than small — Washington Square is a twentieth of the area the
@@ -81,10 +89,12 @@ NEIGHBORHOOD_TOLERANCE = 0.00025
 MIN_NEIGHBORHOOD_AREA = 1e-6
 
 # The NTA table is not only neighborhoods. Type 9 is a park or a cemetery — Central
-# Park, Highbridge, Inwood Hill, Randall's Island — and type 6 is the United Nations,
-# which is a place but not a neighborhood anybody is asked to name. Only type 0 is
+# Park, Prospect Park, Green-Wood, Floyd Bennett Field — type 6 is an institution
+# that is a place but not a neighborhood anybody is asked to name (the United
+# Nations, the Navy Yard, Fort Hamilton), and type 7 is a cemetery. Only type 0 is
 # somewhere people live and call something.
 NEIGHBORHOOD_TYPE = "0"
+
 
 class Area(NamedTuple):
     """One neighborhood of the finished map, and where its ground comes from."""
@@ -99,12 +109,41 @@ class Area(NamedTuple):
     without: tuple[str, ...] = ()
 
 
+class Borough(NamedTuple):
+    """Everything the pipeline needs to know about one borough and nothing else."""
+
+    #: As the tract and NTA tables spell it.
+    name: str
+    #: The city's digit for it: `borocode` in the boundaries table, and the first digit
+    #: of every centerline segment's `b5sc`, which is what the street query keys on.
+    code: str
+    #: The parks table keeps its own initial instead.
+    park_letter: str
+    #: What is written to Resources.
+    file: str
+    #: What the map is divided into. See the two lists below.
+    areas: tuple[Area, ...]
+    #: The streets that carry their name at the widest zoom, and the ones after them.
+    #: Both are counts rather than lengths, so the map's density does not change when
+    #: the city re-surveys a block.
+    avenue_count: int
+    major_count: int
+    #: Whether a numbered avenue is written in words. Manhattan writes Fifth Avenue;
+    #: Brooklyn's avenues run to 28th, and "Twelfth Avenue" beside "13th Avenue" reads
+    #: wrong, so Brooklyn writes 4th Avenue. Numbered streets are figures everywhere.
+    avenues_in_words: bool
+    #: Rings of the borough boundary that reach south or west of these are left out.
+    #: None keeps every island the city files under the borough.
+    min_ring_latitude: float | None = None
+    min_ring_longitude: float | None = None
+
+
 # The three tracts in the East River. The city files them under Lenox Hill; nobody
 # standing on them would agree.
 ROOSEVELT_ISLAND = ("238.02", "238.03", "238.04")
 
 
-# What the map is divided into.
+# What Manhattan is divided into.
 #
 # The city draws 32 lived-in neighborhoods in Manhattan and gives several of them
 # compound names — "SoHo-Little Italy-Hudson Square" is one area — which is fine to read
@@ -117,8 +156,8 @@ ROOSEVELT_ISLAND = ("238.02", "238.03", "238.04")
 # island with no gaps and no overlaps, and every border is a real one the city surveyed
 # rather than a line drawn here by eye. Where an area is a whole NTA, or two of them put
 # back together, it says so; where it is a piece of one, the tracts are listed, and the
-# check at the end of `neighborhoods()` is what keeps those lists honest.
-AREAS = (
+# check at the end of `build_neighborhoods()` is what keeps those lists honest.
+MANHATTAN_AREAS = (
     # --- below Houston
     Area("Battery Park City", tracts=("317.03", "317.04")),
     Area("Financial District", tracts=("7", "9", "13", "15.01", "15.02")),
@@ -176,23 +215,159 @@ AREAS = (
 )
 
 
-# Manhattan borough runs down to Governors, Ellis and Liberty Islands. They are real
-# but they are a mile out to sea, and a map that fits them in shrinks the island it
-# is actually about. Ellis and Liberty sit west of anything Manhattan proper reaches,
-# and Governors sits south, so a corner of water either way is enough to leave them out.
-MIN_RING_LATITUDE = 40.695
-MIN_RING_LONGITUDE = -74.03
+# The one tract of Sea Gate: the gated end of the Coney Island peninsula, west of West
+# 37th Street. The city files it with Coney Island; the gate says otherwise.
+SEA_GATE = ("336",)
 
-# The streets that carry their name at the widest zoom, and the ones after them.
-# Both are counts rather than lengths, so the map's density does not change when
-# the city re-surveys a block.
-AVENUE_COUNT = 25
-MAJOR_COUNT = 175
+# What Brooklyn is divided into.
+#
+# The city draws 51 lived-in neighborhoods in Brooklyn, and the same things are wrong
+# with them: Bed-Stuy, Bushwick, Crown Heights, East New York and East Flatbush are
+# each cut into halves and quarters nobody names, while "Carroll Gardens-Cobble
+# Hill-Gowanus-Red Hook" is four places that do not even touch in the middle. So the
+# halves go back together, the compounds come apart, and the double-barrelled names
+# lose the barrel nobody uses.
+#
+# Where an NTA is cut, the cut follows the streets people actually draw the line on —
+# Hamilton Avenue under the expressway for Red Hook, Bond Street for Gowanus, 9th
+# Avenue between Sunset Park and Borough Park, Ocean Parkway between Gravesend and
+# Homecrest, Flatbush Avenue between Marine Park and Mill Basin — rounded to the
+# nearest tract edge. A tract that straddles the line goes with the side most of it is
+# on, which is why 414.02 is Gravesend though the city filed it under "(East)".
+BROOKLYN_AREAS = (
+    # --- the north
+    Area("Greenpoint", ntas=("Greenpoint",)),
+    Area("Williamsburg", ntas=("Williamsburg",)),
+    Area("South Williamsburg", ntas=("South Williamsburg",)),
+    Area("East Williamsburg", ntas=("East Williamsburg",)),
+    Area("Bushwick", ntas=("Bushwick (East)", "Bushwick (West)")),
+    # --- downtown and the brownstone belt
+    # DUMBO is everything north of the BQE, Vinegar Hill included; the Farragut Houses
+    # south of the expressway go with Downtown, as does everything down to Atlantic.
+    Area("DUMBO", tracts=("21",)),
+    Area("Downtown Brooklyn", tracts=("11", "13", "15.01", "15.02", "23", "37")),
+    Area("Boerum Hill", tracts=("39", "41", "43", "69.01")),
+    Area("Brooklyn Heights", ntas=("Brooklyn Heights",)),
+    Area("Fort Greene", ntas=("Fort Greene",)),
+    Area("Clinton Hill", ntas=("Clinton Hill",)),
+    # Red Hook is what lies south of Hamilton Avenue and the expressway above it. The
+    # Columbia Street waterfront north of there has no tract of its own — the piers
+    # (53.03) and the blocks behind them (51) go with Carroll Gardens, which they
+    # adjoin, and the northern end (47) with Cobble Hill. Gowanus is the canal and
+    # the blocks east of Bond Street on its far side, down to the expressway.
+    Area("Red Hook", tracts=("53.01", "53.02", "59", "85")),
+    Area("Cobble Hill", tracts=("45", "47", "49")),
+    Area("Carroll Gardens", tracts=("51", "53.03", "63", "65", "67", "69.02", "75", "77")),
+    Area("Gowanus", tracts=("71", "117", "119.01", "119.02", "121", "127")),
+    Area("Park Slope", ntas=("Park Slope",)),
+    Area("Prospect Heights", ntas=("Prospect Heights",)),
+    Area("Windsor Terrace", ntas=("Windsor Terrace-South Slope",)),
+    Area("Kensington", ntas=("Kensington",)),
+    # --- central
+    Area("Bedford-Stuyvesant", ntas=("Bedford-Stuyvesant (East)", "Bedford-Stuyvesant (West)")),
+    Area("Crown Heights", ntas=("Crown Heights (North)", "Crown Heights (South)")),
+    Area("Prospect Lefferts Gardens", ntas=("Prospect Lefferts Gardens-Wingate",)),
+    Area("Flatbush", ntas=("Flatbush",)),
+    Area("Ditmas Park", ntas=("Flatbush (West)-Ditmas Park-Parkville",)),
+    Area("East Flatbush",
+         ntas=("East Flatbush-Erasmus", "East Flatbush-Farragut",
+               "East Flatbush-Remsen Village", "East Flatbush-Rugby")),
+    Area("Midwood", ntas=("Midwood",)),
+    # --- the east
+    Area("Ocean Hill", ntas=("Ocean Hill",)),
+    Area("Brownsville", ntas=("Brownsville",)),
+    Area("Cypress Hills", ntas=("Cypress Hills",)),
+    Area("East New York",
+         ntas=("East New York (North)", "East New York-New Lots", "East New York-City Line")),
+    Area("Starrett City", ntas=("Spring Creek-Starrett City",)),
+    Area("Canarsie", ntas=("Canarsie",)),
+    Area("Flatlands", ntas=("Flatlands",)),
+    # --- the south-west
+    # "Sunset Park (East)-Borough Park (West)" is the two blocks between 8th Avenue and
+    # Fort Hamilton Parkway. 9th Avenue is the line: the strip west of it goes to
+    # Sunset Park, the strip east of it to Borough Park.
+    Area("Sunset Park",
+         ntas=("Sunset Park (West)", "Sunset Park (Central)"),
+         tracts=("90.02", "92.02", "94.02", "104.02", "106.02", "108.02")),
+    Area("Borough Park", ntas=("Borough Park",), tracts=("110", "112", "114", "116")),
+    Area("Bay Ridge", ntas=("Bay Ridge",)),
+    Area("Dyker Heights", ntas=("Dyker Heights",)),
+    Area("Bensonhurst", ntas=("Bensonhurst",)),
+    Area("Bath Beach", ntas=("Bath Beach",)),
+    Area("Mapleton", ntas=("Mapleton-Midwood (West)",)),
+    # --- the south
+    # "Gravesend (East)-Homecrest" is split at Ocean Parkway.
+    Area("Gravesend",
+         ntas=("Gravesend (West)", "Gravesend (South)"),
+         tracts=("386", "388", "396", "398", "414.01", "414.02", "422")),
+    Area("Homecrest",
+         tracts=("390", "392", "394", "416", "418", "420", "554", "556", "582", "584", "588")),
+    Area("Madison", ntas=("Madison",)),
+    Area("Coney Island", ntas=("Coney Island-Sea Gate",), without=SEA_GATE),
+    Area("Sea Gate", tracts=SEA_GATE),
+    Area("Brighton Beach", ntas=("Brighton Beach",)),
+    # Manhattan Beach is the peninsula south of the bay. Gerritsen Beach is both its
+    # sections — the old one on the peninsula east of Knapp Street and the new one
+    # north of the creek, up to Avenue U. Sheepshead Bay is the rest, Emmons Avenue
+    # and the Plumb Beach end included.
+    Area("Manhattan Beach", tracts=("612", "616", "620")),
+    Area("Gerritsen Beach", tracts=("628", "632")),
+    Area("Sheepshead Bay",
+         tracts=("570", "572", "586", "590", "592", "594.02", "594.03", "594.04", "596",
+                 "598", "600", "606", "608", "622", "626")),
+    # Marine Park is west of Flatbush Avenue and the park it is named for. Mill Basin
+    # is east of Flatbush on both sides of Avenue U — the peninsulas either side of the
+    # basin and Old Mill Basin behind them; 670 straddles Flatbush and lies mostly on
+    # the Kings Plaza side. Bergen Beach is north-east of the basin, Georgetown included.
+    Area("Marine Park",
+         tracts=("636", "640", "644", "646", "648", "652", "654", "656", "658", "660", "662")),
+    Area("Mill Basin", tracts=("670", "686", "698", "702.01")),
+    Area("Bergen Beach", tracts=("696.01", "696.02", "700", "706.01")),
+)
+
+
+MANHATTAN = Borough(
+    name="Manhattan",
+    code="1",
+    park_letter="M",
+    file="manhattan.json",
+    areas=MANHATTAN_AREAS,
+    avenue_count=25,
+    major_count=175,
+    avenues_in_words=True,
+    # Manhattan borough runs down to Governors, Ellis and Liberty Islands. They are
+    # real but they are a mile out to sea, and a map that fits them in shrinks the
+    # island it is actually about. Ellis and Liberty sit west of anything Manhattan
+    # proper reaches, and Governors sits south, so a corner of water either way is
+    # enough to leave them out.
+    min_ring_latitude=40.695,
+    min_ring_longitude=-74.03,
+)
+
+BROOKLYN = Borough(
+    name="Brooklyn",
+    code="3",
+    park_letter="B",
+    file="brooklyn.json",
+    areas=BROOKLYN_AREAS,
+    # Brooklyn has twice Manhattan's streets and, being wider than it is tall, is drawn
+    # a good deal smaller on the glass, so the bands are not scaled up in proportion:
+    # forty named at the widest zoom is about what stays legible before the names
+    # start to fight.
+    avenue_count=40,
+    major_count=350,
+    avenues_in_words=False,
+)
+
+BOROUGHS = {"manhattan": MANHATTAN, "brooklyn": BROOKLYN}
+
 
 # Length alone makes a poor avenue. The longest roads in Manhattan include the
 # Henry Hudson Parkway, the FDR and the Harlem River Driveway, none of which anybody
 # gives directions by, and the carriage drives that loop through Central Park, which
-# are long precisely because they wander. Two rules sort the real avenues out:
+# are long precisely because they wander. Brooklyn has the Belt Parkway, the BQE
+# and the drives round Prospect Park to say the same thing. Two rules sort the real
+# avenues out:
 #
 #   - an avenue is a *street*. The city's roadway type tells a street (1) from a
 #     highway (2) and a bridge (3), and Fifth, Madison, Lexington, Amsterdam, Park
@@ -208,27 +383,39 @@ ORDINAL_WORDS = {
     7: "Seventh", 8: "Eighth", 9: "Ninth", 10: "Tenth", 11: "Eleventh", 12: "Twelfth",
 }
 
-# The city's abbreviations, spelled out. A numbered *avenue* is written in words
-# ("Fifth Avenue") and a numbered *street* in figures ("42nd Street"), which is how
-# New York writes them and not a rule any dataset carries.
+# The city's abbreviations, spelled out. A numbered *street* is written in figures
+# ("42nd Street") everywhere; whether a numbered *avenue* is written in words is the
+# borough's call (see `Borough.avenues_in_words`). Neither is a rule any dataset
+# carries.
 EXPANSIONS = {
     "ST": "Street", "STR": "Street", "AVE": "Avenue", "AV": "Avenue", "PL": "Place",
-    "RD": "Road", "DR": "Drive", "BLVD": "Boulevard", "PKWY": "Parkway", "PKY": "Parkway",
+    "RD": "Road", "DR": "Drive", "BLVD": "Boulevard", "BL": "Boulevard",
+    "PKWY": "Parkway", "PKY": "Parkway", "PY": "Parkway",
     "SQ": "Square", "CT": "Court", "TER": "Terrace", "LN": "Lane", "ALY": "Alley",
-    "PLZ": "Plaza", "CIR": "Circle", "EXPY": "Expressway", "HWY": "Highway",
-    "BRG": "Bridge", "TUNL": "Tunnel", "APPR": "Approach", "WALK": "Walk", "SLIP": "Slip",
-    "DY": "Driveway", "HL": "Hill", "HTS": "Heights", "PZ": "Plaza",
-    "E": "East", "W": "West", "N": "North", "S": "South", "JR": "Jr.",
-    "OF": "of", "THE": "the", "AND": "and", "AT": "at",
+    "PLZ": "Plaza", "CIR": "Circle", "EXPY": "Expressway", "EXPWY": "Expressway",
+    "EXWPY": "Expressway", "EP": "Expressway", "HWY": "Highway", "DRV": "Drive", "BRG": "Bridge", "BRDG": "Bridge", "BR": "Bridge", "TUNL": "Tunnel",
+    "APPR": "Approach", "WALK": "Walk", "SLIP": "Slip", "DY": "Driveway", "HL": "Hill",
+    "HTS": "Heights", "PZ": "Plaza", "RDWY": "Roadway", "ESPL": "Esplanade",
+    "PROM": "Promenade", "CMNS": "Commons", "GDNS": "Gardens", "MNR": "Manor",
+    "CV": "Cove", "CTR": "Center", "FT": "Fort", "BCH": "Beach", "IS": "Island",
+    "PED": "Pedestrian", "ACAD": "Academy", "HSNG": "Housing",
+    "E": "East", "W": "West", "N": "North", "S": "South",
+    "NE": "Northeast", "NW": "Northwest", "SE": "Southeast", "SW": "Southwest",
+    "JR": "Jr.", "JJ": "J.J.",
+    "OF": "of", "THE": "the", "AND": "and", "AT": "at", "TO": "to",
 }
+
+# Names that capitalise in the middle, which `str.capitalize` cannot know.
+PROPER = {"DEKALB": "DeKalb", "METROTECH": "MetroTech"}
 
 # Rows whose name marks them as a ramp, a direction of travel or a piece of highway
 # plumbing. These are named like streets in the data and are not streets.
 PLUMBING = re.compile(r"\b(EN|EX|NB|SB|EB|WB|OPAS|RAMP|RP|SR|SVC|VIADUCT APPR)\b")
 
-# The city records a segment it has no name for as "UNNAMED STREET". That is a row
-# with a blank in it, not a street called Unnamed.
-NAMELESS = {"UNNAMED STREET", "UNNAMED", "DRIVEWAY", "STREET"}
+# The city records a segment it has no name for as "UNNAMED STREET" — or "UNNAMED
+# ST", depending on who typed it. That is a row with a blank in it, not a street
+# called Unnamed, and ninety-one rows of Brooklyn are called nothing but "CONNECTOR".
+NAMELESS = {"DRIVEWAY", "STREET", "CONNECTOR"}
 
 
 def fetch(dataset: str, where: str, limit: int = 50_000, select: str | None = None) -> list[dict]:
@@ -253,41 +440,98 @@ def ordinal(number: int) -> str:
     return f"{number}{suffix}"
 
 
-def spell(raw: str | None) -> str | None:
-    """"E  HOUSTON ST" -> "East Houston Street". None for anything that is not a street."""
+def capitalised(word: str) -> str:
+    """"O'BRIEN" -> "O'Brien". A capital after every apostrophe, not only the first."""
+    return re.sub(r"[A-Z]+", lambda run: run.group().capitalize(), word)
+
+
+def spell_word(
+    word: str,
+    follows: str,
+    first: bool,
+    avenues_in_words: bool,
+    unknown: collections.Counter | None,
+) -> str:
+    if "-" in word:
+        # "MARINE PY-GIL HODGES MEMORIAL BRG": each side of the hyphen is spelled on
+        # its own, so the abbreviation on the left still expands.
+        return "-".join(
+            spell_word(part, "", False, avenues_in_words, unknown) for part in word.split("-")
+        )
+    if word.isdigit():
+        number = int(word)
+        if avenues_in_words and follows in ("AVE", "AV") and number in ORDINAL_WORDS:
+            return ORDINAL_WORDS[number]
+        return ordinal(number)
+    if word == "ST" and first:
+        # Leading ST is Saint, not Street: St Nicholas Avenue, St Marks Place.
+        # Anywhere else it is the street — "65 ST TRANSVERSE" is a cross street.
+        return "St."
+    if word in EXPANSIONS:
+        return EXPANSIONS[word]
+    if word in PROPER:
+        return PROPER[word]
+    if word.startswith("MC") and len(word) > 3 and word.isalpha():
+        # McDonald Avenue, McGuinness Boulevard: the city writes them as one shout.
+        return "Mc" + word[2:].capitalize()
+    if word.isalpha():
+        if unknown is not None and 2 <= len(word) <= 4:
+            # Short and unknown: possibly a word, possibly an abbreviation the table
+            # above has not met. Counted so it can be looked at, not guessed at.
+            unknown[word] += 1
+        return word.capitalize()
+    return capitalised(word)
+
+
+def spell(
+    raw: str | None,
+    avenues_in_words: bool = True,
+    unknown: collections.Counter | None = None,
+) -> str | None:
+    """"E  HOUSTON ST" -> "East Houston Street". None for anything that is not a street.
+
+    `unknown`, if given, collects the short words that were capitalised without being
+    recognised, so an abbreviation the table has not met shows up rather than shipping
+    as "Bch 37th Street".
+    """
     if not raw:
         return None
     words = " ".join(raw.upper().split())
-    if PLUMBING.search(words) or words in NAMELESS:
+    if PLUMBING.search(words) or words in NAMELESS or words.startswith("UNNAMED"):
         return None
 
     parts = words.split(" ")
     spelled = []
-    for index, word in enumerate(parts):
-        if word.isdigit():
-            number = int(word)
-            follows = parts[index + 1] if index + 1 < len(parts) else ""
-            if follows in ("AVE", "AV") and number in ORDINAL_WORDS:
-                spelled.append(ORDINAL_WORDS[number])
-            else:
-                spelled.append(ordinal(number))
-        elif word == "ST" and index == 0 and len(parts) > 1:
-            # Leading ST is Saint, not Street: St Nicholas Avenue, St Marks Place.
-            # Anywhere else it is the street — "65 ST TRANSVERSE" is a cross street.
-            spelled.append("St.")
-        elif word in EXPANSIONS:
-            spelled.append(EXPANSIONS[word])
-        elif word.isalpha():
-            spelled.append(word.capitalize())
-        else:
+    index = 0
+    while index < len(parts):
+        word = parts[index]
+        follows = parts[index + 1] if index + 1 < len(parts) else ""
+        if len(parts) == 2 and index == 1 and len(word) == 1 and parts[0] in ("AVE", "AV"):
+            # "AVE N" is Avenue N. Brooklyn's lettered avenues run A to Z, so here
+            # N, S and W are letters and not compass points — though in "PARK AVE S"
+            # the S is still South.
             spelled.append(word)
+            index += 1
+            continue
+        if word in ("MC", "MAC") and follows.isalpha() and len(follows) > 1:
+            # "MC KIBBIN ST", "MAC DONOUGH ST": the city puts a space in the name
+            # where the name has none. Note MACON and MACKAY do not come this way.
+            spelled.append(word.capitalize() + follows.capitalize())
+            index += 2
+            continue
+        spelled.append(spell_word(word, follows, index == 0 and len(parts) > 1, avenues_in_words, unknown))
+        index += 1
     return " ".join(spelled).strip() or None
 
 
-def thin(points: list[tuple[float, float]], tolerance: float) -> list[tuple[float, float]]:
-    """Ramer–Douglas–Peucker, iteratively so a long shoreline cannot blow the stack."""
+def thin_indices(points: list[tuple[float, float]], tolerance: float) -> list[int]:
+    """Ramer–Douglas–Peucker, iteratively so a long shoreline cannot blow the stack.
+
+    Returns the indices of the points kept, in order, so a caller can tell which
+    stretch of the original a thinned edge stands for.
+    """
     if len(points) < 3:
-        return points
+        return list(range(len(points)))
     keep = [False] * len(points)
     keep[0] = keep[-1] = True
     stack = [(0, len(points) - 1)]
@@ -308,7 +552,11 @@ def thin(points: list[tuple[float, float]], tolerance: float) -> list[tuple[floa
             keep[where] = True
             stack.append((first, where))
             stack.append((where, last))
-    return [p for p, k in zip(points, keep) if k]
+    return [i for i, k in enumerate(keep) if k]
+
+
+def thin(points: list[tuple[float, float]], tolerance: float) -> list[tuple[float, float]]:
+    return [points[i] for i in thin_indices(points, tolerance)]
 
 
 def segments_cross(a, b, c, d) -> bool:
@@ -323,17 +571,46 @@ def segments_cross(a, b, c, d) -> bool:
     return 0 <= along <= 1 and 0 <= across <= 1
 
 
+def crossing_edges(ring) -> set[int]:
+    """The edges of a closed ring that cross an edge they are not joined to, by the
+    index of the point each starts at.
+
+    A sweep over the edges' extents rather than every pair against every pair: a
+    borough's raw shoreline is twelve thousand points, and the pairs of those would
+    take a coffee break to test.
+    """
+    count = len(ring)
+    extents = []
+    for i in range(count):
+        (ax, ay), (bx, by) = ring[i], ring[(i + 1) % count]
+        extents.append((min(ax, bx), max(ax, bx), min(ay, by), max(ay, by), i))
+    extents.sort()
+    crossing: set[int] = set()
+    active: list[tuple] = []
+    for x0, x1, y0, y1, i in extents:
+        active = [e for e in active if e[1] >= x0]
+        for _, _, ey0, ey1, j in active:
+            if ey1 < y0 or ey0 > y1:
+                continue
+            if (j + 1) % count == i or (i + 1) % count == j:
+                continue  # neighbours share a corner, which is not a crossing
+            if segments_cross(ring[i], ring[(i + 1) % count], ring[j], ring[(j + 1) % count]):
+                crossing.add(i)
+                crossing.add(j)
+        active.append((x0, x1, y0, y1, i))
+    return crossing
+
+
 def folds_over_itself(ring) -> bool:
     """Whether any two non-adjacent edges of a closed ring cross."""
-    count = len(ring)
-    for i in range(count):
-        a, b = ring[i], ring[(i + 1) % count]
-        for j in range(i + 1, count):
-            if j == i or j == (i + 1) % count or (j + 1) % count == i:
-                continue
-            if segments_cross(a, b, ring[j], ring[(j + 1) % count]):
-                return True
-    return False
+    return bool(crossing_edges(ring))
+
+
+def as_written(points):
+    """The points as the file will carry them, so a fold is looked for in the ring
+    that ships rather than in one a hair different: five places is a bit over a
+    metre, and a metre is enough to make two edges that nearly touch cross."""
+    return [(round(x, 5), round(y, 5)) for x, y in points]
 
 
 def thin_ring(ring, tolerance: float):
@@ -342,16 +619,49 @@ def thin_ring(ring, tolerance: float):
     Thinning is per-ring rather than per-map because the rings are not the same size.
     A tolerance that smooths a pier off twenty-one kilometres of Manhattan shoreline
     pinches Wards Island — which is two islands joined by landfill — into a bow tie,
-    and a ring that crosses itself fills as a shape with a hole punched in it. So the
-    tolerance is backed off until the ring comes out sound, which leaves each island
-    thinned as far as its own shape allows and no further.
+    and a ring that crosses itself fills as a shape with a hole punched in it.
+
+    And it is backed off per-edge rather than per-ring, because the rings are not the
+    same shape all the way round either. Brooklyn's shoreline is sound at the full
+    tolerance except in three creeks, where two banks a few metres apart get thinned
+    across one another; halving the tolerance for the whole ring until the last creek
+    came right would carry five times the points everywhere else. So only the edges
+    that cross are re-thinned, from the original points, at half the tolerance they
+    had — and again, halved again, until they stop — which leaves every reach of the
+    shore thinned as far as its own shape allows and no further.
+
+    A ring that still crosses when its crossing edges are back at the city's own
+    resolution is one the city drew that way — a parkway ribbon pinched to a point, or
+    a park boundary that doubles back within the metre the file rounds to — and it is
+    returned as it stands rather than dropped. The shoreline's caller checks; a nick
+    in a green is nothing anybody will see.
     """
     closed = ring[:-1] if len(ring) > 1 and ring[0] == ring[-1] else ring[:]
-    for attempt in range(6):
-        thinned = thin(closed, tolerance / (2 ** attempt))
-        if len(thinned) >= 4 and not folds_over_itself(thinned):
-            return thinned
-    return closed
+    if len(closed) < 4:
+        return closed
+    kept = thin_indices(closed, tolerance)
+    halvings = [0] * len(kept)  # of the edge that starts at each kept point
+    points = closed
+    for _ in range(12):
+        points = [closed[i] for i in kept]
+        crossing = crossing_edges(as_written(points))
+        if not crossing and len(points) >= 4:
+            break
+        refined, levels = [], []
+        for position, start in enumerate(kept):
+            refined.append(start)
+            levels.append(halvings[position])
+            if position not in crossing:
+                continue
+            end = kept[(position + 1) % len(kept)]
+            span = closed[start:end + 1] if end > start else closed[start:] + closed[:end + 1]
+            level = halvings[position] + 1
+            levels[-1] = level
+            for inner in thin_indices(span, tolerance / (2 ** level))[1:-1]:
+                refined.append((start + inner) % len(closed))
+                levels.append(level)
+        kept, halvings = refined, levels
+    return points
 
 
 def chain(segments: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
@@ -470,38 +780,63 @@ def outline(polygons: list[list[tuple[float, float]]]) -> list[list[tuple[float,
         onward[start].extend([end] * count)
 
     rings = []
+
+    def finish(ring):
+        # Start the ring at its westernmost point rather than wherever the walk
+        # happened to begin. Thinning pins a ring's first point and works out from
+        # it, so a ring that started somewhere different came out thinned
+        # differently, and the file changed on every run without the city having
+        # changed a thing.
+        if len(ring) >= 3:
+            start = ring.index(min(ring))
+            rings.append(ring[start:] + ring[:start])
+
     while onward:
-        first = next(iter(onward))
+        first = min(onward)
         ring = [first]
+        position = {first: 0}
         here = first
         while True:
             nexts = onward.get(here)
             if not nexts:
                 break
-            step = nexts.pop()
+            step = min(nexts)
+            nexts.remove(step)
             if not nexts:
                 del onward[here]
             if step == first:
                 break
+            if step in position:
+                # Back at a corner the ring has already been through: two lobes that
+                # touch at a point, like Inwood at the edge of its park. Walked straight
+                # through, that is one ring with a vertex in it twice, which is a fold.
+                # Pinched off, it is two sound rings, one of them usually a sliver.
+                lobe = ring[position[step]:]
+                del ring[position[step]:]
+                for vertex in lobe:
+                    del position[vertex]
+                finish(lobe)
+            position[step] = len(ring)
             ring.append(step)
             here = step
-        if len(ring) >= 3:
-            rings.append(ring)
+        finish(ring)
+    # Largest first, so the order of the file does not depend on the order of the walk.
+    rings.sort(key=lambda ring: (-ring_area(ring), ring[0]))
     return rings
 
 
-def build_neighborhoods() -> list[dict]:
-    """The forty areas of `AREAS`, drawn out of census tracts.
+def build_neighborhoods(borough: Borough) -> list[dict]:
+    """The areas of `borough.areas`, drawn out of census tracts.
 
-    The city's lived-in NTAs say which tracts are in play; `AREAS` says how to divide
-    them up again. Every tract of every lived-in NTA has to end up in exactly one area —
-    claimed twice and two neighborhoods would overlap, claimed by nobody and there would
-    be a hole on the island a tap falls through — so this counts them and refuses to
-    write a map where that is not true.
+    The city's lived-in NTAs say which tracts are in play; the area list says how to
+    divide them up again. Every tract of every lived-in NTA has to end up in exactly
+    one area — claimed twice and two neighborhoods would overlap, claimed by nobody and
+    there would be a hole in the borough a tap falls through — so this counts them and
+    refuses to write a map where that is not true.
     """
     rows = fetch(
         TRACTS,
-        where=f"boroname='Manhattan'",
+        where=f"boroname='{borough.name}'",
         limit=2_000,
     )
 
@@ -528,7 +863,7 @@ def build_neighborhoods() -> list[dict]:
     # quietly followed.
     for row in fetch(
         NEIGHBORHOODS,
-        where=f"boroname='Manhattan' AND ntatype='{NEIGHBORHOOD_TYPE}'",
+        where=f"boroname='{borough.name}' AND ntatype='{NEIGHBORHOOD_TYPE}'",
         limit=500,
     ):
         lived_in.add((row["properties"].get("ntaname") or "").strip())
@@ -537,7 +872,7 @@ def build_neighborhoods() -> list[dict]:
 
     claimed: dict[str, str] = {}
     neighborhoods = []
-    for area in AREAS:
+    for area in borough.areas:
         labels = set(area.tracts)
         for nta in area.ntas:
             found = {label for label, name in nta_of.items() if name == nta}
@@ -559,10 +894,14 @@ def build_neighborhoods() -> list[dict]:
             claimed[label] = area.name
 
         rings = []
-        for ring in outline([shape for label in labels for shape in polygons[label]]):
+        for ring in outline([shape for label in sorted(labels) for shape in polygons[label]]):
             if ring_area(ring) < MIN_NEIGHBORHOOD_AREA:
                 continue  # a tract's share of the river, a pier, a mooring
             thinned = thin_ring(ring, NEIGHBORHOOD_TOLERANCE)
+            if folds_over_itself(as_written(thinned)):
+                # A folded ring both fills wrong and hit-tests wrong, and the app's
+                # tests check every one.
+                raise SystemExit(f"{area.name}: its outline folds over itself as drawn, and cannot be thinned sound")
             if len(thinned) >= 4:
                 rings.append(thinned)
         if not rings:
@@ -572,7 +911,7 @@ def build_neighborhoods() -> list[dict]:
     orphans = sorted(in_play - set(claimed))
     if orphans:
         raise SystemExit(
-            "no neighborhood claims these tracts, which would leave holes in the island: "
+            "no neighborhood claims these tracts, which would leave holes in the borough: "
             + ", ".join(f"{label} ({nta_of[label]})" for label in orphans)
         )
 
@@ -584,21 +923,26 @@ def build_neighborhoods() -> list[dict]:
     return neighborhoods
 
 
-def main() -> None:
-    print("NYC Open Data:")
+def build(borough: Borough) -> None:
+    print(f"{borough.name}, from NYC Open Data:")
 
     # --- the shoreline
-    boroughs = fetch(BOROUGHS, where=f"borocode='{MANHATTAN}'", limit=10)
-    rings = [r for poly in boroughs[0]["geometry"]["coordinates"] for r in poly]
+    boundary = fetch(BOUNDARIES, where=f"borocode='{borough.code}'", limit=10)
+    rings = [r for poly in boundary[0]["geometry"]["coordinates"] for r in poly]
     land = []
     for ring in rings:
         if ring_area(ring) < MIN_RING_AREA:
             continue
-        if min(point[1] for point in ring) < MIN_RING_LATITUDE:
+        if borough.min_ring_latitude is not None and min(p[1] for p in ring) < borough.min_ring_latitude:
             continue
-        if min(point[0] for point in ring) < MIN_RING_LONGITUDE:
+        if borough.min_ring_longitude is not None and min(p[0] for p in ring) < borough.min_ring_longitude:
             continue
-        land.append(thin_ring([(x, y) for x, y in ring], SHORE_TOLERANCE))
+        thinned = thin_ring([(x, y) for x, y in ring], SHORE_TOLERANCE)
+        if folds_over_itself(as_written(thinned)):
+            # The one ring that has to be sound: it is filled as the land, and the
+            # app's tests say so.
+            raise SystemExit(f"{borough.name}: an island folds over itself as drawn, and cannot be thinned sound")
+        land.append(thinned)
     land.sort(key=ring_area, reverse=True)
     print(f"    {len(land)} islands, {sum(len(r) for r in land)} points")
 
@@ -616,15 +960,21 @@ def main() -> None:
     # --- the streets
     rows = fetch(
         CENTERLINE,
-        where=f"starts_with(b5sc,'{MANHATTAN}') AND rw_type in({','.join(repr(t) for t in DRAWN_TYPES)})",
+        where=f"starts_with(b5sc,'{borough.code}') AND rw_type in({','.join(repr(t) for t in DRAWN_TYPES)})",
         select="full_street_name,rw_type,the_geom",
     )
     by_name: dict[str, list] = collections.defaultdict(list)
     kinds: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    spelling: dict[str, str | None] = {}
+    unknown: collections.Counter = collections.Counter()
     plumbing = 0
-    adrift = 0
     for row in rows:
-        name = spell(row["properties"].get("full_street_name"))
+        raw = row["properties"].get("full_street_name") or ""
+        if raw not in spelling:
+            # Spelled once per distinct name, so the unknown-word count is of names
+            # rather than of the rows that happen to carry them.
+            spelling[raw] = spell(raw, borough.avenues_in_words, unknown)
+        name = spelling[raw]
         geometry = row.get("geometry")
         if not name or not geometry:
             plumbing += 1
@@ -635,6 +985,14 @@ def main() -> None:
             by_name[name].append([(x, y) for x, y in line])
     print(f"    {plumbing} rows were ramps, service roads or unnamed")
     print(f"    {len(by_name)} named streets")
+    if unknown:
+        # Most of these are words — BAY, PARK, YORK — and a few are abbreviations the
+        # table above should learn. Read the list; do not trust it.
+        listed = ", ".join(f"{word}×{count}" for word, count in unknown.most_common())
+        print(textwrap.fill(
+            f"short words capitalised without being recognised: {listed}",
+            width=96, initial_indent="    ", subsequent_indent="      ",
+        ))
 
     streets = []
     adrift = 0
@@ -664,7 +1022,7 @@ def main() -> None:
     print(f"    joined into {pieces} runs, {points} points after thinning")
 
     # --- the greens
-    park_rows = fetch(PARKS, where="borough='M'", limit=2000)
+    park_rows = fetch(PARKS, where=f"borough='{borough.park_letter}'", limit=2000)
     parks = []
     for row in park_rows:
         geometry = row.get("geometry")
@@ -693,7 +1051,7 @@ def main() -> None:
     ranked = 0
     for street in streets:
         avenue = (
-            ranked < AVENUE_COUNT
+            ranked < borough.avenue_count
             and street["roadway"] == "1"
             and not mostly_in_a_park(street)
         )
@@ -704,7 +1062,7 @@ def main() -> None:
             street["tier"] = 1
     # Everything not an avenue falls back to length order for the second band.
     for rank, street in enumerate(s for s in streets if s["tier"] != 0):
-        street["tier"] = 1 if rank < MAJOR_COUNT else 2
+        street["tier"] = 1 if rank < borough.major_count else 2
     print(f"    {ranked} of them rank as avenues")
 
     # The file's order is the order names are offered in when two of them want the
@@ -714,7 +1072,7 @@ def main() -> None:
     streets.sort(key=lambda s: (s["tier"], -s["length"]))
 
     # --- the neighborhoods
-    neighborhoods = build_neighborhoods()
+    neighborhoods = build_neighborhoods(borough)
 
     # --- write it
     names = [s["name"] for s in streets]
@@ -739,12 +1097,25 @@ def main() -> None:
             for n in neighborhoods
         ],
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(document, separators=(",", ":")))
-    print(f"\nwrote {OUT} ({OUT.stat().st_size / 1024:.0f} KB)")
+    out = RESOURCES / borough.file
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(document, separators=(",", ":")))
+    print(f"\nwrote {out} ({out.stat().st_size / 1024:.0f} KB)")
     print(f"  {len(names)} streets, {len(roads)} runs, {len(land)} islands, "
-          f"{len(parks)} greens, {len(neighborhoods)} neighborhoods")
+          f"{len(parks)} greens, {len(neighborhoods)} neighborhoods\n")
+
+
+def main(argv: list[str]) -> None:
+    which = argv[1] if len(argv) > 1 else "all"
+    if which == "all":
+        chosen = list(BOROUGHS.values())
+    elif which in BOROUGHS:
+        chosen = [BOROUGHS[which]]
+    else:
+        raise SystemExit(f"usage: {Path(argv[0]).name} [{'|'.join(BOROUGHS)}|all]")
+    for borough in chosen:
+        build(borough)
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)

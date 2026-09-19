@@ -82,10 +82,39 @@ final class BankTests: XCTestCase {
         let bank = Bank(defaults: defaults)
         bank.earn(1_000)
 
-        // Nothing but Manhattan is drawn, so nothing can actually be bought yet; what is
-        // checked here is that the earning behind it survived the trip.
-        XCTAssertFalse(bank.buy(.brooklyn))
-        XCTAssertEqual(Bank(defaults: defaults).wallet.balance, 1_000)
-        XCTAssertTrue(Bank(defaults: defaults).wallet.bought.isEmpty)
+        XCTAssertTrue(bank.buy(.brooklyn))
+
+        let next = Bank(defaults: defaults)
+        XCTAssertEqual(next.wallet.balance, 1_000 - Borough.brooklyn.price)
+        XCTAssertEqual(next.wallet.bought, [.brooklyn])
+    }
+
+    /// Where the player is goes down with the money, so the app opens where it was
+    /// closed. And a move that is refused writes nothing: there is nothing to write.
+    func testWhereThePlayerIsIsWrittenDownToo() {
+        let bank = Bank(defaults: defaults)
+        XCTAssertFalse(bank.play(.brooklyn), "not bought")
+        XCTAssertNil(defaults.data(forKey: Bank.storageKey), "a refusal is not worth a write")
+
+        bank.earn(1_000)
+        bank.buy(.brooklyn)
+        XCTAssertTrue(bank.play(.brooklyn))
+
+        XCTAssertEqual(Bank(defaults: defaults).wallet.current, .brooklyn)
+    }
+
+    /// Erasing puts the player back in Manhattan along with everything else: a fresh
+    /// wallet is in Manhattan, and erasing gives a fresh wallet.
+    func testErasingSendsThePlayerHome() {
+        let bank = Bank(defaults: defaults)
+        bank.earn(1_000)
+        bank.buy(.brooklyn)
+        bank.play(.brooklyn)
+        XCTAssertEqual(bank.wallet.current, .brooklyn)
+
+        bank.erase()
+
+        XCTAssertEqual(bank.wallet.current, .manhattan)
+        XCTAssertEqual(Bank(defaults: defaults).wallet.current, .manhattan)
     }
 }

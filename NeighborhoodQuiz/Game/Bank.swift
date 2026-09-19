@@ -43,7 +43,16 @@ final class Bank {
         return bought
     }
 
-    /// Forget all of it: the money, the career, the boroughs bought.
+    /// Move to a borough, and remember it for next launch.
+    @discardableResult
+    func play(_ borough: Borough) -> Bool {
+        let moved = wallet.play(borough)
+        if moved { write() }
+        return moved
+    }
+
+    /// Forget all of it: the money, the career, the boroughs bought, and where the
+    /// player was — a fresh wallet is in Manhattan.
     ///
     /// The saved copy is removed rather than overwritten with an empty one, because the
     /// promise settings makes is that the data is gone, not that it has been set back to

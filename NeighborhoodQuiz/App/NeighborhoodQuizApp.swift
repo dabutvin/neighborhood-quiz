@@ -9,8 +9,8 @@ struct NeighborhoodQuizApp: App {
             switch screen {
             case .quiz(let stage):
                 QuizView(stage: stage)
-            case .map(let opening, let showing):
-                HomeView(opening: opening, showing: showing)
+            case .map(let borough, let opening, let showing):
+                HomeView(borough: borough, opening: opening, showing: showing)
             case .boroughs(let wallet):
                 StagedBoroughs(wallet)
             case .settings(let wallet):
@@ -26,13 +26,18 @@ struct NeighborhoodQuizApp: App {
 /// round of ten places drawn at random. Everything else here is for the screenshot runs.
 ///
 /// The `-quiz-*` arguments play a fixed round forward to a particular moment: something
-/// picked and waiting on the button, two goes gone, the island half filled in, a place
-/// the round gave away, the end of it. They go through `QuizRound.guess` exactly as a
+/// picked and waiting on the button, two goes gone, the map half filled in, a place the
+/// round gave away, the end of it. They go through `QuizRound.guess` exactly as a
 /// player's taps would, so each one is a real state of the game rather than a mock-up of
 /// one — which is the only reason a screenshot of it is worth looking at.
+///
+/// The `-map*` arguments are the map on its own: `-map` whole, `-map-zoomed` in on
+/// Midtown, `-map-neighborhood` with Greenwich Village picked out — all Manhattan — and
+/// `-map-brooklyn`, which is the other borough drawn, whole and north-up. `-boroughs`
+/// and `-settings` are the two sheets, each over a throwaway wallet.
 enum Screen: Equatable {
     case quiz(stage: QuizView.Stage?)
-    case map(opening: MapBoard.Opening, showing: String?)
+    case map(borough: Borough, opening: MapBoard.Opening, showing: String?)
     case boroughs(Wallet)
     case settings(Wallet)
 
@@ -43,18 +48,26 @@ enum Screen: Equatable {
             self = .settings(Wallet(balance: 140, earned: 440, rounds: 11))
         } else if arguments.contains("-boroughs") {
             // Saved up for Brooklyn and a career behind it: the rung that has something
-            // to say, and the one state where the game has to explain itself.
+            // to say. Now that Brooklyn is drawn, what it says is a live Unlock button —
+            // the one state where the ladder can actually be climbed from.
             self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24))
         } else if let stage = QuizView.Stage.allCases.first(where: { arguments.contains("-quiz-\($0.rawValue)") }) {
             self = .quiz(stage: stage)
         } else if arguments.contains("-map-neighborhood") {
             // Greenwich Village: small enough to fill a phone, known to anybody who has
             // heard of Manhattan, and a tidy shape to show a highlight on.
-            self = .map(opening: .neighborhood("Greenwich Village"), showing: "Greenwich Village")
+            self = .map(
+                borough: .manhattan,
+                opening: .neighborhood("Greenwich Village"),
+                showing: "Greenwich Village"
+            )
         } else if arguments.contains("-map-zoomed") {
-            self = .map(opening: .midtown, showing: nil)
+            self = .map(borough: .manhattan, opening: .midtown, showing: nil)
+        } else if arguments.contains("-map-brooklyn") {
+            // Brooklyn whole, drawn as it sits: the one shot of the other file.
+            self = .map(borough: .brooklyn, opening: .island, showing: nil)
         } else if arguments.contains("-map") {
-            self = .map(opening: .island, showing: nil)
+            self = .map(borough: .manhattan, opening: .island, showing: nil)
         } else {
             self = .quiz(stage: nil)
         }

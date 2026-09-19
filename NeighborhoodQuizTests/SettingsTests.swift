@@ -70,6 +70,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(bank.wallet.earned, 0, "the career total goes too")
         XCTAssertEqual(bank.wallet.rounds, 0)
         XCTAssertTrue(bank.wallet.bought.isEmpty)
+        XCTAssertEqual(bank.wallet.current, .manhattan)
 
         // And it is gone rather than set back to nought: the next launch finds nothing
         // saved, which is the state the app was in before it was ever played.
