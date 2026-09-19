@@ -189,10 +189,21 @@ struct BoroughMapView: View, @MainActor Animatable {
 
         // Crossed off. Over the streets like the highlight, and before the borders, so
         // that a greyed neighborhood still has a line round it saying where it ends.
+        //
+        // And crossed off in the literal sense as well as the figurative one. The wash
+        // on its own was too quiet to be an answer: you tapped a place, said it, were
+        // wrong, and the map went very slightly grey there. A wrong guess should look
+        // like somebody drew a line through it, because that is what it is — the two
+        // strokes say *no* in a way a change of shade does not.
         if !ruledOut.isEmpty {
             for area in map.neighborhoods where ruledOut.contains(area.id) {
                 guard area.bounds.intersects(onScreen) else { continue }
                 board.fill(area.shape, with: .color(palette.ruledOut.opacity(0.42)))
+                board.stroke(
+                    area.cross,
+                    with: .color(palette.ruledOutInk.opacity(0.9)),
+                    style: StrokeStyle(lineWidth: 2.6 / zoom, lineCap: .round, lineJoin: .round)
+                )
             }
         }
 

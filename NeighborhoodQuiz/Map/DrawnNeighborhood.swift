@@ -23,6 +23,12 @@ struct DrawnNeighborhood: Identifiable {
     /// Where its name is written when it is picked out: the middle of its largest
     /// piece, pulled inside the shape if the middle happens to fall outside it.
     let labelPoint: CGPoint
+    /// Two strokes through the middle, for when a guess has crossed this place off.
+    ///
+    /// Drawn here rather than at drawing time for the same reason as everything else on
+    /// this map: the pen wobbles from a seed, and a wobble worked out afresh every frame
+    /// would crawl under the finger. Worked out once, it is a mark somebody made.
+    let cross: Path
 
     /// Whether a point on the drawing falls inside this neighborhood.
     func contains(_ point: CGPoint) -> Bool {
