@@ -98,6 +98,51 @@ struct ManhattanMapView: View, @MainActor Animatable {
         // neighbourhood name wrapping onto a second line — and does nothing at all to
         // the street names, which are a line each.
         .multilineTextAlignment(.center)
+        // One element, described below, rather than nine hundred street names.
+        //
+        // Here rather than at the two places this view is used, because one of them had
+        // it and the other did not, and the one that did not is the quiz — the screen
+        // people actually spend their time on.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            ManhattanMapView.spoken(
+                showing: chosen?.name,
+                picked: candidate != nil,
+                found: settled.count,
+                missed: givenAway.count
+            )
+        )
+        .accessibilityHint("Drag to move the map, pinch to zoom, tap a neighborhood to pick it")
+    }
+
+    /// What the map says to somebody who is not looking at it.
+    ///
+    /// A canvas has no structure for VoiceOver to walk, so SwiftUI offers it the only
+    /// thing it can find in one: every piece of text drawn into it. On this map that is
+    /// nine hundred street names read out one after another, which is no way to find
+    /// anything — and through the accessibility annotations behind it, it was also what
+    /// took the app down. The street names are of use on the glass. They are of none in
+    /// a list.
+    ///
+    /// What it says is exactly what the map shows and not a word more. A neighbourhood
+    /// that has been found is written on the map, so it is named here. One that has
+    /// only been picked is deliberately *not* written on the map — naming it would hand
+    /// over the game — so it is not named here either. The quiz has to be as hard to
+    /// listen to as it is to look at.
+    static func spoken(showing: String?, picked: Bool, found: Int, missed: Int) -> String {
+        var said = "Map of Manhattan"
+        if let showing {
+            said += ", showing \(showing)"
+        } else if picked {
+            said += ", with a neighborhood picked but not named"
+        }
+
+        var tally: [String] = []
+        if found > 0 { tally.append("\(found) found") }
+        if missed > 0 { tally.append("\(missed) given away") }
+        if !tally.isEmpty { said += ". " + tally.joined(separator: ", ") }
+
+        return said
     }
 
     /// The picked-out neighbourhood. Held by identity rather than by position, so a map
