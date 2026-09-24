@@ -115,10 +115,11 @@ jobs:
           # them is the borough; a regression in the loader or the projection
           # that only the other file would catch is what this shot is for.
           #
-          # `-boroughs` is the ladder, seeded with enough money for Brooklyn so
-          # the shot shows the rung that has something to say — a live Unlock
-          # button now that Brooklyn is drawn, where it used to be the one
-          # place the game had to admit the map behind it was not built.
+          # `-boroughs` is the ladder, seeded with enough money for a first
+          # borough so the shot shows the card that has something to say — and
+          # a live Unlock button on Brooklyn now that it is drawn, where it used
+          # to be the one place the game had to admit the map behind it was not
+          # built.
           #
           # Every shot is checked before it counts, because one of these came
           # back as a white launch screen once and went up on the pull request

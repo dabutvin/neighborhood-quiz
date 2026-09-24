@@ -14,7 +14,8 @@ struct QuizView: View {
     /// Only reachable by launch argument. A person playing gets `nil` and a round of
     /// ten drawn at random.
     enum Stage: String, CaseIterable {
-        /// The menu a returning player opens on, with a wallet part-way to Brooklyn.
+        /// The menu a returning player opens on, with a wallet part-way to a first
+        /// borough.
         case menu
         /// A fresh question, nothing picked.
         case asking
@@ -39,7 +40,7 @@ struct QuizView: View {
     ]
 
     /// What the gallery's wallet holds before the staged round is paid for: part-way to
-    /// Brooklyn, with a career behind it, so the rows have something to say.
+    /// a first borough, with a career behind it, so the rows have something to say.
     static let stagedWallet = Wallet(balance: 140, earned: 440, rounds: 11)
 
     var stage: Stage?
@@ -635,17 +636,19 @@ struct QuizView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Wallet, \(Money.text(wallet.balance))."
-                + (wallet.saving.map { " \(saved(for: $0))" } ?? "")
+                + (wallet.nextPrice == nil ? "" : " \(savedLine)")
         )
     }
 
-    /// How far along to the next borough, and what it is for. On the menu and again at
-    /// the end of a round, which are the two moments anybody looks at it.
+    /// How far along to the next borough, and what it costs. On the menu and again at
+    /// the end of a round, which are the two moments anybody looks at it. Nothing at
+    /// all once the whole city is bought: a full bar with nothing left to fill it for
+    /// would be a bar for its own sake.
     @ViewBuilder
     private var savingBar: some View {
         let wallet = bank.wallet
 
-        if let saving = wallet.saving {
+        if let price = wallet.nextPrice {
             VStack(spacing: 7) {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
@@ -659,23 +662,25 @@ struct QuizView: View {
                 }
                 .frame(height: 8)
 
-                Text(saved(for: saving))
+                Text(savedLine)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(wallet.canAfford(saving) ? palette.highlightInk : palette.inkSoft)
+                    .foregroundStyle(wallet.balance >= price ? palette.highlightInk : palette.inkSoft)
             }
         }
     }
 
     /// The one line under the bar. Three things it can say, and the third is the honest
-    /// one: the money is there and the map is not, which is true of Queens onwards.
-    private func saved(for borough: Borough) -> String {
+    /// one: the money is there and no map is, which is where a player who has bought
+    /// everything drawn so far sits until the next borough is. No borough is named,
+    /// because the price is not any borough's — it is the next rung, and which borough
+    /// goes on it is picked on the Boroughs screen, not here.
+    private var savedLine: String {
         let wallet = bank.wallet
-        guard wallet.canAfford(borough) else {
-            return "\(borough.name) at \(Money.text(borough.price))"
-        }
-        return borough.isDrawn
-            ? "\(borough.name) — ready to unlock"
-            : "\(borough.name) — saved up, map still being drawn"
+        guard let price = wallet.nextPrice else { return "" }
+        guard wallet.balance >= price else { return "Next borough at \(Money.text(price))" }
+        return Borough.buyable.contains(where: { wallet.canBuy($0) })
+            ? "\(Money.text(price)) saved — pick a borough"
+            : "\(Money.text(price)) saved — the next maps are still being drawn"
     }
 
     private func pill(_ title: String, action: @escaping () -> Void) -> some View {

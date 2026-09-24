@@ -23,15 +23,21 @@ and nothing if three goes are not enough — at which point the round shows you 
 was and moves on. Fifty dollars is a perfect round.
 
 The money is kept. It banks up across every round you ever play, and it buys the rest of
-the city:
+the city, a borough at a time:
 
 | | |
 |---|---|
 | Manhattan | free — where everyone starts |
-| Brooklyn | $200 |
-| Queens | $600 |
-| The Bronx | $1,200 |
-| Staten Island | $2,000 |
+| the first borough you buy | $200 |
+| the second | $600 |
+| the third | $1,200 |
+| the fourth | $2,000 |
+
+The order is yours. The price is about how far you have got, not which borough it is:
+the second borough costs $600 whether it is Queens or Brooklyn, and taking the city in
+an odd order costs exactly what taking it in the obvious one does. A perfect round is
+fifty dollars, so the first borough is four good rounds away and the fourth is a long
+winter.
 
 All of that lives in one preference on the phone and nowhere else — there is no account
 and no server — and Settings will delete it, which is the only destructive thing the app
@@ -39,16 +45,16 @@ can do.
 
 Two numbers are tracked, not one. The balance is what you can spend and it goes down when
 you spend it; the career total is every dollar ever earned and it never goes down, because
-buying Brooklyn should not make it look like you played less than you did.
+buying a borough should not make it look like you played less than you did.
 
 **Manhattan and Brooklyn are drawn so far.** Buying Brooklyn opens it; the menu then
 offers both, and a third thing — "Anywhere" — which draws the ten from every borough you
 have open and hops the map between them as the questions come, saying which borough
 each one is in. Whichever you pick is written down with the money so the app opens where
-you left it. The other three boroughs are priced and listed because knowing what you are
-saving for is most of the reason to save, but the game will not take money for a borough
-it cannot open — when the balance is there and the map is not, it says so and the button
-stays off.
+you left it. The other three boroughs are listed because knowing what there is to save
+for is most of the reason to save, but the game will not take money for a borough it
+cannot open — when the balance is there and the map is not, it says so and there is no
+button to press.
 
 The end of a round can be shared — the score, and where it was scored — and Settings has
 a row to rate the app and one to pass it on. Both go through the phone's own sheets;
@@ -161,7 +167,7 @@ NeighborhoodQuiz/
 │   ├── AppVersion.swift            # What build this is, read from the bundle rather than written down
 │   └── AppStore.swift              # The listing's name and links, and the words the share sheet gets
 ├── Game/
-│   ├── Borough.swift               # The five, their prices, which are drawn, and how each is turned
+│   ├── Borough.swift               # The five, what the next one costs, which are drawn, and how each is turned
 │   ├── Place.swift                 # A neighbourhood anywhere in the city: which borough, which shape
 │   ├── Wallet.swift                # The money, the boroughs bought, and what the next round is about
 │   ├── Bank.swift                  # The one wallet the app plays with, written down after every change
@@ -179,7 +185,7 @@ NeighborhoodQuiz/
 │   ├── QuizView.swift              # The game: the question, the map, the menu, the end of a round
 │   ├── MapBoard.swift              # The map you can push about, and what a tap on it means
 │   ├── BoroughMapView.swift        # One Canvas: the borough under the transform, the names over it
-│   ├── BoroughsView.swift          # The ladder: what you have, what you are saving for
+│   ├── BoroughsView.swift          # The city: what you have, and what the next borough costs
 │   ├── HomeView.swift              # The map on its own, for the screenshot runs
 │   ├── SettingsView.swift          # The version, rate and share, and the one destructive thing
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette

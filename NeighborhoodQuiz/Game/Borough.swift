@@ -1,18 +1,19 @@
 import Foundation
 
-/// The five boroughs, in the order you can afford them.
+/// The five boroughs.
 ///
 /// Manhattan is free and always open — it is where the game starts and there has to be
-/// somewhere to earn the first dollar. Everything after it has a price, and the prices
-/// climb, which is the whole shape of the thing: a round of Manhattan is worth up to
-/// fifty dollars, so Brooklyn is four good rounds away and Staten Island is a long
-/// winter.
+/// somewhere to earn the first dollar. The other four are bought, one at a time, in
+/// whatever order the player likes, and what climbs is not any borough's own price but
+/// the `ladder`: the first borough bought costs the first rung, the second the second,
+/// whichever boroughs they are. `allCases` is just the list; it says nothing about which
+/// comes next, because that is the player's to decide.
 ///
 /// `isDrawn` is the honest part. A borough in this list is somewhere the game intends to
 /// go; a borough that is drawn is somewhere it can actually take you. Manhattan and
-/// Brooklyn are drawn today. The rest are priced and visible on purpose — knowing what
-/// you are saving for is most of why saving is worth doing — but the game says plainly
-/// that their maps are not built yet rather than taking money for a blank page.
+/// Brooklyn are drawn today. The rest are listed on purpose — knowing what there is to
+/// save for is most of why saving is worth doing — but the game says plainly that their
+/// maps are not built yet rather than taking money for a blank page.
 enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
     case manhattan
     case brooklyn
@@ -32,16 +33,25 @@ enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    /// What it costs to open up, in dollars. Zero means it was never locked.
-    var price: Int {
-        switch self {
-        case .manhattan: return 0
-        case .brooklyn: return 200
-        case .queens: return 600
-        case .bronx: return 1_200
-        case .statenIsland: return 2_000
-        }
-    }
+    /// The one that was never locked. Everything the wallet knows about being open
+    /// starts from here.
+    static let free: Borough = .manhattan
+
+    /// Whether it was ever for sale.
+    var isFree: Bool { self == Borough.free }
+
+    /// The ones that cost something, which is everywhere the money is for.
+    static var buyable: [Borough] { allCases.filter { !$0.isFree } }
+
+    /// What the first, second, third and fourth borough bought cost, in dollars — one
+    /// rung per borough in `buyable`, and the order the rungs are climbed in is the
+    /// player's, not this list's.
+    ///
+    /// The shape is the whole idea: a round of Manhattan is worth up to fifty dollars,
+    /// so the first borough is four good rounds away and the fourth is a long winter.
+    /// Tying the price to how many have been bought rather than to which one means the
+    /// climb is the same whichever way round the city is taken.
+    static let ladder = [200, 600, 1_200, 2_000]
 
     /// The ones with a map behind them. Two entries today; this is the line that grows
     /// as each borough gets drawn. A file in `Resources/` and a cache line in
@@ -83,9 +93,6 @@ enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
         case .brooklyn, .queens, .bronx, .statenIsland: return 0
         }
     }
-
-    /// The ones that cost something, which is everywhere the money is for.
-    static var forSale: [Borough] { allCases.filter { $0.price > 0 } }
 }
 
 /// Dollars, written the way a price is written. One place, so the wallet, the ladder and

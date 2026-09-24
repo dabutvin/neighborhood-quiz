@@ -48,9 +48,10 @@ enum Screen: Equatable {
             // rather than offering to delete nothing.
             self = .settings(Wallet(balance: 140, earned: 440, rounds: 11))
         } else if arguments.contains("-boroughs") {
-            // Saved up for Brooklyn and a career behind it: the rung that has something
-            // to say. Now that Brooklyn is drawn, what it says is a live Unlock button —
-            // the one state where the ladder can actually be climbed from.
+            // Saved up for a first borough and a career behind it: the card that has
+            // something to say. Now that Brooklyn is drawn, what it says is a live
+            // Unlock button on its row — the one state where the ladder can actually
+            // be climbed from.
             self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24))
         } else if let stage = QuizView.Stage.allCases.first(where: { arguments.contains("-quiz-\($0.rawValue)") }) {
             self = .quiz(stage: stage)
