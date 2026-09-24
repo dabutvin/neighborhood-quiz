@@ -21,8 +21,9 @@ struct MapBoard: View {
     }
 
     let palette: MapPalette
-    /// Which borough to draw. Change it and the drawing is built again from that
-    /// borough's file, and the camera goes home — it is a different map, not a move.
+    /// Which borough to draw. Change it and the drawing is built from that borough's
+    /// file — the first time; after that it is taken from the cache below — and the
+    /// camera goes home, because it is a different map, not a move.
     let borough: Borough
     var opening: Opening = .island
     /// Filled and named. The quiz uses it for the place you have just found; the map
@@ -42,11 +43,20 @@ struct MapBoard: View {
     var resetToken: Int = 0
     /// Which neighborhood was touched, or nothing for the water and the parks.
     var onTap: (Int?) -> Void = { _ in }
-    /// Handed back once the drawing exists, for anything that needs to know what is on
-    /// the map — the quiz asks it what there is to ask about.
+    /// Handed back once a drawing exists that did not before. The map on its own picks
+    /// its opening highlight off it; the quiz cares about the moment rather than the
+    /// map, since the first time it fires is the first time a round could be shown.
     var onReady: (DrawnMap) -> Void = { _ in }
 
-    @State private var drawn: DrawnMap?
+    /// The drawings, one per borough visited, all at `drawnSize`.
+    ///
+    /// A cache rather than the one map, because in the anywhere mode the map hops
+    /// between boroughs every question and Brooklyn takes a good fraction of a second
+    /// to draw. Built once each, the second visit is free. A new size empties it, since
+    /// every drawing in it was for the old one — a rotation pays for one borough again,
+    /// not for both.
+    @State private var drawn: [Borough: DrawnMap] = [:]
+    @State private var drawnSize: CGSize = .zero
     @State private var camera = MapCamera()
     /// Set once, the first time the view is given a size, so an opening that has to be
     /// aimed somewhere in particular is not re-aimed on every rotation.
@@ -77,7 +87,7 @@ struct MapBoard: View {
             let size = geometry.size
 
             ZStack {
-                if let drawn, drawn.size == size, drawn.borough == borough {
+                if let drawn = drawn[borough], drawn.size == size {
                     BoroughMapView(
                         drawn: drawn,
                         camera: live(in: size),
@@ -108,7 +118,8 @@ struct MapBoard: View {
             }
             // A new borough is a new drawing, so the camera is put back rather than
             // animated: there is nothing for a move from Inwood to Coney Island to
-            // travel across.
+            // travel across. The drawing itself is built only if this is the first
+            // visit; a borough seen before is already in the cache.
             .onChange(of: borough) { _, _ in
                 camera = MapCamera()
                 prepare(for: size)
@@ -255,10 +266,14 @@ struct MapBoard: View {
 
     private func prepare(for size: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
-        guard drawn?.size != size || drawn?.borough != borough else { return }
+        if size != drawnSize {
+            drawn = [:]
+            drawnSize = size
+        }
+        guard drawn[borough] == nil else { return }
 
         let map = DrawnMap.build(borough: borough, size: size)
-        drawn = map
+        drawn[borough] = map
         onReady(map)
 
         guard !hasOpened else {

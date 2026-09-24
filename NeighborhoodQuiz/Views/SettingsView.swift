@@ -1,14 +1,20 @@
+import StoreKit
 import SwiftUI
 
-/// What build this is, and the one destructive thing the app can do to itself.
+/// What build this is, two ways to send the app on, and the one destructive thing it
+/// can do to itself.
 ///
-/// Two rows and nothing else. A settings screen that offers to throw away everything
-/// somebody has earned should have very little else on it to mis-tap around.
+/// Four rows and nothing else. A settings screen that offers to throw away everything
+/// somebody has earned should have very little else on it to mis-tap around, and the
+/// two rows between the version and the delete both open something of the phone's — a
+/// store page, a share sheet — rather than doing anything to the wallet.
 struct SettingsView: View {
     let bank: Bank
     var onClose: () -> Void = {}
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
+    @Environment(\.requestReview) private var requestReview
     @State private var askingToDelete = false
 
     private var palette: MapPalette { .of(colorScheme) }
@@ -25,6 +31,8 @@ struct SettingsView: View {
                         .foregroundStyle(palette.ink)
 
                     version
+                    rate
+                    share
                     savedData
 
                     Button(action: onClose) {
@@ -79,6 +87,47 @@ struct SettingsView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Version \(AppVersion.text)")
+    }
+
+    /// Straight to the review form on the store page when there is a store page, and
+    /// otherwise Apple's in-app sheet — which is the best that can be done before the
+    /// app record exists, and which Apple may decline to show at all. Somebody who came
+    /// to Settings to rate the app has asked; the store page always answers.
+    private var rate: some View {
+        Button {
+            if let url = AppStore.reviewURL {
+                openURL(url)
+            } else {
+                requestReview()
+            }
+        } label: {
+            row { leading("Rate the app") }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The plain "try this" message, handed to whatever the phone can send it with.
+    private var share: some View {
+        ShareLink(item: AppStore.shareText) {
+            row { leading("Share the app") }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A row that goes somewhere: the title, and a mark at the far end saying so.
+    private func leading(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(MapFont.chrome(size: 20))
+                .foregroundStyle(palette.ink)
+            Spacer(minLength: 12)
+            Text("\u{203A}")
+                .font(MapFont.chrome(size: 22))
+                .foregroundStyle(palette.inkSoft)
+                // Decoration. Read out, it is "single right-pointing angle quotation
+                // mark", which is no help to anybody.
+                .accessibilityHidden(true)
+        }
     }
 
     private var savedData: some View {
@@ -142,5 +191,8 @@ struct SettingsView: View {
                             .strokeBorder(palette.inkSoft, lineWidth: 1.8)
                     )
             )
+            // The row is the button on the two rows that are one, so the whole of the
+            // paper has to take the tap and not just the lettering on it.
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

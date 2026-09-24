@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 /// The game. A name at the top, the map below it, and three goes to put your finger on
@@ -13,7 +14,7 @@ struct QuizView: View {
     /// Only reachable by launch argument. A person playing gets `nil` and a round of
     /// ten drawn at random.
     enum Stage: String, CaseIterable {
-        /// The menu the app opens on, with a wallet part-way to Brooklyn.
+        /// The menu a returning player opens on, with a wallet part-way to Brooklyn.
         case menu
         /// A fresh question, nothing picked.
         case asking
@@ -44,6 +45,8 @@ struct QuizView: View {
     var stage: Stage?
 
     @Environment(\.colorScheme) private var colorScheme
+    /// Apple's rating sheet. Asking is all this can do; whether it appears is Apple's.
+    @Environment(\.requestReview) private var requestReview
 
     /// The money. A staged run gets one that remembers nothing, so the gallery shows the
     /// same numbers every time and a photograph of the game can never spend, add to or
@@ -66,7 +69,6 @@ struct QuizView: View {
     }
 
     @State private var round: QuizRound?
-    @State private var names: [Int: String] = [:]
     /// The place the round has just settled, held on the map with its name on for a
     /// moment before the next question. Also what stops a fast thumb from answering the
     /// next question before it has read it.
@@ -74,20 +76,23 @@ struct QuizView: View {
     /// Picked out and waiting on the button. A tap on the map chooses; it is answering
     /// with it that spends a go, so a thumb landing somewhere careless is free to be
     /// taken back.
-    @State private var candidate: Int?
+    @State private var candidate: Place?
     /// Bumped at the start of a round to send the map back to the whole borough. Not
     /// between questions: where you have got the map to is yours, and pulling it back
     /// out every time was undoing the player's own work.
     @State private var opening = 0
+    /// Whether the map has been ready once this launch. The first time is the only
+    /// time a round starts itself; a rotation builds the map again and must not.
+    @State private var hasLaunched = false
 
     /// How a question ended, while it is still on screen.
     enum Shown: Equatable {
-        case found(Int, worth: Int)
-        case missed(Int)
+        case found(Place, worth: Int)
+        case missed(Place)
 
-        var id: Int {
+        var place: Place {
             switch self {
-            case .found(let id, _), .missed(let id): return id
+            case .found(let place, _), .missed(let place): return place
             }
         }
 
@@ -99,16 +104,40 @@ struct QuizView: View {
 
     private var palette: MapPalette { .of(colorScheme) }
 
-    /// The borough on the map, which is the one the next round asks about.
+    /// Where the map opens, and goes back to between rounds.
     ///
-    /// The wallet's, checked against what it can actually play — see `Wallet.current`.
-    /// A staged run is pinned to Manhattan whatever its wallet says: the showcase names
-    /// are Manhattan's, and a gallery shot of Brooklyn with "Find SoHo" over it would be
-    /// a photograph of a bug. The staged wallet owns nothing anyway, so the pills that
-    /// could move it never appear; this is the belt to that pair of braces.
-    private var borough: Borough {
-        stage == nil ? bank.wallet.current : .manhattan
+    /// The wallet's borough, checked against what it can actually play — see
+    /// `Wallet.current` — and for the anywhere mode simply the borough the player was
+    /// last in, since a menu has to be over some map or other. A staged run is pinned to
+    /// Manhattan whatever its wallet says: the showcase names are Manhattan's, and a
+    /// gallery shot of Brooklyn with "Find SoHo" over it would be a photograph of a
+    /// bug. The staged wallet owns nothing anyway, so the pills that could move it never
+    /// appear; this is the belt to that pair of braces.
+    private var home: Borough {
+        guard stage == nil else { return .manhattan }
+        switch bank.wallet.pick {
+        case .borough(let borough): return borough
+        case .anywhere: return bank.wallet.current
+        }
     }
+
+    /// The borough on the map right now.
+    ///
+    /// Derived rather than chosen, because in the anywhere mode the map follows the
+    /// question: whatever is being shown, then whatever is being asked, then — once the
+    /// round is over and the summary is up — wherever the last question was, so the map
+    /// under the card is the one the round ended on. With no round at all, home.
+    private var shownBorough: Borough {
+        if let showing { return showing.place.borough }
+        if let round {
+            if let current = round.current { return current.borough }
+            if let last = round.questions.last { return last.borough }
+        }
+        return home
+    }
+
+    /// Whether the round runs over every borough rather than one.
+    private var anywhere: Bool { bank.wallet.pick == .anywhere }
 
     var body: some View {
         ZStack {
@@ -126,15 +155,15 @@ struct QuizView: View {
                 ZStack {
                     MapBoard(
                         palette: palette,
-                        borough: borough,
-                        selected: showing?.id,
-                        ruledOut: round?.ruledOut ?? [],
-                        settled: Set(round?.found ?? []),
-                        givenAway: Set(round?.missed ?? []),
-                        candidate: candidate,
+                        borough: shownBorough,
+                        selected: id(of: showing?.place),
+                        ruledOut: ids(of: round?.ruledOut ?? []),
+                        settled: ids(of: round?.found ?? []),
+                        givenAway: ids(of: round?.missed ?? []),
+                        candidate: id(of: candidate),
                         resetToken: opening,
                         onTap: pick,
-                        onReady: start
+                        onReady: { _ in start() }
                     )
                     PaperTexture(palette: palette)
 
@@ -159,13 +188,16 @@ struct QuizView: View {
             case .settings: SettingsView(bank: bank) { overlay = nil }
             }
         }
-        // Moving borough is only offered from the menu and from the ladder, and the
-        // ladder can be opened over the end of a round. A finished round has been paid
-        // and its summary is all that is left of it — but its found and missed places
-        // are ids on the old map, and the new map has other places at those ids. So the
-        // summary goes with the old drawing, and the player lands on the menu of the
-        // borough they asked for.
-        .onChange(of: borough) { _, _ in
+        // Changing what the next round is about is only offered from the menu and from
+        // the ladder, and the ladder can be opened over the end of a round. A finished
+        // round has been paid and its summary is all that is left of it — but it was
+        // the old pick's round, and the player has just asked for something else. So
+        // the summary goes, and the player lands on the menu of what they asked for.
+        //
+        // The *borough* on the map is not what this watches, and must not be: in the
+        // anywhere mode it changes mid-round on purpose, every time the question moves
+        // from one borough to the other.
+        .onChange(of: bank.wallet.pick) { _, _ in
             if round != nil { leave() }
         }
         // Holding the settled place on screen, then moving along. `task(id:)` rather
@@ -182,25 +214,46 @@ struct QuizView: View {
         }
     }
 
+    // MARK: - What the map is handed
+
+    /// The places on the borough being shown, by the id the map draws them under.
+    ///
+    /// A round's lists are places from all over the city and the map draws one borough
+    /// at a time, so it is handed the ids on that borough and none of the others — an
+    /// id from Brooklyn's list is some other neighbourhood on Manhattan's, and would be
+    /// washed in terracotta for no reason anybody could see.
+    private func ids(of places: some Collection<Place>) -> Set<Int> {
+        Set(places.filter { $0.borough == shownBorough }.map(\.id))
+    }
+
+    /// One place's id, if it is on the borough being shown.
+    private func id(of place: Place?) -> Int? {
+        guard let place, place.borough == shownBorough else { return nil }
+        return place.id
+    }
+
     // MARK: - The question
 
     private func prompt(for round: QuizRound) -> some View {
         let lead: String
         let name: String
         let ink: Color
+        let said = whereItIs(round)
 
         switch showing {
-        case .found(let id, _):
+        case .found(let place, _):
             lead = "FOUND"
-            name = names[id] ?? ""
+            name = place.name
             ink = palette.highlightInk
-        case .missed(let id):
+        case .missed(let place):
             lead = "IT WAS"
-            name = names[id] ?? ""
+            name = place.name
             ink = palette.ruledOutInk
         case nil:
-            lead = "FIND"
-            name = round.current.flatMap { names[$0] } ?? ""
+            // In the anywhere mode the map hops between boroughs and a name on its own
+            // does not say which one you are looking at, so the card does.
+            lead = said.map { "FIND · \($0.uppercased())" } ?? "FIND"
+            name = round.current?.name ?? ""
             ink = palette.ink
         }
 
@@ -242,11 +295,24 @@ struct QuizView: View {
         .padding(.bottom, 6)
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(spoken(lead: lead, name: name, round: round))
+        .accessibilityLabel(spoken(name: name, in: said, round: round))
     }
 
-    /// What the goes look like: three dots that go out as they are spent, and in their
-    /// place, once a question has ended, what it was worth.
+    /// Which borough the question is on, when that is worth saying — which is only in
+    /// the anywhere mode. A round of one borough has its name on the menu already, and
+    /// repeating it over ten questions would be noise.
+    private func whereItIs(_ round: QuizRound) -> String? {
+        anywhere ? round.current?.borough.name : nil
+    }
+
+    /// What the goes look like: three tally strokes that fade as they are spent, and in
+    /// their place, once a question has ended, what it was worth.
+    ///
+    /// Tally marks rather than dots. Three little circles in a row are, on a phone, a
+    /// "more" button, and a player who taps the question card expecting a menu has been
+    /// told the wrong thing by the drawing. Strokes read as goes — a count kept by hand
+    /// — and they suit a map drawn by one. A spent stroke goes faint rather than going
+    /// altogether, so the count of three is still there to be read against.
     @ViewBuilder
     private func verdict(for round: QuizRound) -> some View {
         switch showing {
@@ -261,10 +327,11 @@ struct QuizView: View {
         case nil:
             HStack(spacing: 5) {
                 ForEach(0..<QuizRound.tries, id: \.self) { index in
-                    Circle()
-                        .fill(index < round.triesLeft ? palette.ink : .clear)
-                        .overlay(Circle().strokeBorder(palette.inkSoft.opacity(0.7), lineWidth: 1.2))
-                        .frame(width: 9, height: 9)
+                    Capsule()
+                        .fill(index < round.triesLeft ? palette.ink : palette.inkSoft.opacity(0.35))
+                        .frame(width: 2.5, height: 13)
+                        // Each leans a little differently, as strokes made by hand do.
+                        .rotationEffect(.degrees([8.0, 6, 9][index % 3]))
                 }
             }
         }
@@ -290,12 +357,14 @@ struct QuizView: View {
             : max(round.index, 1)
     }
 
-    private func spoken(lead: String, name: String, round: QuizRound) -> String {
+    private func spoken(name: String, in borough: String?, round: QuizRound) -> String {
         switch showing {
         case .found(_, let worth): return "Found \(name), worth \(Money.text(worth))."
         case .missed: return "Out of goes. It was \(name)."
         case nil:
-            return "Find \(name). Question \(asked(of: round)) of \(round.questions.count), "
+            let there = borough.map { " in \($0)" } ?? ""
+            return "Find \(name)\(there). "
+                + "Question \(asked(of: round)) of \(round.questions.count), "
                 + "\(round.triesLeft) \(round.triesLeft == 1 ? "go" : "goes") left."
         }
     }
@@ -349,7 +418,10 @@ struct QuizView: View {
             takings
 
             VStack(spacing: 10) {
-                pill("Play again", action: startRound)
+                HStack(spacing: 10) {
+                    pill("Play again", action: startRound)
+                    share(round)
+                }
                 HStack(spacing: 10) {
                     pill("Boroughs") { overlay = .boroughs }
                     pill("Menu", action: leave)
@@ -360,6 +432,26 @@ struct QuizView: View {
         .padding(.vertical, 28)
         .background(card)
         .padding(28)
+    }
+
+    /// The score, handed to whatever the phone can send it with. Dressed as a pill so
+    /// it sits beside "Play again" as one of the things you can do next rather than as
+    /// a system button that wandered onto the card.
+    private func share(_ round: QuizRound) -> some View {
+        let line = AppStore.shareText(score: round.score, of: round.perfectScore, borough: playedWhere)
+        return ShareLink(item: line) {
+            pillLabel("Share")
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Where the round was, for the line that gets shared: the borough's name, or
+    /// "across the city" for a round that ran over all of them.
+    private var playedWhere: String {
+        switch bank.wallet.pick {
+        case .borough(let borough): return borough.name
+        case .anywhere: return "across the city"
+        }
     }
 
     /// The paper a card is on. The menu and the end of a round are the same kind of
@@ -376,13 +468,19 @@ struct QuizView: View {
 
     // MARK: - The menu
 
-    /// Where the app opens, and where quitting a round puts you back.
+    /// Where a returning player opens, and where quitting a round puts you back.
     private var menu: some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                Text("NYC Quiz")
-                    .font(MapFont.chrome(size: 32))
+                // The full name, which wraps after the colon on a phone. Two lines of
+                // hand lettering read as a title; one line squeezed to fit reads as a
+                // label that ran out of room.
+                Text(AppStore.name)
+                    .font(MapFont.chrome(size: 26))
                     .foregroundStyle(palette.ink)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
                 whereabouts
             }
 
@@ -419,13 +517,14 @@ struct QuizView: View {
         .padding(28)
     }
 
-    /// Where the next round will be.
+    /// What the next round will be about.
     ///
     /// One quiet line while there is only Manhattan to play — a choice of one is not a
     /// choice, and a single pill would look like a button that does nothing. Once a
-    /// second borough is open it becomes a row of pills, the one being played filled in,
-    /// in the order they are bought. Only on the menu: mid-round the map is the round's,
-    /// and a staged run never sees the row because its wallet owns nothing.
+    /// second borough is open it becomes a row of pills, one per borough in the order
+    /// they were bought and then "Anywhere", which draws the ten from all of them; the
+    /// one being played is filled in. Only on the menu: mid-round the map is the
+    /// round's, and a staged run never sees the row because its wallet owns nothing.
     @ViewBuilder
     private var whereabouts: some View {
         let wallet = bank.wallet
@@ -433,39 +532,44 @@ struct QuizView: View {
         if wallet.playable.count > 1 {
             HStack(spacing: 8) {
                 ForEach(wallet.playable) { borough in
-                    boroughPill(borough, playing: borough == wallet.current)
+                    choice(borough.name, chosen: wallet.pick == .borough(borough)) {
+                        bank.play(borough)
+                    }
+                }
+                choice("Anywhere", chosen: wallet.pick == .anywhere) {
+                    bank.playAnywhere()
                 }
             }
         } else {
-            Text(borough.name.uppercased())
+            Text(home.name.uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .kerning(1.3)
                 .foregroundStyle(palette.inkSoft)
         }
     }
 
-    /// One borough on the row. The one being played is ink with the paper showing
-    /// through the name, the way the answer button is; the others are outlined like
-    /// every other pill, and pressing one moves the player there.
-    private func boroughPill(_ borough: Borough, playing: Bool) -> some View {
+    /// One thing on the row. The one being played is ink with the paper showing through
+    /// the name, the way the answer button is; the others are outlined like every other
+    /// pill, and pressing one makes it the pick.
+    private func choice(_ title: String, chosen: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            // Pressing the one you are in is not a move, and should not write anything.
-            guard !playing else { return }
-            bank.play(borough)
+            // Pressing the one you are on is not a change, and should not write anything.
+            guard !chosen else { return }
+            action()
         } label: {
-            Text(borough.name)
+            Text(title)
                 .font(MapFont.chrome(size: 15))
-                .foregroundStyle(playing ? palette.labelHalo : palette.ink)
+                .foregroundStyle(chosen ? palette.labelHalo : palette.ink)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(playing ? palette.ink : palette.land)
-                        .overlay(Capsule().strokeBorder(playing ? palette.ink : palette.inkSoft, lineWidth: 1.5))
+                        .fill(chosen ? palette.ink : palette.land)
+                        .overlay(Capsule().strokeBorder(chosen ? palette.ink : palette.inkSoft, lineWidth: 1.5))
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(playing ? "Playing \(borough.name)" : "Play \(borough.name)")
+        .accessibilityLabel(chosen ? "Playing \(title)" : "Play \(title)")
     }
 
     /// What the wallet has to say about itself when there is no round to talk about.
@@ -576,18 +680,23 @@ struct QuizView: View {
 
     private func pill(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(MapFont.chrome(size: 20))
-                .foregroundStyle(palette.ink)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(palette.land)
-                        .overlay(Capsule().strokeBorder(palette.inkSoft, lineWidth: 1.8))
-                )
+            pillLabel(title)
         }
         .buttonStyle(.plain)
+    }
+
+    /// The pill itself, apart from the button, so the share link can wear one too.
+    private func pillLabel(_ title: String) -> some View {
+        Text(title)
+            .font(MapFont.chrome(size: 20))
+            .foregroundStyle(palette.ink)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(palette.land)
+                    .overlay(Capsule().strokeBorder(palette.inkSoft, lineWidth: 1.8))
+            )
     }
 
     /// Where the score came from, a line per go.
@@ -646,25 +755,35 @@ struct QuizView: View {
 
     // MARK: - Playing
 
-    /// The map is ready — the first time, and again whenever it is built anew, which is
-    /// a rotation or a change of borough. The names are taken from it before anything
-    /// else is decided, so that a round started from the menu after moving to Brooklyn
-    /// asks about Brooklyn's places and not the list Manhattan left behind.
-    private func start(_ map: DrawnMap) {
-        names = Dictionary(uniqueKeysWithValues: map.neighborhoods.map { ($0.id, $0.name) })
+    /// The map is ready — the first time, and again whenever a borough is drawn that
+    /// was not before. Nothing is taken from the drawing any more: a round's places
+    /// come from the data, and their names with them. What matters here is the moment.
+    ///
+    /// On the first one, a fresh wallet goes straight into a round. A new player has
+    /// nothing to read on the menu — no money, no ladder worth looking at — and the map
+    /// with a question over it is the whole pitch, so that is what they get. A returning
+    /// player has a balance and a ladder to look at, and opens on the menu as before.
+    /// The gallery's `-quiz-menu` run has money, so its shot is unchanged.
+    private func start() {
         guard round == nil else { return }
 
-        // Nothing is a round until Start is pressed: the app opens on the menu, and so
-        // does the gallery's shot of it.
-        guard let stage, stage != .menu else { return }
+        if let stage {
+            // Nothing is a round until Start is pressed, and the gallery's shot of the
+            // menu is a shot of exactly that.
+            guard stage != .menu else { return }
+            var staged = QuizRound(asking: QuizView.showcase.compactMap(QuizView.place(named:)))
+            play(&staged, to: stage)
+            // A staged round that reached the end is paid like any other, so the wallet
+            // on the card agrees with the breakdown above it. The bank is a throwaway,
+            // so this goes nowhere near a real player's money.
+            if staged.isFinished { bank.earn(staged.score) }
+            round = staged
+            return
+        }
 
-        var staged = QuizRound(asking: QuizView.showcase.compactMap { map.neighborhood(named: $0)?.id })
-        play(&staged, to: stage, on: map)
-        // A staged round that reached the end is paid like any other, so the wallet on
-        // the card agrees with the breakdown above it. The bank is a throwaway, so this
-        // goes nowhere near a real player's money.
-        if staged.isFinished { bank.earn(staged.score) }
-        round = staged
+        guard !hasLaunched else { return }
+        hasLaunched = true
+        if bank.wallet.isEmpty { startRound() }
     }
 
     /// A tap on the map. It picks a place out and costs nothing — a go is only spent
@@ -677,14 +796,17 @@ struct QuizView: View {
     private func pick(_ id: Int?) {
         guard showing == nil, let round, !round.isFinished else { return }
 
-        guard let id, !round.ruledOut.contains(id),
-              !round.found.contains(id), !round.missed.contains(id)
+        // The map reports an id on the borough it is drawing; the round wants to know
+        // which borough that was.
+        let place = id.map { Place(shownBorough, $0) }
+        guard let place, !round.ruledOut.contains(place),
+              !round.found.contains(place), !round.missed.contains(place)
         else {
             withAnimation(.easeOut(duration: 0.15)) { candidate = nil }
             return
         }
         withAnimation(.easeOut(duration: 0.15)) {
-            candidate = (id == candidate) ? nil : id
+            candidate = (place == candidate) ? nil : place
         }
     }
 
@@ -713,6 +835,7 @@ struct QuizView: View {
         // and paying from one would pay again on every redraw.
         if playing.isFinished {
             bank.earn(playing.score)
+            askForARating()
         }
 
         // One change, not three.
@@ -732,11 +855,36 @@ struct QuizView: View {
         }
     }
 
+    /// Whether to ask for a rating, and when.
+    ///
+    /// After the third round and after the tenth: the third is the first moment
+    /// somebody has played enough to have an opinion, and the tenth is somebody who
+    /// stayed. Apple throttles the sheet itself — a few asks a year at most, and none if
+    /// the phone has been told not to — so this is a suggestion to the system rather
+    /// than a nag to the player, and most of the time it shows nothing. A second and a
+    /// half later, so the summary card is on the screen before anything is put over it.
+    /// Never on a staged run: a photograph of the game must not have a system sheet in
+    /// it, and the staged wallet's round count is whatever the gallery needed anyway.
+    private func askForARating() {
+        guard stage == nil, bank.wallet.rounds == 3 || bank.wallet.rounds == 10 else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            requestReview()
+        }
+    }
+
+    /// A round from what the wallet asked for: one borough's places, or every open
+    /// borough's places put together. Read at the moment of starting, so a pick made
+    /// on the menu is what the next round is about.
     private func startRound() {
-        guard !names.isEmpty else { return }
+        let pool: [Place]
+        switch bank.wallet.pick {
+        case .borough(let borough): pool = Place.all(in: borough)
+        case .anywhere: pool = bank.wallet.playable.flatMap(Place.all(in:))
+        }
         showing = nil
         candidate = nil
-        round = QuizRound(askingAbout: Array(names.keys))
+        round = QuizRound(askingAbout: pool)
         // A fresh round starts on the whole borough. Mid-round it never does.
         opening += 1
     }
@@ -758,21 +906,29 @@ struct QuizView: View {
 
     // MARK: - Staging, for the gallery
 
+    /// A Manhattan place by name, for the staging. Looked up in the data rather than on
+    /// a drawing, so the round can be built before the map is.
+    private static func place(named name: String) -> Place? {
+        BoroughMap.of(.manhattan).neighborhoods
+            .firstIndex { $0.name == name }
+            .map { Place(.manhattan, $0) }
+    }
+
     /// Plays a round forward to the moment a screenshot wants. Everything here goes
     /// through `guess` like anybody else's round would, so a staged screen is a real
     /// state of the game rather than a picture of one.
-    private func play(_ round: inout QuizRound, to stage: Stage, on map: DrawnMap) {
+    private func play(_ round: inout QuizRound, to stage: Stage) {
         // The same places a player would be allowed to pick: not the answer, not already
         // tried this question, and not one the round has settled. Anything else would put
         // a neighborhood into two of the map's lists at once and draw it twice.
         func elsewhere(_ count: Int) {
             var made = 0
-            for id in map.neighborhoods.map(\.id) {
+            for place in Place.all(in: .manhattan) {
                 guard made < count else { return }
-                guard id != round.current, !round.ruledOut.contains(id),
-                      !round.found.contains(id), !round.missed.contains(id)
+                guard place != round.current, !round.ruledOut.contains(place),
+                      !round.found.contains(place), !round.missed.contains(place)
                 else { continue }
-                _ = round.guess(id)
+                _ = round.guess(place)
                 made += 1
             }
         }
@@ -781,10 +937,10 @@ struct QuizView: View {
         case .menu, .asking:
             break
         case .picked:
-            candidate = map.neighborhood(named: "SoHo")?.id
+            candidate = QuizView.place(named: "SoHo")
         case .narrowing:
             elsewhere(2)
-            candidate = map.neighborhood(named: "West Village")?.id
+            candidate = QuizView.place(named: "West Village")
         case .filling:
             for _ in 0..<4 { if let wanted = round.current { _ = round.guess(wanted) } }
         case .missed:

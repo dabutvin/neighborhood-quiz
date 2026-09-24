@@ -95,10 +95,12 @@ jobs:
           # the same map rather than two rolls of the dice. The launch arguments
           # are the ones `Screen` understands.
           #
-          # No argument at all is what a person gets, which is now the menu with
-          # whatever they have actually earned. The gallery asks for `-quiz-menu`
-          # instead, which is the same screen with a wallet part-way to Brooklyn,
-          # so the shot has something on it on a simulator that has never played.
+          # No argument at all is what a person gets: a round straight away for a
+          # wallet that has never earned anything, and the menu — with whatever
+          # they have actually earned — once it has. The gallery asks for
+          # `-quiz-menu` instead, which is the menu over a wallet part-way to
+          # Brooklyn, so the shot has something on it on a simulator that has
+          # never played and is not a round of ten places rolled at random.
           #
           # The `-quiz-*` runs play a fixed round forward to each state the game
           # can be in — picked and waiting on the button, two goes gone, the

@@ -48,9 +48,15 @@ struct HomeView: View {
 
     private var header: some View {
         VStack(alignment: .trailing, spacing: 1) {
-            Text("NYC Neighborhoods")
+            // The full name. It may wrap after the colon on a phone, which is fine —
+            // two lines in the corner still read as a title, and the borough sits
+            // under either.
+            Text(AppStore.name)
                 .font(MapFont.chrome(size: 24))
                 .foregroundStyle(palette.ink)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
             Text(borough.name.uppercased())
                 .font(.system(size: 10, weight: .semibold))
                 .kerning(2.2)

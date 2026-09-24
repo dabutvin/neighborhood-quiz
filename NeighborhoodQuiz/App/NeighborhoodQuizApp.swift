@@ -22,8 +22,9 @@ struct NeighborhoodQuizApp: App {
 
 /// What the app opens on.
 ///
-/// A launch with no arguments — which is every launch a person makes — starts a fresh
-/// round of ten places drawn at random. Everything else here is for the screenshot runs.
+/// A launch with no arguments — which is every launch a person makes — opens on the
+/// game: straight into a round of ten for a wallet that has never earned anything, and
+/// on the menu for one that has. Everything else here is for the screenshot runs.
 ///
 /// The `-quiz-*` arguments play a fixed round forward to a particular moment: something
 /// picked and waiting on the button, two goes gone, the map half filled in, a place the
