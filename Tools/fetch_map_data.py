@@ -326,6 +326,19 @@ BROOKLYN_AREAS = (
 )
 
 
+# What Queens is divided into. Filled in by the Queens pass; see the notes there.
+QUEENS_AREAS = ()
+
+
+# What the Bronx is divided into. Filled in by the Bronx pass; see the notes there.
+BRONX_AREAS = ()
+
+
+# What Staten Island is divided into. Filled in by the Staten Island pass; see the
+# notes there.
+STATEN_ISLAND_AREAS = ()
+
+
 MANHATTAN = Borough(
     name="Manhattan",
     code="1",
@@ -359,7 +372,46 @@ BROOKLYN = Borough(
     avenues_in_words=False,
 )
 
-BOROUGHS = {"manhattan": MANHATTAN, "brooklyn": BROOKLYN}
+QUEENS = Borough(
+    name="Queens",
+    code="4",
+    park_letter="Q",
+    file="queens.json",
+    areas=QUEENS_AREAS,
+    avenue_count=45,
+    major_count=400,
+    avenues_in_words=False,
+)
+
+BRONX = Borough(
+    name="Bronx",
+    code="2",
+    park_letter="X",
+    file="bronx.json",
+    areas=BRONX_AREAS,
+    avenue_count=35,
+    major_count=300,
+    avenues_in_words=False,
+)
+
+STATEN_ISLAND = Borough(
+    name="Staten Island",
+    code="5",
+    park_letter="R",
+    file="staten-island.json",
+    areas=STATEN_ISLAND_AREAS,
+    avenue_count=30,
+    major_count=250,
+    avenues_in_words=False,
+)
+
+BOROUGHS = {
+    "manhattan": MANHATTAN,
+    "brooklyn": BROOKLYN,
+    "queens": QUEENS,
+    "bronx": BRONX,
+    "staten-island": STATEN_ISLAND,
+}
 
 
 # Length alone makes a poor avenue. The longest roads in Manhattan include the
