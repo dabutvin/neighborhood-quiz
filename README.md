@@ -10,9 +10,12 @@ way, and is what the first two hundred dollars buy.
 
 ## The game
 
-The app opens on a menu: what you have to spend, how far off the next borough is, and
-one button to start. A round can be left part-way from the same menu — though a round
-pays when it is played out, so walking away from one banks nothing.
+The first time, the app opens straight into a round: a new player has nothing to read on
+a menu, and the map with a question over it is the whole pitch. Once there is money it
+opens on the menu instead — what you have to spend, how far off the next borough is,
+which borough the next round is about, and one button to start. A round can be left
+part-way from the same menu — though a round pays when it is played out, so walking away
+from one banks nothing.
 
 A round is ten neighbourhoods. You are given a name and three goes to put your finger on
 it: five dollars if you know it straight away, three on the second go, one on the third,
@@ -39,11 +42,17 @@ you spend it; the career total is every dollar ever earned and it never goes dow
 buying Brooklyn should not make it look like you played less than you did.
 
 **Manhattan and Brooklyn are drawn so far.** Buying Brooklyn opens it; the menu then
-offers both, and the one you are playing is written down with the money so the app opens
-where you left it. The other three are priced and listed because knowing what you are
+offers both, and a third thing — "Anywhere" — which draws the ten from every borough you
+have open and hops the map between them as the questions come, saying which borough
+each one is in. Whichever you pick is written down with the money so the app opens where
+you left it. The other three boroughs are priced and listed because knowing what you are
 saving for is most of the reason to save, but the game will not take money for a borough
 it cannot open — when the balance is there and the map is not, it says so and the button
 stays off.
+
+The end of a round can be shared — the score, and where it was scored — and Settings has
+a row to rate the app and one to pass it on. Both go through the phone's own sheets;
+nothing is sent by the app itself.
 
 ## The map
 
@@ -148,10 +157,13 @@ then the long names, then every side street.
 ```
 NeighborhoodQuiz/
 ├── App/
-│   └── NeighborhoodQuizApp.swift   # App entry point, and the launch arguments CI shoots with
+│   ├── NeighborhoodQuizApp.swift   # App entry point, and the launch arguments CI shoots with
+│   ├── AppVersion.swift            # What build this is, read from the bundle rather than written down
+│   └── AppStore.swift              # The listing's name and links, and the words the share sheet gets
 ├── Game/
 │   ├── Borough.swift               # The five, their prices, which are drawn, and how each is turned
-│   ├── Wallet.swift                # The money, the boroughs bought, and where the player is
+│   ├── Place.swift                 # A neighbourhood anywhere in the city: which borough, which shape
+│   ├── Wallet.swift                # The money, the boroughs bought, and what the next round is about
 │   ├── Bank.swift                  # The one wallet the app plays with, written down after every change
 │   └── QuizRound.swift             # Ten places, three goes each, and what the goes are worth
 ├── Map/
@@ -160,6 +172,7 @@ NeighborhoodQuiz/
 │   ├── Polyline.swift              # Measuring along a line: length, middle, which way a name goes
 │   ├── Pen.swift                   # The unsteady hand: seeded wobble, after rough.js
 │   ├── DrawnMap.swift              # Builds the whole drawing of one borough once for a given size
+│   ├── DrawnNeighborhood.swift     # A neighbourhood as drawn: the shape, the line, what a tap tests
 │   ├── MapCamera.swift             # How far in, how far pushed about, and what is on the glass
 │   └── MapPalette.swift            # Paper, ink, sage — day and night — and the hand it is lettered in
 ├── Views/
@@ -168,7 +181,7 @@ NeighborhoodQuiz/
 │   ├── BoroughMapView.swift        # One Canvas: the borough under the transform, the names over it
 │   ├── BoroughsView.swift          # The ladder: what you have, what you are saving for
 │   ├── HomeView.swift              # The map on its own, for the screenshot runs
-│   ├── SettingsView.swift          # The version, and the one destructive thing the app can do
+│   ├── SettingsView.swift          # The version, rate and share, and the one destructive thing
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette
 └── Resources/
     ├── manhattan.json              # The city's Manhattan, written by Tools/fetch_map_data.py

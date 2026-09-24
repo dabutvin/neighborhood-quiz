@@ -51,6 +51,14 @@ final class Bank {
         return moved
     }
 
+    /// Ask for the whole city, and remember that for next launch too.
+    @discardableResult
+    func playAnywhere() -> Bool {
+        let moved = wallet.playAnywhere()
+        if moved { write() }
+        return moved
+    }
+
     /// Forget all of it: the money, the career, the boroughs bought, and where the
     /// player was — a fresh wallet is in Manhattan.
     ///

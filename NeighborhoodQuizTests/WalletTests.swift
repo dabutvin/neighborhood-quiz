@@ -167,6 +167,60 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(wallet.current, .manhattan, "but not honoured")
     }
 
+    // MARK: - The whole city
+
+    /// A choice of one is not a choice. With only Manhattan open there is nothing for
+    /// "anywhere" to add, so the wallet refuses and the pick stays the borough.
+    func testAnywhereNeedsMoreThanOneBoroughToDrawFrom() {
+        var wallet = Wallet()
+
+        XCTAssertFalse(wallet.playAnywhere())
+        XCTAssertFalse(wallet.anywhere)
+        XCTAssertEqual(wallet.pick, .borough(.manhattan))
+    }
+
+    func testAnywhereIsAllowedOnceBrooklynIsOpen() {
+        var wallet = Wallet(balance: 500)
+        wallet.buy(.brooklyn)
+
+        XCTAssertTrue(wallet.playAnywhere())
+        XCTAssertTrue(wallet.anywhere)
+        XCTAssertEqual(wallet.pick, .anywhere)
+        XCTAssertEqual(wallet.current, .manhattan, "still somewhere, for the map to open on")
+    }
+
+    /// Asking for a borough is asking for that borough and not the whole city, so it
+    /// takes the anywhere flag down with it — and the pick says so.
+    func testPickingABoroughClearsAnywhere() {
+        var wallet = Wallet(balance: 500)
+        wallet.buy(.brooklyn)
+        wallet.playAnywhere()
+        XCTAssertEqual(wallet.pick, .anywhere)
+
+        XCTAssertTrue(wallet.play(.brooklyn))
+
+        XCTAssertFalse(wallet.anywhere)
+        XCTAssertEqual(wallet.pick, .borough(.brooklyn))
+        XCTAssertEqual(wallet.current, .brooklyn)
+    }
+
+    /// A wallet that asked for the whole city and then lost Brooklyn — erased, or read
+    /// by a build that stopped drawing it — is a wallet with one borough, and a round
+    /// "across the city" drawn from one borough would be an ordinary round wearing the
+    /// wrong label. So the pick falls back to a borough, the way `current` falls back
+    /// to Manhattan. Reached through the decoder, which is the only door: neither
+    /// `play` nor `playAnywhere` will put the wallet in this state on purpose.
+    func testThePickFallsBackToABoroughWhenBrooklynIsGone() throws {
+        let json = """
+        {"balance": 0, "earned": 500, "rounds": 12, "bought": [],
+         "playing": "brooklyn", "anywhere": true}
+        """
+        let wallet = try JSONDecoder().decode(Wallet.self, from: Data(json.utf8))
+
+        XCTAssertTrue(wallet.anywhere, "what was written down is kept")
+        XCTAssertEqual(wallet.pick, .borough(.manhattan), "but not honoured")
+    }
+
     // MARK: - The ladder
 
     func testTheLadderClimbsInPrice() {
@@ -251,6 +305,31 @@ final class WalletTests: XCTestCase {
         XCTAssertTrue(wallet.bought.isEmpty)
         XCTAssertEqual(wallet.playing, .manhattan)
         XCTAssertEqual(wallet.current, .manhattan)
+    }
+
+    /// `anywhere` is newer than `playing`, and a wallet written between the two has the
+    /// one and not the other. Missing means one borough, which is all there used to be.
+    func testAWalletWrittenBeforeAnywhereStillReads() throws {
+        let json = """
+        {"balance": 340, "earned": 640, "rounds": 15, "bought": ["brooklyn"], "playing": "brooklyn"}
+        """
+        let wallet = try JSONDecoder().decode(Wallet.self, from: Data(json.utf8))
+
+        XCTAssertFalse(wallet.anywhere)
+        XCTAssertEqual(wallet.pick, .borough(.brooklyn))
+        XCTAssertEqual(wallet.playable, [.manhattan, .brooklyn], "so anywhere could be asked for")
+    }
+
+    func testAskingForTheWholeCitySurvivesTheTripToo() throws {
+        var wallet = Wallet(balance: 500)
+        wallet.buy(.brooklyn)
+        wallet.playAnywhere()
+
+        let data = try JSONEncoder().encode(wallet)
+        let read = try JSONDecoder().decode(Wallet.self, from: data)
+
+        XCTAssertEqual(read, wallet)
+        XCTAssertEqual(read.pick, .anywhere)
     }
 
     func testWhereThePlayerIsSurvivesTheTripToo() throws {

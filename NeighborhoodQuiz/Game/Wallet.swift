@@ -37,6 +37,16 @@ struct Wallet: Equatable, Codable {
     /// is what can actually be had.
     private(set) var playing: Borough = .manhattan
 
+    /// Whether the player asked for the whole city rather than one borough — a round
+    /// whose ten places are drawn from every borough they have open.
+    ///
+    /// Kept beside `playing` rather than folded into it, because a player who leaves
+    /// the anywhere mode should land back in the borough they were in, and that has to
+    /// be written down somewhere. Read through `pick`, for the same reason `playing` is
+    /// read through `current`: this is what was asked for, and `pick` is what can be
+    /// honoured.
+    private(set) var anywhere = false
+
     init() {}
 
     /// A wallet part-way through, for tests and for the screenshot runs.
@@ -71,6 +81,23 @@ struct Wallet: Equatable, Codable {
     /// always open, rather than stranded in a borough the map cannot show.
     var current: Borough {
         playable.contains(playing) ? playing : .manhattan
+    }
+
+    /// What the next round is about: one borough, or all of them.
+    enum Pick: Equatable, Sendable {
+        case borough(Borough)
+        case anywhere
+    }
+
+    /// The choice the game can honour.
+    ///
+    /// Anywhere needs somewhere to go: a wallet that asked for the whole city and has
+    /// since had Brooklyn erased from under it is a wallet with one borough, and a round
+    /// "across the city" drawn from one borough would be an ordinary round wearing the
+    /// wrong label. So it falls back to a borough, the same way `current` falls back
+    /// to Manhattan, and for the same two reasons.
+    var pick: Pick {
+        anywhere && playable.count > 1 ? .anywhere : .borough(current)
     }
 
     /// The next thing being saved for — the cheapest one not yet owned. Nothing once
@@ -140,13 +167,24 @@ struct Wallet: Equatable, Codable {
     mutating func play(_ borough: Borough) -> Bool {
         guard has(borough), borough.isDrawn else { return false }
         playing = borough
+        // Asking for a borough is asking for that borough and not the whole city.
+        anywhere = false
+        return true
+    }
+
+    /// Ask for the whole city. Returns whether that was allowed, which it is only when
+    /// there is more than one borough to draw from — with one, it is a choice of one.
+    @discardableResult
+    mutating func playAnywhere() -> Bool {
+        guard playable.count > 1 else { return false }
+        anywhere = true
         return true
     }
 
     // MARK: - Reading it back
 
     private enum CodingKeys: String, CodingKey {
-        case balance, earned, rounds, bought, playing
+        case balance, earned, rounds, bought, playing, anywhere
     }
 
     /// Written by hand so that a wallet saved before `playing` existed still reads.
@@ -155,7 +193,9 @@ struct Wallet: Equatable, Codable {
     /// was drawn has no `playing` in it. The synthesised decoder would refuse the whole
     /// thing over the missing key, the bank would treat that as nothing saved, and a
     /// player would open the update to an empty balance. A missing field means
-    /// Manhattan, which is where everybody was. Encoding is still the compiler's.
+    /// Manhattan, which is where everybody was. `anywhere` arrived later still and is
+    /// read the same way: missing means one borough, which is all there used to be.
+    /// Encoding is still the compiler's.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         balance = try container.decode(Int.self, forKey: .balance)
@@ -163,5 +203,6 @@ struct Wallet: Equatable, Codable {
         rounds = try container.decode(Int.self, forKey: .rounds)
         bought = try container.decode(Set<Borough>.self, forKey: .bought)
         playing = try container.decodeIfPresent(Borough.self, forKey: .playing) ?? .manhattan
+        anywhere = try container.decodeIfPresent(Bool.self, forKey: .anywhere) ?? false
     }
 }

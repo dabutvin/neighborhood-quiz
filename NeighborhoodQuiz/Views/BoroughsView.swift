@@ -9,7 +9,9 @@ import SwiftUI
 /// One row is different: the one being saved for gets the bar, and whatever can be done
 /// about it. The rows above it are the ones already open, and each of those says either
 /// that you are there or offers to take you — which is the other thing this screen can
-/// do now that there is more than one place to be.
+/// do now that there is more than one place to be. A round running over the whole city
+/// is "there" nowhere in particular, so every open row offers; the menu is where
+/// "Anywhere" lives, and this screen does not repeat it.
 struct BoroughsView: View {
     let bank: Bank
     var onClose: () -> Void = {}
@@ -144,14 +146,15 @@ struct BoroughsView: View {
 
     /// What the right-hand end of a row says.
     ///
-    /// Owned and drawn: "playing" if you are there, otherwise a way to go there. Owned
-    /// and not drawn: "bought", which is a state the game can reach only by a build
-    /// that has stopped drawing something — the button never sells a blank page — but
-    /// a wallet is a preference on a phone and outlives the build that wrote it.
+    /// Owned and drawn: "playing" if the next round is this borough's, otherwise a way
+    /// to make it so. Owned and not drawn: "bought", which is a state the game can
+    /// reach only by a build that has stopped drawing something — the button never
+    /// sells a blank page — but a wallet is a preference on a phone and outlives the
+    /// build that wrote it.
     @ViewBuilder
     private func status(for borough: Borough, owned: Bool, next: Bool) -> some View {
         if owned, borough.isDrawn {
-            if wallet.current == borough {
+            if wallet.pick == .borough(borough) {
                 Text("playing")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(palette.highlightInk)
@@ -254,7 +257,7 @@ struct BoroughsView: View {
     private func spoken(for borough: Borough, owned: Bool, next: Bool) -> String {
         guard !owned else {
             guard borough.isDrawn else { return "\(borough.name), bought, map not drawn yet" }
-            return wallet.current == borough
+            return wallet.pick == .borough(borough)
                 ? "\(borough.name), open, playing"
                 : "\(borough.name), open, tap to play"
         }

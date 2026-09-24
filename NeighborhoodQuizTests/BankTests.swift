@@ -103,6 +103,23 @@ final class BankTests: XCTestCase {
         XCTAssertEqual(Bank(defaults: defaults).wallet.current, .brooklyn)
     }
 
+    /// Asking for the whole city is written down like a move to a borough is, and a
+    /// refusal — one borough is no city — writes nothing. Picking a borough afterwards
+    /// takes the anywhere flag down, and that is written too.
+    func testAskingForTheWholeCityIsWrittenDownToo() {
+        let bank = Bank(defaults: defaults)
+        XCTAssertFalse(bank.playAnywhere(), "only Manhattan is open")
+        XCTAssertNil(defaults.data(forKey: Bank.storageKey), "a refusal is not worth a write")
+
+        bank.earn(1_000)
+        bank.buy(.brooklyn)
+        XCTAssertTrue(bank.playAnywhere())
+        XCTAssertEqual(Bank(defaults: defaults).wallet.pick, .anywhere)
+
+        XCTAssertTrue(bank.play(.brooklyn))
+        XCTAssertEqual(Bank(defaults: defaults).wallet.pick, .borough(.brooklyn))
+    }
+
     /// Erasing puts the player back in Manhattan along with everything else: a fresh
     /// wallet is in Manhattan, and erasing gives a fresh wallet.
     func testErasingSendsThePlayerHome() {
@@ -115,6 +132,7 @@ final class BankTests: XCTestCase {
         bank.erase()
 
         XCTAssertEqual(bank.wallet.current, .manhattan)
+        XCTAssertEqual(bank.wallet.pick, .borough(.manhattan))
         XCTAssertEqual(Bank(defaults: defaults).wallet.current, .manhattan)
     }
 }

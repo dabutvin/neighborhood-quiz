@@ -4,10 +4,15 @@ import Foundation
 /// goes were worth.
 ///
 /// The whole of the game's rules live here, and none of the drawing does. A round knows
-/// nothing about maps, taps or SwiftUI — it is asked about a neighborhood by its id and
-/// answers whether that was the one. That is what lets the rules be tested without a
-/// screen, and it is why the scoring below could be argued about in a test rather than
-/// by squinting at a phone.
+/// nothing about maps, taps or SwiftUI — it is asked whether a `Place` was the one and
+/// answers. That is what lets the rules be tested without a screen, and it is why the
+/// scoring below could be argued about in a test rather than by squinting at a phone.
+///
+/// A place rather than a bare id, since the round stopped being about one borough. Ten
+/// questions drawn from the whole city are ten neighbourhoods on two maps, and an id
+/// alone cannot say which map it belongs to. Not generic over the question type,
+/// tempting as that looks: the point values and the go names are static stored
+/// properties, and a generic type is not allowed those.
 ///
 /// ## Scoring
 ///
@@ -32,8 +37,8 @@ struct QuizRound: Equatable {
     /// better than nothing rather than to be worth chasing.
     static let points = [5, 3, 1]
 
-    /// The neighborhoods to find, by `DrawnNeighborhood.id`, in the order asked.
-    let questions: [Int]
+    /// The neighborhoods to find, in the order asked.
+    let questions: [Place]
 
     /// Which question is being asked, counted from zero. Equal to `questions.count`
     /// once the round is over.
@@ -43,12 +48,12 @@ struct QuizRound: Equatable {
     private(set) var score = 0
 
     /// The places found, in the order they were found. The map leaves them filled in.
-    private(set) var found: [Int] = []
+    private(set) var found: [Place] = []
 
     /// The places three goes were not enough for, which the round showed instead. The
     /// map leaves these too: being shown where Inwood was is the whole consolation for
     /// not knowing.
-    private(set) var missed: [Int] = []
+    private(set) var missed: [Place] = []
 
     /// How many places were found on the first go, on the second and on the third,
     /// indexed by the go. Together with `missed` it accounts for every question asked,
@@ -64,10 +69,10 @@ struct QuizRound: Equatable {
     /// map can show a player what they have already eliminated, so that guessing the
     /// same wrong place twice is not charged for twice — that is a slip of the thumb,
     /// not a second opinion — and because its size is how many goes have been used.
-    private(set) var ruledOut: Set<Int> = []
+    private(set) var ruledOut: Set<Place> = []
 
     /// The neighborhood being asked for, or nothing once the round is over.
-    var current: Int? {
+    var current: Place? {
         questions.indices.contains(index) ? questions[index] : nil
     }
 
@@ -85,24 +90,25 @@ struct QuizRound: Equatable {
         ["First go", "Second go", "Third go"][safe: go] ?? "Go \(go + 1)"
     }
 
-    /// Ten of the forty, in an order nobody can predict. Takes the ids to choose from so
-    /// that a test can hand it a known set and a known generator.
+    /// Ten of the pool, in an order nobody can predict. Takes the places to choose from
+    /// so that a test can hand it a known set and a known generator — and so that the
+    /// pool can be one borough or the whole city, which is the caller's business.
     init<Generator: RandomNumberGenerator>(
-        askingAbout choices: [Int],
+        askingAbout choices: [Place],
         count: Int = QuizRound.questionCount,
         using generator: inout Generator
     ) {
         questions = Array(choices.shuffled(using: &generator).prefix(count))
     }
 
-    init(askingAbout choices: [Int], count: Int = QuizRound.questionCount) {
+    init(askingAbout choices: [Place], count: Int = QuizRound.questionCount) {
         var generator = SystemRandomNumberGenerator()
         self.init(askingAbout: choices, count: count, using: &generator)
     }
 
     /// A round that asks exactly these, in exactly this order. For the screenshot runs,
     /// which want the same places in the gallery every time, and for tests.
-    init(asking questions: [Int]) {
+    init(asking questions: [Place]) {
         self.questions = questions
     }
 
@@ -121,11 +127,11 @@ struct QuizRound: Equatable {
     }
 
     /// Guess at the neighborhood being asked for.
-    mutating func guess(_ id: Int) -> Answer {
+    mutating func guess(_ place: Place) -> Answer {
         guard let current, triesLeft > 0 else { return .ignored }
-        guard !ruledOut.contains(id) else { return .ignored }
+        guard !ruledOut.contains(place) else { return .ignored }
 
-        guard id != current else {
+        guard place != current else {
             let go = min(triesUsed, QuizRound.tries - 1)
             score += QuizRound.points[min(go, QuizRound.points.count - 1)]
             foundOn[go] += 1
@@ -134,7 +140,7 @@ struct QuizRound: Equatable {
             return .right
         }
 
-        ruledOut.insert(id)
+        ruledOut.insert(place)
         guard triesLeft > 0 else {
             missed.append(current)
             moveOn()
