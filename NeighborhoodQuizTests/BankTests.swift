@@ -85,7 +85,7 @@ final class BankTests: XCTestCase {
         XCTAssertTrue(bank.buy(.brooklyn))
 
         let next = Bank(defaults: defaults)
-        XCTAssertEqual(next.wallet.balance, 1_000 - Borough.brooklyn.price)
+        XCTAssertEqual(next.wallet.balance, 1_000 - Borough.ladder[0])
         XCTAssertEqual(next.wallet.bought, [.brooklyn])
     }
 

@@ -5,7 +5,7 @@ import Foundation
 /// Two numbers, not one, and they answer different questions. `balance` is money you can
 /// spend and it goes down when you spend it. `earned` is every dollar the game has ever
 /// paid you and it only ever goes up — it is the career figure, the one that says how
-/// much of this you have played, and buying Brooklyn must not make it look like you
+/// much of this you have played, and buying a borough must not make it look like you
 /// played less.
 ///
 /// Nothing here knows about maps, views or storage. A wallet is a value you can hand to
@@ -22,7 +22,9 @@ struct Wallet: Equatable, Codable {
     private(set) var rounds = 0
 
     /// The ones that have been paid for. Manhattan is never in here — it was never for
-    /// sale — which is why `has(_:)` asks about the price rather than about this set.
+    /// sale — which is why `has(_:)` asks whether a borough is free before it asks this
+    /// set. How many are in here is also what sets the next price: the ladder is
+    /// climbed by count, not by name.
     private(set) var bought: Set<Borough> = []
 
     /// Where the player is: the borough the next round will ask about.
@@ -63,7 +65,7 @@ struct Wallet: Equatable, Codable {
 
     /// Whether a borough is open. Free ones always are.
     func has(_ borough: Borough) -> Bool {
-        borough.price == 0 || bought.contains(borough)
+        borough.isFree || bought.contains(borough)
     }
 
     /// Everywhere that can be played right now: open, and with a map behind it.
@@ -100,29 +102,39 @@ struct Wallet: Equatable, Codable {
         anywhere && playable.count > 1 ? .anywhere : .borough(current)
     }
 
-    /// The next thing being saved for — the cheapest one not yet owned. Nothing once
+    /// What the next borough costs, whichever borough it turns out to be. Nothing once
     /// the whole city is bought.
-    var saving: Borough? {
-        Borough.allCases.first { !has($0) }
+    ///
+    /// Read off the ladder by how many have been bought, not by which. The ladder is
+    /// about how much of the game you have played, not about which borough is which:
+    /// the second borough costs $600 whether it is Queens or Brooklyn, and a player who
+    /// takes the city in an unusual order pays exactly what one who takes it in the
+    /// obvious order does. The check on the rung is only caution: a ladder with more
+    /// rungs than there are boroughs would otherwise name a price for nothing.
+    var nextPrice: Int? {
+        guard Borough.buyable.contains(where: { !has($0) }),
+              Borough.ladder.indices.contains(bought.count) else { return nil }
+        return Borough.ladder[bought.count]
     }
 
-    /// How far along the way to `saving`, from 0 to 1. A full bar means the money is
-    /// there, which is not the same as the map being there.
+    /// How far along the way to `nextPrice`, from 0 to 1. A full bar means the money is
+    /// there, which is not the same as a map being there.
     var progress: Double {
-        guard let saving, saving.price > 0 else { return 1 }
-        return min(Double(balance) / Double(saving.price), 1)
+        guard let nextPrice else { return 1 }
+        return min(Double(balance) / Double(nextPrice), 1)
     }
 
-    /// How much of a borough's price is covered so far, which is never more than the
+    /// How much of the next price is covered so far, which is never more than the
     /// price. The balance itself can be more, and saying so out loud reads as a mistake:
     /// "$240 of $200" is not a thing anybody has ever said about saving up.
-    func saved(towards borough: Borough) -> Int {
-        min(balance, borough.price)
+    var saved: Int {
+        min(balance, nextPrice ?? 0)
     }
 
     /// Whether there is enough money for it. Says nothing about whether it is drawn.
     func canAfford(_ borough: Borough) -> Bool {
-        !has(borough) && balance >= borough.price
+        guard !has(borough), let nextPrice else { return false }
+        return balance >= nextPrice
     }
 
     /// Whether it can actually be bought: affordable, and somewhere the game can take
@@ -148,12 +160,14 @@ struct Wallet: Equatable, Codable {
 
     /// Buy a borough, if it can be bought. Returns whether it was.
     ///
-    /// Refuses anything that is not drawn even when the money is there. Charging for a
-    /// place the game cannot open is the one outcome worth writing a guard against.
+    /// Charges the next rung of the ladder, not anything of the borough's own — see
+    /// `nextPrice`. Refuses anything that is not drawn even when the money is there:
+    /// charging for a place the game cannot open is the one outcome worth writing a
+    /// guard against.
     @discardableResult
     mutating func buy(_ borough: Borough, drawn: Set<Borough> = Borough.drawn) -> Bool {
-        guard canBuy(borough, drawn: drawn) else { return false }
-        balance -= borough.price
+        guard canBuy(borough, drawn: drawn), let price = nextPrice else { return false }
+        balance -= price
         bought.insert(borough)
         return true
     }

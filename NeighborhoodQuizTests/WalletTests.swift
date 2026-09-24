@@ -1,8 +1,8 @@
 import XCTest
 @testable import NeighborhoodQuiz
 
-/// The money: what a round pays, what a borough costs, and the one thing the game must
-/// never do, which is take payment for a place it cannot open.
+/// The money: what a round pays, what the next borough costs, and the one thing the
+/// game must never do, which is take payment for a place it cannot open.
 final class WalletTests: XCTestCase {
 
     // MARK: - Earning
@@ -53,11 +53,11 @@ final class WalletTests: XCTestCase {
 
         XCTAssertTrue(wallet.buy(.brooklyn, drawn: city))
 
-        XCTAssertEqual(wallet.balance, 500 - Borough.brooklyn.price)
+        XCTAssertEqual(wallet.balance, 500 - Borough.ladder[0])
         XCTAssertEqual(wallet.earned, 500, "a career total never goes down")
         XCTAssertEqual(wallet.rounds, 14, "buying is not playing")
         XCTAssertTrue(wallet.has(.brooklyn))
-        XCTAssertEqual(wallet.saving, .queens, "on to the next rung")
+        XCTAssertEqual(wallet.nextPrice, Borough.ladder[1], "on to the next rung")
     }
 
     func testTheSameBoroughCannotBeBoughtTwice() {
@@ -85,36 +85,37 @@ final class WalletTests: XCTestCase {
     }
 
     func testWhatCannotBeAffordedCannotBeBought() {
-        var wallet = Wallet(balance: Borough.brooklyn.price - 1)
+        var wallet = Wallet(balance: Borough.ladder[0] - 1)
 
         XCTAssertFalse(wallet.canAfford(.brooklyn))
         XCTAssertFalse(wallet.canBuy(.brooklyn))
         XCTAssertFalse(wallet.buy(.brooklyn))
-        XCTAssertEqual(wallet.balance, Borough.brooklyn.price - 1)
+        XCTAssertEqual(wallet.balance, Borough.ladder[0] - 1)
     }
 
     /// The guard that matters most.
     ///
-    /// Every borough is priced and visible, and from Queens on none of them is drawn
-    /// yet. A player can reach the money for Queens — and if the button took it, they
-    /// would have paid six hundred dollars for a blank page. Affordable and buyable are
-    /// two different questions for exactly this reason.
+    /// Every borough is listed, and from Queens on none of them is drawn yet. The next
+    /// borough costs the same whichever one it is, so a player with the price of one
+    /// in hand has the price of Queens in hand — and if the button took it, they would
+    /// have paid for a blank page. Affordable and buyable are two different questions
+    /// for exactly this reason.
     ///
     /// This picks the first undrawn borough rather than naming one, so when a borough
     /// does get a map it stops applying to it and applies to the next one along — it
     /// moved from Brooklyn to Queens without being touched — and when they are all
     /// drawn it has nothing left to guard and says so.
     func testMoneyIsNeverTakenForABoroughWithNoMapBehindIt() {
-        guard let undrawn = Borough.forSale.first(where: { !$0.isDrawn }) else {
+        guard let undrawn = Borough.buyable.first(where: { !$0.isDrawn }) else {
             return  // every borough is drawn; there is nothing left to protect against
         }
 
-        var wallet = Wallet(balance: undrawn.price * 2)
+        var wallet = Wallet(balance: Borough.ladder[0] * 2)
 
         XCTAssertTrue(wallet.canAfford(undrawn), "the money is there")
         XCTAssertFalse(wallet.canBuy(undrawn), "but there is nowhere to go")
         XCTAssertFalse(wallet.buy(undrawn))
-        XCTAssertEqual(wallet.balance, undrawn.price * 2, "not a dollar of it was taken")
+        XCTAssertEqual(wallet.balance, Borough.ladder[0] * 2, "not a dollar of it was taken")
         XCTAssertFalse(wallet.has(undrawn))
     }
 
@@ -133,7 +134,7 @@ final class WalletTests: XCTestCase {
         XCTAssertFalse(wallet.play(.brooklyn), "drawn, but not bought")
         XCTAssertEqual(wallet.current, .manhattan)
 
-        guard let undrawn = Borough.forSale.first(where: { !$0.isDrawn }) else { return }
+        guard let undrawn = Borough.buyable.first(where: { !$0.isDrawn }) else { return }
         wallet = Wallet(balance: 0, bought: [undrawn])
         XCTAssertTrue(wallet.has(undrawn), "owned, however that happened")
         XCTAssertFalse(wallet.play(undrawn), "but there is no map to play it on")
@@ -223,54 +224,94 @@ final class WalletTests: XCTestCase {
 
     // MARK: - The ladder
 
+    /// One rung per borough that can be bought, each dearer than the last. Strictly:
+    /// two rungs at the same price would mean a borough that cost nothing extra, and
+    /// the climb is the point.
     func testTheLadderClimbsInPrice() {
-        let prices = Borough.allCases.map(\.price)
-        XCTAssertEqual(prices, prices.sorted(), "allCases is the order you can afford them")
-        XCTAssertEqual(Borough.manhattan.price, 0)
-        XCTAssertTrue(Borough.forSale.allSatisfy { $0.price > 0 })
-        XCTAssertEqual(Borough.forSale.count, Borough.allCases.count - 1)
+        let ladder = Borough.ladder
+        XCTAssertTrue(zip(ladder, ladder.dropFirst()).allSatisfy { $0 < $1 }, "every rung dearer than the last")
+        XCTAssertTrue(ladder.allSatisfy { $0 > 0 })
+        XCTAssertEqual(ladder.count, Borough.buyable.count, "a rung for every borough there is to buy")
     }
 
-    func testTheNextThingSavedForIsTheCheapestOneNotOwned() {
-        var wallet = Wallet()
-        XCTAssertEqual(wallet.saving, .brooklyn)
+    func testManhattanIsTheFreeOneAndTheRestAreBuyable() {
+        XCTAssertEqual(Borough.free, .manhattan)
+        XCTAssertTrue(Borough.manhattan.isFree)
+        XCTAssertFalse(Borough.buyable.contains(.manhattan))
+        XCTAssertTrue(Borough.buyable.allSatisfy { !$0.isFree })
+        XCTAssertEqual(Borough.buyable.count, Borough.allCases.count - 1)
+    }
 
-        wallet = Wallet(balance: 0, bought: [.brooklyn])
-        XCTAssertEqual(wallet.saving, .queens)
+    /// The next price is the next rung, and the rung is counted by purchases: fresh,
+    /// it is the first; after one borough — whichever — it is the second; with the
+    /// whole city bought there is no rung left and nothing to save for.
+    func testTheNextPriceClimbsWithEachPurchase() {
+        let city: Set<Borough> = [.manhattan, .brooklyn, .queens]
+        var wallet = Wallet(balance: 1_000)
+        XCTAssertEqual(wallet.nextPrice, Borough.ladder[0])
 
-        wallet = Wallet(balance: 0, bought: Set(Borough.forSale))
-        XCTAssertNil(wallet.saving, "nothing left to save for")
+        XCTAssertTrue(wallet.buy(.brooklyn, drawn: city))
+        XCTAssertEqual(wallet.nextPrice, Borough.ladder[1])
+
+        wallet = Wallet(balance: 0, bought: Set(Borough.buyable))
+        XCTAssertNil(wallet.nextPrice, "nothing left to save for")
         XCTAssertEqual(wallet.progress, 1)
+        XCTAssertEqual(wallet.saved, 0)
+        XCTAssertTrue(Borough.allCases.allSatisfy { !wallet.canAfford($0) }, "and nothing left to buy")
+    }
+
+    /// The order is the player's. The price is about how far along the ladder they
+    /// are, not about which borough is which: Queens first is the first rung, and
+    /// Brooklyn after it is the second, exactly as it would be the other way round.
+    func testTheOrderIsThePlayersAndThePriceDoesNotCare() {
+        let city: Set<Borough> = [.manhattan, .brooklyn, .queens]
+        let start = Borough.ladder[0] + Borough.ladder[1]
+
+        var queensFirst = Wallet(balance: start)
+        XCTAssertTrue(queensFirst.buy(.queens, drawn: city))
+        XCTAssertEqual(queensFirst.balance, start - Borough.ladder[0], "the first borough is the first rung, even Queens")
+        XCTAssertTrue(queensFirst.buy(.brooklyn, drawn: city))
+        XCTAssertEqual(queensFirst.balance, 0, "and the second is the second, even Brooklyn")
+
+        var brooklynFirst = Wallet(balance: start)
+        XCTAssertTrue(brooklynFirst.buy(.brooklyn, drawn: city))
+        XCTAssertEqual(brooklynFirst.balance, start - Borough.ladder[0])
+        XCTAssertTrue(brooklynFirst.buy(.queens, drawn: city))
+        XCTAssertEqual(brooklynFirst.balance, 0)
+
+        XCTAssertEqual(queensFirst.bought, brooklynFirst.bought, "both roads end in the same city")
     }
 
     func testProgressRunsFromEmptyToFullAndStopsThere() {
         XCTAssertEqual(Wallet().progress, 0)
-        XCTAssertEqual(Wallet(balance: Borough.brooklyn.price / 2).progress, 0.5, accuracy: 0.001)
-        XCTAssertEqual(Wallet(balance: Borough.brooklyn.price).progress, 1)
-        XCTAssertEqual(Wallet(balance: Borough.brooklyn.price * 10).progress, 1, "never past full")
+        XCTAssertEqual(Wallet(balance: Borough.ladder[0] / 2).progress, 0.5, accuracy: 0.001)
+        XCTAssertEqual(Wallet(balance: Borough.ladder[0]).progress, 1)
+        XCTAssertEqual(Wallet(balance: Borough.ladder[0] * 10).progress, 1, "never past full")
     }
 
     /// What the ladder prints under the bar. Once the money is there the bar is full, and
     /// the count beside it has to agree with the bar rather than with the balance —
-    /// "$240 of $200" reads as a bug even though both numbers are true.
-    func testWhatIsSavedTowardsSomethingNeverExceedsItsPrice() {
-        XCTAssertEqual(Wallet(balance: 0).saved(towards: .brooklyn), 0)
-        XCTAssertEqual(Wallet(balance: 140).saved(towards: .brooklyn), 140)
-        XCTAssertEqual(Wallet(balance: 200).saved(towards: .brooklyn), 200)
-        XCTAssertEqual(Wallet(balance: 240).saved(towards: .brooklyn), 200, "not $240 of $200")
-        XCTAssertEqual(Wallet(balance: 9_999).saved(towards: .brooklyn), Borough.brooklyn.price)
+    /// "$240 of $200" reads as a bug even though both numbers are true. And it is the
+    /// next rung it is measured against, which moves up after a purchase.
+    func testWhatIsSavedNeverExceedsTheNextPrice() {
+        XCTAssertEqual(Wallet(balance: 0).saved, 0)
+        XCTAssertEqual(Wallet(balance: 140).saved, 140)
+        XCTAssertEqual(Wallet(balance: 200).saved, 200)
+        XCTAssertEqual(Wallet(balance: 240).saved, 200, "not $240 of $200")
+        XCTAssertEqual(Wallet(balance: 9_999).saved, Borough.ladder[0])
+        XCTAssertEqual(Wallet(balance: 9_999, bought: [.brooklyn]).saved, Borough.ladder[1], "one rung up")
     }
 
     // MARK: - How long the first one takes
 
     /// Not a rule so much as the tuning written down. A perfect round is fifty dollars,
-    /// so Brooklyn is four of them — and since nobody plays perfectly, really more like
-    /// six or seven. If either number moves, this is the line that says what it did to
-    /// the climb.
-    func testBrooklynIsAboutFourPerfectRoundsAway() {
+    /// so the first borough is four of them — and since nobody plays perfectly, really
+    /// more like six or seven. If either number moves, this is the line that says what
+    /// it did to the climb.
+    func testTheFirstBoroughIsAboutFourPerfectRoundsAway() {
         let perfect = QuizRound.questionCount * (QuizRound.points.first ?? 0)
         XCTAssertEqual(perfect, 50)
-        XCTAssertEqual(Borough.brooklyn.price / perfect, 4)
+        XCTAssertEqual(Borough.ladder[0] / perfect, 4)
     }
 
     // MARK: - Writing it down
