@@ -32,8 +32,9 @@ struct Road: Sendable {
 /// A borough, as the city has it.
 ///
 /// Everything here is read from the borough's own file — `manhattan.json`,
-/// `brooklyn.json` — which `Tools/fetch_map_data.py` writes from NYC Open Data and
-/// which is committed to the repository. Nothing is generated, nothing is guessed, and
+/// `brooklyn.json`, `queens.json`, `bronx.json`, `staten-island.json` — which
+/// `Tools/fetch_map_data.py` writes from NYC Open Data and which is committed to the
+/// repository. Nothing is generated, nothing is guessed, and
 /// nothing is fetched at runtime: the streets below Houston are the streets that are
 /// there, and Washington Heights is laid out the way it was actually laid out rather
 /// than the way the 1811 grid would have continued.
@@ -47,7 +48,9 @@ struct BoroughMap: Sendable {
     /// The land, as a list of rings. For Manhattan that is the island and the three
     /// others in the frame: Roosevelt, Randalls and the scrap of Marble Hill that is
     /// legally Manhattan and physically the Bronx. For Brooklyn it is most of the west
-    /// end of Long Island.
+    /// end of Long Island; for Queens the rest of it and the Rockaways; for the Bronx
+    /// the one piece of the city on the mainland, plus City Island; for Staten Island,
+    /// an island.
     let land: [[Coordinate]]
 
     /// The greens over eight acres — Central Park chief among Manhattan's, Prospect
@@ -90,25 +93,31 @@ struct BoroughMap: Sendable {
 
     /// The map of a borough, parsed once and kept.
     ///
-    /// One cached copy per drawn borough rather than a load per call: a file is two
-    /// hundred kilobytes and more, and the drawing asks for its parts several times over
-    /// while it is being built. The copies are `static let`s, which is what makes them
-    /// safe to read from anywhere — nothing here is ever written to after it is made.
+    /// One cached copy per borough rather than a load per call: a file is two hundred
+    /// kilobytes and more, and the drawing asks for its parts several times over while
+    /// it is being built. The copies are `static let`s, which is what makes them safe
+    /// to read from anywhere — nothing here is ever written to after it is made — and
+    /// lazy, as every `static let` is, so a borough nobody has visited costs nothing
+    /// until they do.
     ///
-    /// Asking for a borough with no file behind it is a programming error, not a state
-    /// of the game: `Wallet.play` will not let a player in, so a crash here means some
-    /// code path forgot to ask `isDrawn` first.
+    /// Every borough has a file now, so there is no arm here for one that does not.
+    /// The one way this can still fail is a file missing from the bundle, and the loader
+    /// below has its own precondition for that.
     static func of(_ borough: Borough) -> BoroughMap {
         switch borough {
         case .manhattan: return manhattan
         case .brooklyn: return brooklyn
-        case .queens, .bronx, .statenIsland:
-            preconditionFailure("\(borough.name) is not drawn yet; there is no \(borough.mapFile).json to read")
+        case .queens: return queens
+        case .bronx: return bronx
+        case .statenIsland: return statenIsland
         }
     }
 
     private static let manhattan = load(.manhattan)
     private static let brooklyn = load(.brooklyn)
+    private static let queens = load(.queens)
+    private static let bronx = load(.bronx)
+    private static let statenIsland = load(.statenIsland)
 
     // MARK: - Reading the file
 

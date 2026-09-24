@@ -2,14 +2,15 @@ import SwiftUI
 
 /// The city: what you have, what the next borough costs, and what is a long way off.
 ///
-/// Every borough is listed, including the ones with no map yet, because a game about
-/// saving up has to show you what there is to save for. What the list does not carry
-/// is a price per row. The next borough costs the same whichever one it is — the price
-/// climbs with how many you have bought, not with which — so the price is said once, on
-/// the card above the list, with the bar and how far off it is. The rows are then only
-/// states: playing, or a way to get there, for the ones that are open; Unlock, or the
-/// word "locked", for the drawn ones that are not; and a plain word for the ones whose
-/// map is still being drawn.
+/// Every borough is listed, because a game about saving up has to show you what there
+/// is to save for. What the list does not carry is a price per row. The next borough
+/// costs the same whichever one it is — the price climbs with how many you have bought,
+/// not with which — so the price is said once, on the card above the list, with the bar
+/// and how far off it is. The rows are then only states: playing, or a way to get
+/// there, for the ones that are open; Unlock, or the word "locked", for the drawn ones
+/// that are not; and a plain word for one whose map is still being drawn. The whole
+/// city is drawn now, so nothing reaches that last state — it stays because it is the
+/// honest fallback for the next map that is not, whichever that turns out to be.
 ///
 /// An open row says either that you are there or offers to take you — which is the
 /// other thing this screen can do now that there is more than one place to be. A round
@@ -122,8 +123,8 @@ struct BoroughsView: View {
     // MARK: - The next borough
 
     /// Whether there is anything on the list the Unlock button could be pressed for.
-    /// The money being there is not enough: every unowned borough might be one whose
-    /// map is still being drawn, and the line under the bar has to say which it is.
+    /// The money being there is not enough: an unowned borough could be one whose map
+    /// is not drawn — none is today — and the line under the bar has to say which it is.
     private var somethingToUnlock: Bool {
         Borough.buyable.contains { wallet.canBuy($0) }
     }

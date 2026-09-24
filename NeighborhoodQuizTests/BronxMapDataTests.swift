@@ -2,44 +2,44 @@ import CoreGraphics
 import XCTest
 @testable import NeighborhoodQuiz
 
-/// The same checks `ManhattanMapDataTests` makes, on Brooklyn's file.
+/// The same checks `BrooklynMapDataTests` makes, on the Bronx's file.
 ///
-/// `brooklyn.json` comes out of the same tool with a different borough on the command
-/// line, so most of what could go wrong with it is what could go wrong with Manhattan's
-/// — a filter that swallowed the borough, a ring that folded over, a stump the speller
-/// left. What is Brooklyn's own is the shape of the place: bigger, more neighbourhoods,
-/// numbered avenues in figures rather than words, and a Belt Parkway that is the longest
-/// road in the borough and not an avenue at all.
-final class BrooklynMapDataTests: XCTestCase {
-    private let map = BoroughMap.of(.brooklyn)
+/// `bronx.json` comes out of the same tool as the others, so what could go wrong with
+/// it is what could go wrong with any of them — a filter that swallowed the borough, a
+/// ring that folded over, a stump the speller left. What is the Bronx's own: it is the
+/// one piece of the city on the mainland, so its "shoreline" is mostly a county line;
+/// Manhattan's numbered streets carry on over the Harlem River and then give out; and
+/// three expressways run through it that are the longest roads in the borough and not
+/// avenues at all.
+final class BronxMapDataTests: XCTestCase {
+    private let map = BoroughMap.of(.bronx)
 
-    /// Brooklyn's box, with a little water round it. Coney Island is the south end,
-    /// Greenpoint the north; the Narrows are the west and the Queens line the east.
-    private let longitudes = -74.06...(-73.82)
-    private let latitudes = 40.55...40.75
+    /// The Bronx's box, with a little water round it. Port Morris is the south end and
+    /// Woodlawn the north; Spuyten Duyvil is the west and City Island the east.
+    private let longitudes = -73.94...(-73.74)
+    private let latitudes = 40.78...40.92
 
     func testTheFileIsThereAndHasLand() {
         let land = map.land
-        XCTAssertFalse(land.isEmpty, "brooklyn.json did not load")
-        XCTAssertEqual(map.borough, .brooklyn)
+        XCTAssertFalse(land.isEmpty, "bronx.json did not load")
+        XCTAssertEqual(map.borough, .bronx)
 
         let mainland = land.max { $0.count < $1.count } ?? []
-        XCTAssertGreaterThan(mainland.count, 150, "Too coarse to read as Brooklyn")
+        XCTAssertGreaterThan(mainland.count, 150, "Too coarse to read as the Bronx")
     }
 
-    func testTheLandIsWhereBrooklynIs() {
+    func testTheLandIsWhereTheBronxIs() {
         for ring in map.land {
             for point in ring {
-                XCTAssertTrue(longitudes.contains(point.longitude), "\(point) is not in Brooklyn")
-                XCTAssertTrue(latitudes.contains(point.latitude), "\(point) is not in Brooklyn")
+                XCTAssertTrue(longitudes.contains(point.longitude), "\(point) is not in the Bronx")
+                XCTAssertTrue(latitudes.contains(point.latitude), "\(point) is not in the Bronx")
             }
         }
     }
 
     func testTheShorelineDoesNotCrossItself() {
-        // The same fold that once turned Wards Island into a bow tie. Brooklyn's ring
-        // is longer than Manhattan's, but it is the thinned one, and every pair of
-        // edges on it is still a fraction of a second.
+        // The same fold that once turned Wards Island into a bow tie. Every pair of
+        // edges on the thinned ring is still a fraction of a second.
         let mainland = map.land.max { $0.count < $1.count } ?? []
         let points = mainland.map { CGPoint(x: $0.longitude * 10_000, y: $0.latitude * 10_000) }
 
@@ -77,26 +77,34 @@ final class BrooklynMapDataTests: XCTestCase {
         XCTAssertEqual(carriers.count, named.count, "every street gets its name somewhere")
     }
 
-    /// The streets anybody would look for first. Numbered avenues are in figures here —
-    /// Brooklyn writes "86th Street" and "Avenue U", not "Eighty-sixth" — and North 7th
-    /// is Williamsburg's own grid, which has a compass point in front of every number.
+    /// The streets anybody would look for first. Fordham Road and Tremont Avenue are
+    /// each filed by the city as East and West halves, and the speller may keep the
+    /// compass point or may not; either spelling is the street, so either is accepted.
+    /// Broadway is here too — it is the same Broadway, and it does not stop at the
+    /// Harlem River.
     func testTheStreetsPeopleKnowAreThere() {
         let named = Set(map.roads.map(\.name))
         for street in [
-            "Flatbush Avenue", "Atlantic Avenue", "Bedford Avenue", "Ocean Parkway",
-            "Eastern Parkway", "Kings Highway", "Nostrand Avenue", "Fulton Street",
-            "Avenue U", "86th Street", "North 7th Street",
+            "Grand Concourse", "Jerome Avenue", "Webster Avenue", "White Plains Road",
+            "Boston Road", "Bruckner Boulevard", "Southern Boulevard", "Broadway",
         ] {
             XCTAssertTrue(named.contains(street), "\(street) is missing from the map")
         }
+        for (plain, east) in [("Fordham Road", "East Fordham Road"), ("Tremont Avenue", "East Tremont Avenue")] {
+            XCTAssertTrue(named.contains(plain) || named.contains(east), "\(plain) is missing from the map")
+        }
     }
 
-    /// The Belt Parkway is the longest road in the borough and nobody gives directions
-    /// by it. It is a highway, and the roadway type is what keeps it out of the top
-    /// rank — the same sorting that keeps the FDR off Manhattan's.
-    func testTheBeltParkwayIsNotAnAvenue() {
+    /// The Major Deegan, the Cross Bronx and the Bronx River Parkway are among the
+    /// longest roads in the borough and nobody gives directions by any of them. They
+    /// are highways, and the roadway type is what keeps them out of the top rank — the
+    /// same sorting that keeps the Belt Parkway off Brooklyn's and the FDR off
+    /// Manhattan's.
+    func testTheExpresswaysAreNotAvenues() {
         let avenues = Set(map.roads.filter { $0.kind == .avenue }.map(\.name))
-        XCTAssertFalse(avenues.contains("Belt Parkway"), "Belt Parkway should not rank as an avenue")
+        for pretender in ["Major Deegan Expressway", "Cross Bronx Expressway", "Bronx River Parkway"] {
+            XCTAssertFalse(avenues.contains(pretender), "\(pretender) should not rank as an avenue")
+        }
         XCTAssertFalse(avenues.isEmpty, "But something should")
     }
 
@@ -119,10 +127,13 @@ final class BrooklynMapDataTests: XCTestCase {
         }
     }
 
-    func testProspectParkIsAmongTheGreens() {
+    /// The two biggest parks in the city are both here, and a greens filter that lost
+    /// either of them would have lost something the size of a neighbourhood.
+    func testVanCortlandtAndPelhamBayAreAmongTheGreens() {
         let parks = map.parks
         XCTAssertGreaterThan(parks.count, 10)
-        XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Prospect Park") })
+        XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Van Cortlandt Park") })
+        XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Pelham Bay Park") })
         for park in parks {
             XCTAssertGreaterThanOrEqual(park.ring.count, 3, "\(park.name) is not a shape")
         }
@@ -130,9 +141,9 @@ final class BrooklynMapDataTests: XCTestCase {
 
     func testTheNeighbourhoodsAreNotOnTheMap() {
         // The point of the quiz is that the map does not tell you. A street may share a
-        // name with a district, so this checks for road names that are *only* a
-        // neighbourhood.
-        let forbidden = ["Park Slope", "Williamsburg", "Greenpoint", "Bushwick", "Red Hook", "DUMBO"]
+        // name with a district — Fordham Road, Tremont Avenue, Melrose Avenue — so this
+        // checks for road names that are *only* a neighbourhood.
+        let forbidden = ["Riverdale", "Fordham", "Belmont", "Tremont", "Melrose", "Kingsbridge"]
         for road in map.roads {
             for name in forbidden {
                 XCTAssertNotEqual(road.name.lowercased(), name.lowercased())
@@ -150,9 +161,9 @@ final class BrooklynMapDataTests: XCTestCase {
     /// what each place is called is a judgement and will be revised; a band catches a
     /// re-fetch that fell back to the city's own areas — there are far fewer — or one
     /// that kept every tract as its own place.
-    func testBrooklynIsDividedIntoNeighborhoods() {
+    func testTheBronxIsDividedIntoNeighborhoods() {
         let areas = map.neighborhoods
-        XCTAssertGreaterThanOrEqual(areas.count, 45, "Too few: has the tool fallen back to the NTAs?")
+        XCTAssertGreaterThanOrEqual(areas.count, 40, "Too few: has the tool fallen back to the NTAs?")
         XCTAssertLessThanOrEqual(areas.count, 60, "Too many to ask about, and too many to name")
 
         for area in areas {
@@ -167,11 +178,11 @@ final class BrooklynMapDataTests: XCTestCase {
         XCTAssertEqual(Set(names).count, names.count, "Two neighborhoods share a name")
     }
 
-    func testTheNeighborhoodsAreWhereBrooklynIs() {
+    func testTheNeighborhoodsAreWhereTheBronxIs() {
         for area in map.neighborhoods {
             for point in area.rings.flatMap({ $0 }) {
-                XCTAssertTrue(longitudes.contains(point.longitude), "\(area.name) is not in Brooklyn")
-                XCTAssertTrue(latitudes.contains(point.latitude), "\(area.name) is not in Brooklyn")
+                XCTAssertTrue(longitudes.contains(point.longitude), "\(area.name) is not in the Bronx")
+                XCTAssertTrue(latitudes.contains(point.latitude), "\(area.name) is not in the Bronx")
             }
         }
     }
@@ -196,26 +207,28 @@ final class BrooklynMapDataTests: XCTestCase {
     }
 
     /// The names a player would say, and none of the city's compounds. The city files
-    /// Carroll Gardens, Cobble Hill, Gowanus and Red Hook as one area with all four
-    /// names hyphenated together; a re-fetch that fell back to the NTA table would pass
-    /// every other test in this file and fail this one four times over.
+    /// Mott Haven with Port Morris and Kingsbridge Heights with Van Cortlandt Village;
+    /// a re-fetch that fell back to the NTA table would pass every other test in this
+    /// file and fail this one many times over.
     func testTheNamesAreOnesAPlayerWouldSay() {
         for name in [
-            "Park Slope", "Williamsburg", "Greenpoint", "Bay Ridge", "Coney Island",
-            "Bushwick", "Red Hook", "DUMBO", "Brooklyn Heights", "Bedford-Stuyvesant",
-            "Crown Heights", "Flatbush", "Sheepshead Bay", "Canarsie", "Bensonhurst",
-            "Brighton Beach", "Fort Greene", "Sunset Park", "East New York", "Gowanus",
-            "Carroll Gardens", "Cobble Hill", "Prospect Heights", "Clinton Hill",
-            "Dyker Heights", "Borough Park", "Midwood", "Brownsville", "Marine Park",
-            "Mill Basin", "Gerritsen Beach", "Manhattan Beach", "Windsor Terrace",
-            "Kensington",
+            "Mott Haven", "Port Morris", "Hunts Point", "Longwood", "Morrisania", "Melrose",
+            "Highbridge", "Concourse", "Claremont", "Mount Eden", "Mount Hope", "Tremont",
+            "East Tremont", "West Farms", "Belmont", "Fordham", "University Heights",
+            "Morris Heights", "Bedford Park", "Norwood", "Kingsbridge", "Kingsbridge Heights",
+            "Riverdale", "Spuyten Duyvil", "Williamsbridge", "Wakefield", "Woodlawn",
+            "Co-op City", "Eastchester", "Baychester", "Edenwald", "Pelham Gardens",
+            "Allerton", "Bronxdale", "Pelham Parkway", "Morris Park", "Van Nest",
+            "Parkchester", "Westchester Square", "Castle Hill", "Soundview", "Clason Point",
+            "Throgs Neck", "Country Club", "Pelham Bay", "City Island",
         ] {
             XCTAssertNotNil(named(name), "\(name) is missing from the map")
         }
 
-        // Bedford-Stuyvesant has a hyphen and no space, which is how it is written; a
-        // hyphen *and* a space is the shape of an NTA name, not of a place.
-        for area in map.neighborhoods {
+        // A hyphen *and* a space is the shape of an NTA name, not of a place. Co-op
+        // City is the one exception in the city: the hyphen is in the word, not
+        // between two places.
+        for area in map.neighborhoods where area.name != "Co-op City" {
             XCTAssertFalse(
                 area.name.contains("-") && area.name.contains(" "),
                 "\(area.name) still reads like an NTA rather than like a place"

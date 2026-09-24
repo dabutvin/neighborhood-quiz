@@ -51,10 +51,10 @@ struct MapBoard: View {
     /// The drawings, one per borough visited, all at `drawnSize`.
     ///
     /// A cache rather than the one map, because in the anywhere mode the map hops
-    /// between boroughs every question and Brooklyn takes a good fraction of a second
-    /// to draw. Built once each, the second visit is free. A new size empties it, since
-    /// every drawing in it was for the old one — a rotation pays for one borough again,
-    /// not for both.
+    /// between boroughs every question and a borough the size of Queens takes a good
+    /// fraction of a second to draw. Built once each, the second visit is free. A new
+    /// size empties it, since every drawing in it was for the old one — a rotation
+    /// pays for one borough again, not for all five.
     @State private var drawn: [Borough: DrawnMap] = [:]
     @State private var drawnSize: CGSize = .zero
     @State private var camera = MapCamera()

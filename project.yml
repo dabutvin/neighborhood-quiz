@@ -31,6 +31,12 @@ targets:
       # And Brooklyn, from the same tool with a different borough on the command line.
       # One file per borough: a borough with no file here is one the game will not sell.
       - path: NeighborhoodQuiz/Resources/brooklyn.json
+      # The other three, same tool, same shape. Staten Island's name has a hyphen in it
+      # because a resource with a space in its name is a bug waiting for a shell, and
+      # `Borough.mapFile` spells it the same way.
+      - path: NeighborhoodQuiz/Resources/queens.json
+      - path: NeighborhoodQuiz/Resources/bronx.json
+      - path: NeighborhoodQuiz/Resources/staten-island.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nycneighborhoodsquiz.app

@@ -9,8 +9,8 @@ import Foundation
 /// scoring below could be argued about in a test rather than by squinting at a phone.
 ///
 /// A place rather than a bare id, since the round stopped being about one borough. Ten
-/// questions drawn from the whole city are ten neighbourhoods on two maps, and an id
-/// alone cannot say which map it belongs to. Not generic over the question type,
+/// questions drawn from the whole city are ten neighbourhoods on up to five maps, and
+/// an id alone cannot say which map it belongs to. Not generic over the question type,
 /// tempting as that looks: the point values and the go names are static stored
 /// properties, and a generic type is not allowed those.
 ///
