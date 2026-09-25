@@ -19,7 +19,8 @@ from one banks nothing.
 
 The first round is also the tutorial. Rather than pages of rules in front of the game,
 four tips come up over it, each at the moment it is about: tap where you think the place
-is, and the streets are the clues; Answer is what locks it in; what each of the three goes
+is, and the streets are the clues; the outline is the neighborhood picked, and Answer
+locks it in; what each of the three goes
 pays, said right after the first one; and, on the card at the end of the round, that the
 money is kept and what it buys. Every tip can be skipped, "How to play" in Settings brings
 them back, and a player who was already playing before there were tips is not given them.
