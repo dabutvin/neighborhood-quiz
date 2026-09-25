@@ -246,7 +246,7 @@ python3 Tools/fetch_map_data.py brooklyn
 python3 Tools/fetch_map_data.py queens
 python3 Tools/fetch_map_data.py bronx
 python3 Tools/fetch_map_data.py staten-island
-python3 Tools/generate_app_icon.py          # the icon is the Manhattan map, so it follows
+python3 Tools/generate_app_icon.py          # the icon is the whole city, so it follows
 ```
 
 Commit whatever changes. There is no list of streets to maintain: a street the city adds
@@ -267,12 +267,18 @@ hyphenated compounds.
 
 ### App icon
 
-The icon is the map, not a picture of a map: it reads the very same `manhattan.json`,
-so a re-fetch corrects the tile too and the two cannot drift apart. What it does
-differently is the angle — the app stands the avenues upright, which leaves a tall thin
-island in a square tile, so the icon turns the whole thing another forty-five degrees and
-lets Manhattan run corner to corner. It draws the avenues only: at sixty points across,
-a hundred cross streets are not lines but a smudge.
+The icon is the map, not a picture of a map: it reads the very same five files the app
+reads, so a re-fetch corrects the tile too and the two cannot drift apart. It is all five
+boroughs, north-up — the shape everybody knows the city by, which very nearly fills a
+square without being turned — with the big greens on it and no streets at all: at sixty
+points across, five boroughs of roads are not lines but a smudge.
+
+Over the city, "NYC", lettered in ink by the same unsteady hand that draws the streets.
+There is no font in the icon script and no dependency to bring one in, so the letters are
+strokes — three for the N, three for the Y, an arc for the C — each shaken a little the
+way the map's pen shakes, over a coat of paper that keeps the word readable where it
+crosses the water. (Not "I ♥ NY": that is New York State's registered mark, and App
+Review would be right to ask.)
 
 No Pillow, no cairo, nothing to install — it rasterises by scanline at four times the
 final size, averages back down, and writes the PNGs by hand. Commit the regenerated
