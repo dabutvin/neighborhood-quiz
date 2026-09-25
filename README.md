@@ -23,6 +23,7 @@ is, and the streets are the clues; Answer is what locks it in; what each of the 
 pays, said right after the first one; and, on the card at the end of the round, that the
 money is kept and what it buys. Every tip can be skipped, "How to play" in Settings brings
 them back, and a player who was already playing before there were tips is not given them.
+"Delete all saved data" puts the app back as it was on a fresh install, tips included.
 
 A round is ten neighbourhoods. You are given a name and three goes to put your finger on
 it: five dollars if you know it straight away, three on the second go, one on the third,

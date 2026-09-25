@@ -193,9 +193,9 @@ extension Tutorial.Step {
 /// skipped; written `false` by "How to play", which asks for them again whatever the
 /// wallet says.
 ///
-/// Like the counting's switch, it survives "Delete all saved data". Somebody who deletes
-/// their wallet already knows how to play, and "How to play" is one row up from the
-/// button if they want the tips back.
+/// "Delete all saved data" erases it along with the wallet, because what that button
+/// promises is the app as it was on a fresh install — and a fresh install is shown the
+/// tips. With nothing written and an empty wallet, the next round is coached.
 ///
 /// With no `defaults` it coaches nobody and writes nothing, which is what the screenshot
 /// runs use.
@@ -219,5 +219,10 @@ struct TutorialRecord {
 
     func replay() {
         defaults?.set(false, forKey: Self.key)
+    }
+
+    /// Forgets it was ever decided, for "Delete all saved data".
+    func erase() {
+        defaults?.removeObject(forKey: Self.key)
     }
 }

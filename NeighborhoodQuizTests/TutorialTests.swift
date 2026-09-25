@@ -193,17 +193,30 @@ final class TutorialTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: TutorialRecord.key))
     }
 
-    /// Like the counting's switch, the record is a preference rather than game data, and
-    /// deleting the wallet leaves it where it is.
-    func testDeletingTheWalletLeavesTheRecordAlone() {
-        let bank = Bank(defaults: defaults)
-        bank.earn(30)
+    /// "Delete all saved data" is a fresh install: the wallet goes, the record goes, and
+    /// a fresh install is shown the tips — whether they were read, skipped or never seen.
+    func testDeletingEverythingCoachesTheNextRoundAgain() {
+        let decisions: [(TutorialRecord) -> Void] = [{ $0.finish() }, { $0.replay() }, { _ in }]
+        for decided in decisions {
+            let bank = Bank(defaults: defaults)
+            bank.earn(30)
+            let record = TutorialRecord(defaults: defaults)
+            decided(record)
+
+            record.erase()
+            bank.erase()
+
+            XCTAssertNil(defaults.object(forKey: TutorialRecord.key), "nothing left behind")
+            XCTAssertTrue(TutorialRecord(defaults: defaults).shouldCoach(bank.wallet))
+        }
+    }
+
+    func testErasingAStagedRecordTouchesNothing() {
         TutorialRecord(defaults: defaults).finish()
 
-        bank.erase()
+        TutorialRecord(defaults: nil).erase()
 
         XCTAssertEqual(defaults.object(forKey: TutorialRecord.key) as? Bool, true)
-        XCTAssertFalse(TutorialRecord(defaults: defaults).shouldCoach(bank.wallet))
     }
 
     // MARK: - The camera

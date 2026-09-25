@@ -67,9 +67,10 @@ final class Bank {
     /// nought. After this the app is in the state it was in before it was ever played.
     ///
     /// This wallet is the only game data the app keeps anywhere, so this really is all of
-    /// it — no file, no keychain entry, nothing on a server. The counting keeps two things
-    /// of its own beside it, a switch and a random number, and `Analytics.eraseEverything`
-    /// deals with the number; settings calls both.
+    /// it — no file, no keychain entry, nothing on a server. Two other things are kept
+    /// beside it: whether the tips have been seen, and the counting's switch and random
+    /// number. Settings erases the tips' record and the number along with this, and leaves
+    /// only the switch.
     func erase() {
         wallet = Wallet()
         defaults?.removeObject(forKey: key)

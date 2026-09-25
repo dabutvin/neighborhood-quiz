@@ -144,6 +144,11 @@ private struct StagedSettings: View {
 
     var body: some View {
         // A row that does nothing when pressed, which is fine for a photograph of it.
-        SettingsView(bank: bank, analytics: analytics, onHowToPlay: {})
+        SettingsView(
+            bank: bank,
+            analytics: analytics,
+            tutorialRecord: TutorialRecord(defaults: nil),
+            onHowToPlay: {}
+        )
     }
 }

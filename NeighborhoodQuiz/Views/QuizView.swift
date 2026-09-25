@@ -233,7 +233,10 @@ struct QuizView: View {
         .sheet(item: $overlay) { which in
             switch which {
             case .boroughs: BoroughsView(bank: bank) { overlay = nil }
-            case .settings: SettingsView(bank: bank, onHowToPlay: { replayTutorial() }) { overlay = nil }
+            case .settings:
+                SettingsView(bank: bank, tutorialRecord: record, onHowToPlay: { replayTutorial() }) {
+                    overlay = nil
+                }
             }
         }
         // Changing what the next round is about is only offered from the menu and from
@@ -247,6 +250,13 @@ struct QuizView: View {
         // from one borough to the other.
         .onChange(of: bank.wallet.pick) { _, _ in
             if round != nil { leave() }
+        }
+        // A wallet only ever goes back to empty one way: "Delete all saved data", which
+        // erases the tips' record with it. So the tips are asked again, from the record,
+        // and the next round is coached the way a fresh install's would be.
+        .onChange(of: bank.wallet.isEmpty) { _, empty in
+            guard empty, stage == nil else { return }
+            tutorial = Tutorial(coaching: record.shouldCoach(bank.wallet))
         }
         // Holding the settled place on screen, then moving along. `task(id:)` rather
         // than a Task started by hand: it is cancelled for us if the view goes away or

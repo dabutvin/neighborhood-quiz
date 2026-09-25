@@ -14,6 +14,10 @@ struct SettingsView: View {
     /// What the game counts, and the switch that stops it. The real one by default; the
     /// screenshot run hands in one that remembers nothing.
     @Bindable var analytics: Analytics = .shared
+    /// Whether the tips have been seen, which "Delete all saved data" forgets along with
+    /// the wallet. The real one by default; the screenshot run hands in one that keeps
+    /// nothing.
+    var tutorialRecord = TutorialRecord()
     /// Shows the tips again over a fresh round. The row is only there when the screen
     /// it was opened over can start one.
     var onHowToPlay: (() -> Void)?
@@ -75,7 +79,7 @@ struct SettingsView: View {
             }
             Button("Keep it", role: .cancel) {}
         } message: {
-            Text("Your wallet, everything you have earned and every borough you have bought. This cannot be undone.")
+            Text("Your wallet, everything you have earned and every borough you have bought. The app will be as it was when you first opened it. This cannot be undone.")
         }
     }
 
@@ -233,13 +237,18 @@ struct SettingsView: View {
 
     // MARK: - Actions
 
-    /// The wallet, and the number the counting knew this phone by. Said before it is
-    /// thrown away, since the number it would be counted under is one of the things going.
-    /// What survives is the switch itself: a player who turned counting off and then
-    /// deleted their wallet has not asked to be counted again.
+    /// Everything, so the app is as it was on a fresh install: the wallet, whether the
+    /// tips have been seen — so the next round is coached again — and the number the
+    /// counting knew this phone by. Said before it is thrown away, since the number it
+    /// would be counted under is one of the things going.
+    ///
+    /// The one thing a fresh install would have and this does not put back is the
+    /// counting's switch. A player who turned counting off and then deleted their wallet
+    /// has not asked to be counted again.
     private func deleteEverything() {
         analytics.record(.dataCleared)
         analytics.flush()
+        tutorialRecord.erase()
         bank.erase()
         analytics.eraseEverything()
     }
