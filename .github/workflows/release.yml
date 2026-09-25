@@ -120,7 +120,8 @@ jobs:
             CODE_SIGN_IDENTITY="${{ steps.signing.outputs.identity }}" \
             PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.profile-name }}" \
             MARKETING_VERSION=${{ env.VERSION }} \
-            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }}
+            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }} \
+            TELEMETRYDECK_APP_ID="${{ secrets.TELEMETRYDECK_APP_ID }}"
 
       - name: Configure export options
         env:

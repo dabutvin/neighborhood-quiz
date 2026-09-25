@@ -122,7 +122,8 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_IDENTITY="${{ steps.signing.outputs.identity }}" \
             PROVISIONING_PROFILE_SPECIFIER="${{ steps.signing.outputs.profile-name }}" \
-            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }}
+            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }} \
+            TELEMETRYDECK_APP_ID="${{ secrets.TELEMETRYDECK_APP_ID }}"
 
       # The debug symbols, kept for as long as the build is likely to be on
       # anybody's phone. A crash report arrives as a list of addresses, and the

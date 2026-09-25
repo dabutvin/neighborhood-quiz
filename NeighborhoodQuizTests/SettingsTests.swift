@@ -79,8 +79,10 @@ final class SettingsTests: XCTestCase {
     }
 
     /// Erasing is the whole of it, so there must be nothing else left behind. The wallet
-    /// is the only thing this app writes down anywhere; if that ever stops being true,
-    /// this is the test that should start failing.
+    /// is the only game data this app writes down anywhere — the counting keeps a switch
+    /// and a random number beside it, under its own keys, and `AnalyticsTests` holds it
+    /// to those two. If anything else ever appears, this is the test that should start
+    /// failing.
     func testTheWalletIsTheOnlyThingKept() {
         let bank = Bank(defaults: defaults)
         bank.earn(50)

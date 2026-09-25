@@ -424,7 +424,10 @@ struct QuizView: View {
                     share(round)
                 }
                 HStack(spacing: 10) {
-                    pill("Boroughs") { overlay = .boroughs }
+                    pill("Boroughs") {
+                        count(.boroughsOpened(from: "summary"))
+                        overlay = .boroughs
+                    }
                     pill("Menu", action: leave)
                 }
             }
@@ -501,8 +504,14 @@ struct QuizView: View {
             VStack(spacing: 10) {
                 pill("Start", action: startRound)
                 HStack(spacing: 10) {
-                    pill("Boroughs") { overlay = .boroughs }
-                    pill("Settings") { overlay = .settings }
+                    pill("Boroughs") {
+                        count(.boroughsOpened(from: "menu"))
+                        overlay = .boroughs
+                    }
+                    pill("Settings") {
+                        count(.settingsOpened)
+                        overlay = .settings
+                    }
                 }
             }
             .padding(.top, 2)
@@ -534,11 +543,15 @@ struct QuizView: View {
             HStack(spacing: 8) {
                 ForEach(wallet.playable) { borough in
                     choice(borough.name, chosen: wallet.pick == .borough(borough)) {
-                        bank.play(borough)
+                        if bank.play(borough) {
+                            count(.boroughPicked(.borough(borough), from: "menu"))
+                        }
                     }
                 }
                 choice("Anywhere", chosen: wallet.pick == .anywhere) {
-                    bank.playAnywhere()
+                    if bank.playAnywhere() {
+                        count(.boroughPicked(.anywhere, from: "menu"))
+                    }
                 }
             }
         } else {
@@ -824,23 +837,34 @@ struct QuizView: View {
 
         // Unwrapped and put back rather than mutated through the optional, so that what
         // the round did and what the screen does next are two plain steps.
-        let worth = QuizRound.points[min(playing.triesUsed, QuizRound.points.count - 1)]
+        let go = playing.triesUsed
+        let worth = QuizRound.points[min(go, QuizRound.points.count - 1)]
         let outcome = playing.guess(picked)
 
         // What the card will say about the question that just ended, decided before any
-        // of it reaches the screen.
+        // of it reaches the screen — and, for a question that did end, what the charts
+        // are told about it: which place, and which go it took.
         let settled: Shown?
         switch outcome {
-        case .right: settled = .found(picked, worth: worth)
-        case .missed: settled = playing.missed.last.map(Shown.missed)
-        case .wrong, .ignored: settled = nil
+        case .right:
+            settled = .found(picked, worth: worth)
+            count(.placeSettled(picked, go: go, worth: worth))
+        case .missed:
+            settled = playing.missed.last.map(Shown.missed)
+            if let given = playing.missed.last {
+                count(.placeSettled(given, go: nil, worth: 0))
+            }
+        case .wrong, .ignored:
+            settled = nil
         }
 
         // Paid here rather than where the summary is drawn. This runs once, when the
         // last question is answered; a view body runs whenever SwiftUI feels like it,
-        // and paying from one would pay again on every redraw.
+        // and paying from one would pay again on every redraw. Counted after it is paid,
+        // so the round count on the signal includes this one.
         if playing.isFinished {
             bank.earn(playing.score)
+            count(.roundFinished(playing, pick: bank.wallet.pick, rounds: bank.wallet.rounds))
             askForARating()
         }
 
@@ -873,6 +897,7 @@ struct QuizView: View {
     /// it, and the staged wallet's round count is whatever the gallery needed anyway.
     private func askForARating() {
         guard stage == nil, bank.wallet.rounds == 3 || bank.wallet.rounds == 10 else { return }
+        count(.ratingAsked(afterRounds: bank.wallet.rounds))
         Task {
             try? await Task.sleep(for: .seconds(1.5))
             requestReview()
@@ -891,6 +916,7 @@ struct QuizView: View {
         showing = nil
         candidate = nil
         round = QuizRound(askingAbout: pool)
+        count(.roundStarted(bank.wallet.pick, open: bank.wallet.playable.count))
         // A fresh round starts on the whole borough. Mid-round it never does.
         opening += 1
     }
@@ -902,12 +928,25 @@ struct QuizView: View {
     /// answering the three you knew and walking away a better rate than finishing,
     /// which is the opposite of what the money is for.
     private func leave() {
+        // A round left part-way is worth a line on a chart; a finished one has already
+        // had its say, and leaving its summary for the menu is not leaving the round.
+        if let round, !round.isFinished {
+            count(.roundLeft(round, pick: bank.wallet.pick))
+        }
         withAnimation(.easeOut(duration: 0.25)) {
             round = nil
             showing = nil
             candidate = nil
         }
         opening += 1
+    }
+
+    /// Everything this screen counts goes through here, so that a staged run — which is
+    /// the camera, not a player — counts nothing at all rather than relying on the sink
+    /// downstream to throw it away.
+    private func count(_ signal: AnalyticsSignal) {
+        guard stage == nil else { return }
+        Analytics.record(signal)
     }
 
     // MARK: - Staging, for the gallery

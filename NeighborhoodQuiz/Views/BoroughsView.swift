@@ -287,7 +287,9 @@ struct BoroughsView: View {
     /// sheet closes behind it, because the map you asked for is underneath.
     private func play(_ borough: Borough) -> some View {
         Button {
-            bank.play(borough)
+            if bank.play(borough) {
+                Analytics.record(.boroughPicked(.borough(borough), from: "ladder"))
+            }
             onClose()
         } label: {
             Text("Play")
@@ -308,7 +310,13 @@ struct BoroughsView: View {
     /// which is the money and the map together; the wallet checks again underneath.
     private func unlock(_ borough: Borough) -> some View {
         Button {
-            bank.buy(borough)
+            // Read before the purchase moves them: the rung this is and what it costs
+            // are what the wallet says now, not what it will say once it has one more.
+            let rung = wallet.bought.count + 1
+            let price = wallet.nextPrice ?? 0
+            if bank.buy(borough) {
+                Analytics.record(.boroughBought(borough, rung: rung, price: price, rounds: wallet.rounds))
+            }
         } label: {
             Text("Unlock")
                 .font(.system(size: 12, weight: .semibold))
