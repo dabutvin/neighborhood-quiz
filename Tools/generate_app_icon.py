@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Draw the app icon: the same Manhattan the app draws, turned onto the diagonal.
+"""Draw the app icon: the whole city the app draws, with its name lettered over it.
 
-The icon is the map, not a picture of a map. It reads the very same
-NeighborhoodQuiz/Resources/manhattan.json the app reads, so a re-fetch of the city's
-data corrects the tile along with everything else and the two can never drift apart.
-What it does differently is the angle: the app stands the avenues upright, which
-leaves a tall thin island in a square tile, so the icon turns the whole thing another
-forty-five degrees and lets Manhattan run corner to corner.
+The icon is the map, not a picture of a map. It reads the very same five files in
+NeighborhoodQuiz/Resources/ the app reads, so a re-fetch of the city's data corrects
+the tile along with everything else and the two can never drift apart. It used to be
+Manhattan on its own, turned onto the diagonal to fit; now that all five boroughs are
+drawn it is all five, north-up, which is the shape everybody knows the city by, and it
+very nearly fills a square without being turned at all.
+
+Over the city, "NYC" in ink, lettered by the same unsteady hand that draws the streets.
+The letters are strokes rather than glyphs from a font — there is no font here, and a
+font would be a dependency — three lines for the N, three for the Y, one arc for the
+C, each shaken a little as the map's pen is. A coat of paper under the ink is what
+keeps the word readable where it crosses the water.
 
 Deliberately dependency-free — no Pillow, no cairo — because it writes three PNGs a
 year and a toolchain nobody has installed is a toolchain that rots. It rasterises by
@@ -32,20 +38,45 @@ from pathlib import Path
 
 SIZE = 1024
 SUPERSAMPLE = 4
-# Manhattan's grid runs about twenty-nine degrees east of north; the app turns the
-# plane back by that to stand the avenues up. The icon turns it another forty-five so
-# the island runs corner to corner instead of filling a narrow stripe.
-ROTATION_DEGREES = -29.0 + 45.0
-PADDING = 40  # in final pixels, before supersampling
+PADDING = 76  # in final pixels, before supersampling
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "NeighborhoodQuiz/Resources/manhattan.json"
-OUTPUT = ROOT / "NeighborhoodQuiz/Resources/Assets.xcassets/AppIcon.appiconset"
+RESOURCES = ROOT / "NeighborhoodQuiz/Resources"
+BOROUGH_FILES = ("manhattan", "brooklyn", "queens", "bronx", "staten-island")
+OUTPUT = RESOURCES / "Assets.xcassets/AppIcon.appiconset"
 
-# Only the avenues. The tile is sixty points across on a home screen, where the
-# hundred-odd major cross streets are not lines but a smudge — the same lesson the
-# map itself learned at its widest zoom, arrived at from the other direction.
-ICON_TIERS = {0: 7.0}
+# A green has to be about this big to be more than a fleck at sixty points across:
+# Central Park, Prospect Park, Flushing Meadows, Van Cortlandt, Pelham Bay, the
+# Greenbelt. In square degrees; a hundred acres or so.
+MIN_ICON_PARK_AREA = 4e-6
+
+# Streets are not drawn at all. Manhattan alone could carry its avenues; five boroughs
+# on the same tile cannot, and a smudge of two thousand roads is what the map itself
+# refuses to draw at its widest zoom.
+
+# The word. Letter shapes in a box one unit tall, drawn as strokes: a list of
+# polylines each, in a coordinate system where y runs down the page, as it does on
+# the tile. The C is an arc from a bit past top-right round to a bit past bottom-right.
+LETTER_WIDTH = 0.78
+LETTER_GAP = 0.20
+WORD_HEIGHT = 0.31  # of the tile
+WORD_TILT_DEGREES = -3.0
+INK_WIDTH = 0.105  # of the letter height
+HALO_WIDTH = 0.19
+
+
+def _arc(cx: float, cy: float, rx: float, ry: float, start: float, end: float, steps: int = 40):
+    return [
+        (cx + rx * math.cos(math.radians(a)), cy + ry * math.sin(math.radians(a)))
+        for a in (start + (end - start) * i / steps for i in range(steps + 1))
+    ]
+
+
+LETTERS = {
+    "N": [[(0.0, 1.0), (0.0, 0.0), (LETTER_WIDTH, 1.0), (LETTER_WIDTH, 0.0)]],
+    "Y": [[(0.0, 0.0), (LETTER_WIDTH / 2, 0.52)], [(LETTER_WIDTH, 0.0), (LETTER_WIDTH / 2, 0.52), (LETTER_WIDTH / 2, 1.0)]],
+    "C": [_arc(LETTER_WIDTH * 0.55, 0.5, LETTER_WIDTH * 0.55, 0.5, -48, -312)],
+}
 
 
 @dataclass(frozen=True)
@@ -55,8 +86,8 @@ class Palette:
     land: tuple[int, int, int]
     park: tuple[int, int, int]
     shore: tuple[int, int, int]
-    avenue: tuple[int, int, int]
-    street: tuple[int, int, int]
+    ink: tuple[int, int, int]
+    halo: tuple[int, int, int]
 
 
 LIGHT = Palette(
@@ -65,8 +96,8 @@ LIGHT = Palette(
     land=(0xEF, 0xE6, 0xD2),
     park=(0xBC, 0xD1, 0xA6),
     shore=(0x5C, 0x86, 0x9E),
-    avenue=(0x6E, 0x5A, 0x45),
-    street=(0xB7, 0xA7, 0x8F),
+    ink=(0x5B, 0x4A, 0x3A),
+    halo=(0xF7, 0xF0, 0xDF),
 )
 
 DARK = Palette(
@@ -75,8 +106,8 @@ DARK = Palette(
     land=(0x2B, 0x2A, 0x26),
     park=(0x36, 0x45, 0x2F),
     shore=(0x4A, 0x67, 0x7E),
-    avenue=(0xC2, 0xAE, 0x91),
-    street=(0x6A, 0x60, 0x52),
+    ink=(0xE2, 0xD6, 0xBE),
+    halo=(0x2B, 0x2A, 0x26),
 )
 
 TINTED = Palette(
@@ -85,24 +116,20 @@ TINTED = Palette(
     land=(0xC9, 0xC9, 0xC9),
     park=(0x8E, 0x8E, 0x8E),
     shore=(0x55, 0x55, 0x55),
-    avenue=(0x3A, 0x3A, 0x3A),
-    street=(0x8A, 0x8A, 0x8A),
+    ink=(0x2A, 0x2A, 0x2A),
+    halo=(0xDD, 0xDD, 0xDD),
 )
 
 
 class Projection:
-    """Mercator, turned, and fitted to a square."""
+    """Mercator, fitted to a square. North-up: nothing to turn any more."""
 
-    def __init__(self, coordinates, size: int, padding: float, rotation: float) -> None:
-        radians = math.radians(rotation)
-        self.cos = math.cos(radians)
-        self.sin = math.sin(radians)
-
-        turned = [self._turn(c) for c in coordinates]
-        min_x = min(p[0] for p in turned)
-        max_x = max(p[0] for p in turned)
-        min_y = min(p[1] for p in turned)
-        max_y = max(p[1] for p in turned)
+    def __init__(self, coordinates, size: int, padding: float) -> None:
+        projected = [self._mercator(c) for c in coordinates]
+        min_x = min(p[0] for p in projected)
+        max_x = max(p[0] for p in projected)
+        min_y = min(p[1] for p in projected)
+        max_y = max(p[1] for p in projected)
 
         usable = size - 2 * padding
         span_x = max(max_x - min_x, 1e-12)
@@ -111,20 +138,20 @@ class Projection:
         self.origin_x = (size - span_x * self.scale) / 2 - min_x * self.scale
         self.origin_y = (size - span_y * self.scale) / 2 - min_y * self.scale
 
-    def _turn(self, coordinate) -> tuple[float, float]:
+    @staticmethod
+    def _mercator(coordinate) -> tuple[float, float]:
         longitude, latitude = coordinate
-        x = math.radians(longitude)
-        y = -math.log(math.tan(math.pi / 4 + math.radians(latitude) / 2))
-        return (x * self.cos - y * self.sin, x * self.sin + y * self.cos)
+        return (math.radians(longitude), -math.log(math.tan(math.pi / 4 + math.radians(latitude) / 2)))
 
     def point(self, coordinate) -> tuple[float, float]:
-        x, y = self._turn(coordinate)
+        x, y = self._mercator(coordinate)
         return (x * self.scale + self.origin_x, y * self.scale + self.origin_y)
 
 
 class Canvas:
     """A flat RGB buffer with a scanline polygon fill. That is the whole drawing kit:
-    every line on the icon is a four-cornered polygon, and so is the island."""
+    every stroke on the icon is a four-cornered polygon with a round cap, and so is
+    every island."""
 
     def __init__(self, size: int, background: tuple[int, int, int]) -> None:
         self.size = size
@@ -156,8 +183,11 @@ class Canvas:
                 start = (row + left) * 3
                 self.buffer[start:start + (right - left + 1) * 3] = swatch * (right - left + 1)
 
+    def fill_dot(self, centre, radius: float, colour) -> None:
+        self.fill_polygon(_arc(centre[0], centre[1], radius, radius, 0, 360, 24)[:-1], colour)
+
     def stroke_segment(self, start, end, width: float, colour) -> None:
-        """A thick line is a rectangle with a cap at each end, near enough at this size."""
+        """A thick line is a rectangle, near enough at this size."""
         dx, dy = end[0] - start[0], end[1] - start[1]
         length = math.hypot(dx, dy)
         if length < 1e-9:
@@ -167,6 +197,14 @@ class Canvas:
             (start[0] + nx, start[1] + ny), (end[0] + nx, end[1] + ny),
             (end[0] - nx, end[1] - ny), (start[0] - nx, start[1] - ny),
         ], colour)
+
+    def stroke_polyline(self, points, width: float, colour) -> None:
+        """Segments with a round dot at every joint and end, which is what makes a
+        thick line turn a corner without a notch."""
+        for i in range(len(points) - 1):
+            self.stroke_segment(points[i], points[i + 1], width, colour)
+        for p in points:
+            self.fill_dot(p, width / 2, colour)
 
     def downsample(self, factor: int) -> tuple[int, bytearray]:
         size = self.size // factor
@@ -212,41 +250,101 @@ def write_png(path: Path, size: int, pixels: bytearray) -> None:
     )
 
 
+def ring_area(ring) -> float:
+    total = 0.0
+    for i in range(len(ring)):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % len(ring)]
+        total += x1 * y2 - x2 * y1
+    return abs(total) / 2
+
+
 def load():
-    if not DATA.exists():
-        raise SystemExit(f"{DATA} is missing — run Tools/fetch_map_data.py first")
-    return json.loads(DATA.read_text())
+    """Every borough's land and its big greens, in one list each."""
+    land, parks = [], []
+    for name in BOROUGH_FILES:
+        path = RESOURCES / f"{name}.json"
+        if not path.exists():
+            raise SystemExit(f"{path} is missing — run Tools/fetch_map_data.py first")
+        data = json.loads(path.read_text())
+        land.extend(data["land"])
+        parks.extend(p["ring"] for p in data["parks"] if ring_area(p["ring"]) >= MIN_ICON_PARK_AREA)
+    return land, parks
 
 
-def draw(palette: Palette, data) -> None:
+class Pen:
+    """The unsteady hand, the map's own arithmetic in miniature: a straight run is
+    walked in short steps, each nudged a little off the line, so a letter comes out
+    lettered rather than set. Seeded, so the icon is the same icon every time."""
+
+    def __init__(self, seed: int, stray: float) -> None:
+        self.state = seed
+        self.stray = stray
+
+    def next(self) -> float:
+        self.state = (self.state * 1_103_515_245 + 12_345) & 0x7FFFFFFF
+        return self.state / 0x7FFFFFFF * 2 - 1
+
+    def shake(self, points, step: float):
+        out = [points[0]]
+        for i in range(len(points) - 1):
+            (x1, y1), (x2, y2) = points[i], points[i + 1]
+            length = math.hypot(x2 - x1, y2 - y1)
+            pieces = max(1, int(length / step))
+            nx, ny = -(y2 - y1) / max(length, 1e-9), (x2 - x1) / max(length, 1e-9)
+            for k in range(1, pieces + 1):
+                t = k / pieces
+                wobble = 0.0 if k == pieces else self.next() * self.stray
+                out.append((x1 + (x2 - x1) * t + nx * wobble, y1 + (y2 - y1) * t + ny * wobble))
+        return out
+
+
+def word_strokes(size: int):
+    """"NYC", laid across the middle of the tile as lists of points in tile pixels."""
+    height = WORD_HEIGHT * size
+    width = (3 * LETTER_WIDTH + 2 * LETTER_GAP) * height
+    left = (size - width) / 2
+    top = (size - height) / 2 + 0.03 * size
+    tilt = math.radians(WORD_TILT_DEGREES)
+    cx, cy = size / 2, size / 2
+    pen = Pen(seed=7, stray=height * 0.008)
+
+    def place(x: float, y: float) -> tuple[float, float]:
+        px, py = left + x * height, top + y * height
+        # The whole word leans a touch, as a word written quickly does.
+        dx, dy = px - cx, py - cy
+        return (cx + dx * math.cos(tilt) - dy * math.sin(tilt), cy + dx * math.sin(tilt) + dy * math.cos(tilt))
+
+    strokes = []
+    for index, letter in enumerate("NYC"):
+        offset = index * (LETTER_WIDTH + LETTER_GAP)
+        for polyline in LETTERS[letter]:
+            placed = [place(offset + x, y) for x, y in polyline]
+            strokes.append(pen.shake(placed, step=height * 0.06))
+    return strokes, height
+
+
+def draw(palette: Palette, land, parks) -> None:
     size = SIZE * SUPERSAMPLE
-    land = data["land"]
-    projection = Projection(
-        [tuple(c) for ring in land for c in ring], size, PADDING * SUPERSAMPLE, ROTATION_DEGREES
-    )
+    projection = Projection([tuple(c) for ring in land for c in ring], size, PADDING * SUPERSAMPLE)
     canvas = Canvas(size, palette.water)
 
     for ring in land:
         canvas.fill_polygon([projection.point(c) for c in ring], palette.land)
-    for park in data["parks"]:
-        canvas.fill_polygon([projection.point(c) for c in park["ring"]], palette.park)
+    for ring in parks:
+        canvas.fill_polygon([projection.point(c) for c in ring], palette.park)
 
-    # Heaviest last, so an avenue is never broken by a cross street over it.
-    roads = [r for r in data["roads"] if r["t"] in ICON_TIERS]
-    for road in sorted(roads, key=lambda r: -r["t"]):
-        width = ICON_TIERS[road["t"]] * SUPERSAMPLE
-        colour = palette.avenue if road["t"] == 0 else palette.street
-        points = [projection.point(c) for c in road["p"]]
-        for i in range(len(points) - 1):
-            canvas.stroke_segment(points[i], points[i + 1], width, colour)
-
-    # The shoreline itself, inked last so nothing crosses it.
+    # The shoreline, inked so the islands read as drawn rather than cut out.
     for ring in land:
         points = [projection.point(c) for c in ring]
-        for i in range(len(points)):
-            canvas.stroke_segment(
-                points[i], points[(i + 1) % len(points)], 6.0 * SUPERSAMPLE, palette.shore
-            )
+        canvas.stroke_polyline(points + points[:1], 3.2 * SUPERSAMPLE, palette.shore)
+
+    # The word: paper first, then ink, the way the map halos its labels.
+    strokes, height = word_strokes(size)
+    for stroke in strokes:
+        canvas.stroke_polyline(stroke, HALO_WIDTH * height, palette.halo)
+    for stroke in strokes:
+        canvas.stroke_polyline(stroke, INK_WIDTH * height, palette.ink)
 
     final_size, pixels = canvas.downsample(SUPERSAMPLE)
     OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -255,9 +353,9 @@ def draw(palette: Palette, data) -> None:
 
 
 def main() -> None:
-    data = load()
+    land, parks = load()
     for palette in (LIGHT, DARK, TINTED):
-        draw(palette, data)
+        draw(palette, land, parks)
 
 
 if __name__ == "__main__":
