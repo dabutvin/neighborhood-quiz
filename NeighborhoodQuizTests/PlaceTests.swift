@@ -10,9 +10,9 @@ import XCTest
 final class PlaceTests: XCTestCase {
     private let size = CGSize(width: 393, height: 852)
 
-    /// Checked on every drawn borough, not just Manhattan: Brooklyn is the one whose
-    /// file has a few more shapes in it, and the one a future re-fetch is likelier to
-    /// reorder.
+    /// Checked on every drawn borough, which is all five now, not just Manhattan: the
+    /// other files have more shapes in them, and a future re-fetch of any one of them
+    /// is likelier to reorder it than Manhattan's forty are.
     func testAPlaceIsItsIndexOnTheDrawing() {
         for borough in Borough.drawn {
             let drawn = DrawnMap.build(borough: borough, size: size)
@@ -49,12 +49,13 @@ final class PlaceTests: XCTestCase {
     }
 
     /// The whole reason for the type: the same number on two maps is two places, and
-    /// the whole city is the two lists end to end with nothing shared between them.
+    /// the whole city is the five lists end to end with nothing shared between them.
     func testTheSameNumberInTwoBoroughsIsTwoPlaces() {
         XCTAssertNotEqual(Place(.manhattan, 0), Place(.brooklyn, 0))
+        XCTAssertNotEqual(Place(.queens, 0), Place(.bronx, 0))
 
         let city = Borough.drawn.flatMap(Place.all(in:))
-        XCTAssertEqual(city.count, Place.all(in: .manhattan).count + Place.all(in: .brooklyn).count)
+        XCTAssertEqual(city.count, Borough.drawn.map { Place.all(in: $0).count }.reduce(0, +))
         XCTAssertEqual(Set(city).count, city.count)
     }
 }

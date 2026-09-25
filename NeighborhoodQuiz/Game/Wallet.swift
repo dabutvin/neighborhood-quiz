@@ -144,8 +144,10 @@ struct Wallet: Equatable, Codable {
     /// `drawn` is a parameter rather than a lookup so that the spending rules can be
     /// tested against a city of the test's choosing. It dates from when nothing but
     /// Manhattan was drawn and a test that could only ever watch a purchase fail would
-    /// not have been testing buying at all; it stays because the same will be true of
-    /// Queens until it is drawn, and of whatever comes after.
+    /// not have been testing buying at all; it stays because the same is now true the
+    /// other way round — with the whole city drawn, the one path that refuses a
+    /// purchase could not be run against the real city — and will be true again of
+    /// the next map that is not drawn yet, whichever that turns out to be.
     func canBuy(_ borough: Borough, drawn: Set<Borough> = Borough.drawn) -> Bool {
         canAfford(borough) && drawn.contains(borough)
     }

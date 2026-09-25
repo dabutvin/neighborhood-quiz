@@ -670,10 +670,11 @@ struct QuizView: View {
     }
 
     /// The one line under the bar. Three things it can say, and the third is the honest
-    /// one: the money is there and no map is, which is where a player who has bought
-    /// everything drawn so far sits until the next borough is. No borough is named,
-    /// because the price is not any borough's — it is the next rung, and which borough
-    /// goes on it is picked on the Boroughs screen, not here.
+    /// one: the money is there and no map is. With the whole city drawn nobody sits
+    /// there today, but it is kept for the next map that is not drawn yet, whichever
+    /// that turns out to be. No borough is named, because the price is not any
+    /// borough's — it is the next rung, and which borough goes on it is picked on the
+    /// Boroughs screen, not here.
     private var savedLine: String {
         let wallet = bank.wallet
         guard let price = wallet.nextPrice else { return "" }

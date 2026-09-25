@@ -34,8 +34,10 @@ struct NeighborhoodQuizApp: App {
 ///
 /// The `-map*` arguments are the map on its own: `-map` whole, `-map-zoomed` in on
 /// Midtown, `-map-neighborhood` with Greenwich Village picked out — all Manhattan — and
-/// `-map-brooklyn`, which is the other borough drawn, whole and north-up. `-boroughs`
-/// and `-settings` are the two sheets, each over a throwaway wallet.
+/// then one per other borough, `-map-brooklyn`, `-map-queens`, `-map-bronx` and
+/// `-map-staten-island`, each whole and north-up, so a regression that only one file
+/// would show has a shot to show it in. `-boroughs` and `-settings` are the two sheets,
+/// each over a throwaway wallet.
 enum Screen: Equatable {
     case quiz(stage: QuizView.Stage?)
     case map(borough: Borough, opening: MapBoard.Opening, showing: String?)
@@ -49,9 +51,9 @@ enum Screen: Equatable {
             self = .settings(Wallet(balance: 140, earned: 440, rounds: 11))
         } else if arguments.contains("-boroughs") {
             // Saved up for a first borough and a career behind it: the card that has
-            // something to say. Now that Brooklyn is drawn, what it says is a live
-            // Unlock button on its row — the one state where the ladder can actually
-            // be climbed from.
+            // something to say. With the whole city drawn, what it says is a live
+            // Unlock button on every row but Manhattan's — the one state where the
+            // ladder can actually be climbed from.
             self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24))
         } else if let stage = QuizView.Stage.allCases.first(where: { arguments.contains("-quiz-\($0.rawValue)") }) {
             self = .quiz(stage: stage)
@@ -66,8 +68,14 @@ enum Screen: Equatable {
         } else if arguments.contains("-map-zoomed") {
             self = .map(borough: .manhattan, opening: .midtown, showing: nil)
         } else if arguments.contains("-map-brooklyn") {
-            // Brooklyn whole, drawn as it sits: the one shot of the other file.
+            // Each of the other four whole, drawn as it sits: one shot per file.
             self = .map(borough: .brooklyn, opening: .island, showing: nil)
+        } else if arguments.contains("-map-queens") {
+            self = .map(borough: .queens, opening: .island, showing: nil)
+        } else if arguments.contains("-map-bronx") {
+            self = .map(borough: .bronx, opening: .island, showing: nil)
+        } else if arguments.contains("-map-staten-island") {
+            self = .map(borough: .statenIsland, opening: .island, showing: nil)
         } else if arguments.contains("-map") {
             self = .map(borough: .manhattan, opening: .island, showing: nil)
         } else {

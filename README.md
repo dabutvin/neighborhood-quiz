@@ -5,8 +5,8 @@ hand, in ink, on paper — with every avenue and every numbered cross street nam
 not one neighbourhood.
 
 That omission is the whole idea. Naming the neighbourhoods is the quiz, and a map that
-has already told you where SoHo is has given the game away. Brooklyn is drawn the same
-way, and is what the first two hundred dollars buy.
+has already told you where SoHo is has given the game away. The other four boroughs are
+drawn the same way, and are what the money buys.
 
 ## The game
 
@@ -47,14 +47,14 @@ Two numbers are tracked, not one. The balance is what you can spend and it goes 
 you spend it; the career total is every dollar ever earned and it never goes down, because
 buying a borough should not make it look like you played less than you did.
 
-**Manhattan and Brooklyn are drawn so far.** Buying Brooklyn opens it; the menu then
-offers both, and a third thing — "Anywhere" — which draws the ten from every borough you
-have open and hops the map between them as the questions come, saying which borough
-each one is in. Whichever you pick is written down with the money so the app opens where
-you left it. The other three boroughs are listed because knowing what there is to save
-for is most of the reason to save, but the game will not take money for a borough it
-cannot open — when the balance is there and the map is not, it says so and there is no
-button to press.
+**All five boroughs are drawn.** Buying one opens it; the menu then offers each you
+have, and one more thing — "Anywhere" — which draws the ten from every borough you have
+open and hops the map between them as the questions come, saying which borough each one
+is in. Whichever you pick is written down with the money so the app opens where you left
+it. The game still will not take money for a borough it cannot open — nothing is in that
+state today, but the guard stays for the next map that is not drawn yet, whichever that
+turns out to be — and when the balance is there and the map is not, it says so and there
+is no button to press.
 
 The end of a round can be shared — the score, and where it was scored — and Settings has
 a row to rate the app and one to pass it on. Both go through the phone's own sheets;
@@ -67,7 +67,8 @@ City of New York's own street centreline file, drawn by hand.
 
 `Tools/fetch_map_data.py` takes a borough, pulls three datasets from
 [NYC Open Data](https://data.cityofnewyork.us) and writes one file per borough —
-`NeighborhoodQuiz/Resources/manhattan.json`, `brooklyn.json` — which are committed:
+`NeighborhoodQuiz/Resources/manhattan.json`, `brooklyn.json`, `queens.json`,
+`bronx.json`, `staten-island.json` — which are committed:
 
 | Dataset | What it gives |
 |---|---|
@@ -108,22 +109,29 @@ east of north, and turning the projected plane back by that much is what stands 
 avenues upright and lays the cross streets flat — the difference between a drawing and a
 satellite photograph.
 
-### Brooklyn
+### The other boroughs
 
 The same tool, the same treatment, a different borough on the command line — and one
-thing done differently, which is that Brooklyn is drawn north-up. It is not for want of a
-grid: Brooklyn has half a dozen of them, at different angles — Williamsburg's, Bushwick's,
-Park Slope's, Bay Ridge's, the Flatbush avenues — and no one of them is the borough.
-There is no turn that stands Brooklyn's streets up the way the twenty-nine degrees stands
-Manhattan's; whichever grid you chose, the others would lean. North-up is how a Brooklyn
-map is drawn, so that is how this one is.
+thing done differently for all four, which is that they are drawn north-up. Brooklyn is
+not for want of a grid: it has half a dozen of them, at different angles — Williamsburg's,
+Bushwick's, Park Slope's, Bay Ridge's, the Flatbush avenues — and no one of them is the
+borough. There is no turn that stands Brooklyn's streets up the way the twenty-nine
+degrees stands Manhattan's; whichever grid you chose, the others would lean. Queens is the
+same problem twice over, with a dozen grids that never agreed on a number. The Bronx does
+have Manhattan's grid — the numbered streets carry on over the Harlem River — but they
+bend and give out a mile or two in, and a turn that suited Mott Haven would put Riverdale
+and Throgs Neck on a slant for nothing. Staten Island has no grid to speak of, and it
+runs north-east to south-west as it is. North-up is how a map of any of them is drawn,
+so that is how these are.
 
-Its numbered avenues are in figures, because that is how Brooklyn writes them: 4th
-Avenue and 18th Avenue, where Manhattan has Fifth — a borough whose avenues run to 28th
-cannot switch from words to figures at Twelfth without it showing. And its
-neighbourhoods are the same census-tract treatment Manhattan's had — the city's compounds
-taken apart and the split ones put back together — which comes to about fifty places a
-player would actually call something.
+Their numbered avenues and streets are in figures, because that is how the outer
+boroughs write them: 4th Avenue and 18th Avenue in Brooklyn, 82nd Street and 37th
+Avenue in Queens, where Manhattan has Fifth — a borough whose avenues run to 28th cannot
+switch from words to figures at Twelfth without it showing. And their neighbourhoods are
+the same census-tract treatment Manhattan's had — the city's compounds taken apart and
+the split ones put back together — which comes to 52 places in Brooklyn, 68 in Queens,
+51 in the Bronx and 40 on Staten Island: the places a player would actually call
+something, and no "Elmhurst-Corona" among them.
 
 ### Why it wobbles
 
@@ -192,6 +200,9 @@ NeighborhoodQuiz/
 └── Resources/
     ├── manhattan.json              # The city's Manhattan, written by Tools/fetch_map_data.py
     ├── brooklyn.json               # And its Brooklyn, from the same tool
+    ├── queens.json                 # Queens, the Bronx and Staten Island likewise —
+    ├── bronx.json                  #   one file per borough, and the whole city now
+    ├── staten-island.json          #   (hyphenated, so no resource has a space in its name)
     ├── Assets.xcassets             # App icon (drawn from the same data) and accent colour
     └── PrivacyInfo.xcprivacy       # Nothing collected, nothing sent
 ```
@@ -229,8 +240,12 @@ project.
 ### Refreshing the map
 
 ```bash
-python3 Tools/fetch_map_data.py manhattan   # re-reads NYC Open Data, one borough at a time
+python3 Tools/fetch_map_data.py             # re-reads NYC Open Data, all five boroughs
+python3 Tools/fetch_map_data.py manhattan   # or one at a time
 python3 Tools/fetch_map_data.py brooklyn
+python3 Tools/fetch_map_data.py queens
+python3 Tools/fetch_map_data.py bronx
+python3 Tools/fetch_map_data.py staten-island
 python3 Tools/generate_app_icon.py          # the icon is the Manhattan map, so it follows
 ```
 
@@ -241,10 +256,14 @@ from the lengths.
 `ManhattanMapDataTests` is the check on a re-fetch — that the island is still an island
 and has not folded over itself, that every street is named exactly once, that the
 speller did not meet an abbreviation it does not know, that ramps stayed out, and that
-the streets below Houston are still there. `BrooklynMapDataTests` is its twin for the
-other file, with Brooklyn's own particulars: that the Belt Parkway did not rank as an
-avenue, that Prospect Park is among the greens, and that the neighbourhoods came out as
-places rather than as the city's hyphenated compounds.
+the streets below Houston are still there. There is one of these per borough —
+`BrooklynMapDataTests`, `QueensMapDataTests`, `BronxMapDataTests`,
+`StatenIslandMapDataTests` — each the same checks with that borough's own particulars:
+that the Belt Parkway, the Grand Central, the Major Deegan and the Staten Island
+Expressway did not rank as avenues, that Prospect Park, Flushing Meadows, Van Cortlandt
+and the Greenbelt are among the greens, that the streets anybody would look for first
+are there, and that the neighbourhoods came out as places rather than as the city's
+hyphenated compounds.
 
 ### App icon
 
@@ -407,12 +426,13 @@ Tools/testflight_crashes.py --report-file crashes/crash-01.ips   # re-read a sav
 
 ## What is next
 
-Queens. The economy that pays for it is built and tested, and the app is borough-aware
-now — a third file in `Resources/`, a line in `Borough.drawn` and a cache line in
-`BoroughMap.of` is all the code asks for. What it is waiting on is the map itself: the
-same treatment Manhattan and Brooklyn had, which is a census-tract union from NYC Open
-Data and then a pass over the result deciding what each neighbourhood is actually called.
-That second half is not a job for a script, and Queens has more of them than either.
+The map is finished: five boroughs, one file each, and nothing left on the ladder that
+the game cannot open. What is next is the game, and that is not something to plan from
+here — it is whatever the play says. The neighbourhood names in the outer boroughs are
+a judgement, and playing them is how the wrong ones get found; the ladder was tuned
+against two boroughs and may want a look now that it buys four; and a round across the
+whole city hops between five maps now rather than two. None of that is a feature. It is
+the tuning that comes after the drawing, and it starts with playing it.
 
 ## License
 

@@ -95,28 +95,27 @@ final class WalletTests: XCTestCase {
 
     /// The guard that matters most.
     ///
-    /// Every borough is listed, and from Queens on none of them is drawn yet. The next
-    /// borough costs the same whichever one it is, so a player with the price of one
-    /// in hand has the price of Queens in hand — and if the button took it, they would
-    /// have paid for a blank page. Affordable and buyable are two different questions
-    /// for exactly this reason.
+    /// Every borough is listed, and the next one costs the same whichever it is, so a
+    /// player with the price of one in hand has the price of any of them in hand — and
+    /// if the button took it for a borough with no map, they would have paid for a
+    /// blank page. Affordable and buyable are two different questions for exactly this
+    /// reason.
     ///
-    /// This picks the first undrawn borough rather than naming one, so when a borough
-    /// does get a map it stops applying to it and applies to the next one along — it
-    /// moved from Brooklyn to Queens without being touched — and when they are all
-    /// drawn it has nothing left to guard and says so.
+    /// The whole city is drawn now, so the real `Borough.drawn` has nothing for this to
+    /// bite on; it is played out instead in a city of the test's own where Queens is
+    /// not drawn, which is what the `drawn:` parameter is for. The guard is kept for
+    /// the next map that is not drawn yet, whichever that turns out to be — a file
+    /// pulled for a re-survey, a sixth "borough" (Roosevelt Island?), whatever — and
+    /// this is the test that says it still works the day it is needed again.
     func testMoneyIsNeverTakenForABoroughWithNoMapBehindIt() {
-        guard let undrawn = Borough.buyable.first(where: { !$0.isDrawn }) else {
-            return  // every borough is drawn; there is nothing left to protect against
-        }
-
+        let city: Set<Borough> = [.manhattan, .brooklyn]
         var wallet = Wallet(balance: Borough.ladder[0] * 2)
 
-        XCTAssertTrue(wallet.canAfford(undrawn), "the money is there")
-        XCTAssertFalse(wallet.canBuy(undrawn), "but there is nowhere to go")
-        XCTAssertFalse(wallet.buy(undrawn))
+        XCTAssertTrue(wallet.canAfford(.queens), "the money is there")
+        XCTAssertFalse(wallet.canBuy(.queens, drawn: city), "but there is nowhere to go")
+        XCTAssertFalse(wallet.buy(.queens, drawn: city))
         XCTAssertEqual(wallet.balance, Borough.ladder[0] * 2, "not a dollar of it was taken")
-        XCTAssertFalse(wallet.has(undrawn))
+        XCTAssertFalse(wallet.has(.queens))
     }
 
     // MARK: - Where the player is
@@ -127,7 +126,10 @@ final class WalletTests: XCTestCase {
     }
 
     /// The two halves of the guard: not yours, and not drawn. Either one refuses, and
-    /// a refusal leaves the player where they were.
+    /// a refusal leaves the player where they were. `play` asks the real city rather
+    /// than taking one as a parameter, so with everything drawn the second half has
+    /// nothing to refuse and steps aside; it is left in for the next map that is not
+    /// drawn yet.
     func testYouCannotGoSomewhereYouDoNotOwnOrThatIsNotDrawn() {
         var wallet = Wallet(balance: 5_000)
 

@@ -10,10 +10,11 @@ import Foundation
 /// comes next, because that is the player's to decide.
 ///
 /// `isDrawn` is the honest part. A borough in this list is somewhere the game intends to
-/// go; a borough that is drawn is somewhere it can actually take you. Manhattan and
-/// Brooklyn are drawn today. The rest are listed on purpose — knowing what there is to
-/// save for is most of why saving is worth doing — but the game says plainly that their
-/// maps are not built yet rather than taking money for a blank page.
+/// go; a borough that is drawn is somewhere it can actually take you. The whole city is
+/// drawn now, all five, so the two lists agree — but they are still two lists. A file
+/// pulled for a re-survey, or a sixth "borough" added before its map is, would put a
+/// borough back on the first list and off the second, and the game would say plainly
+/// that its map is not built yet rather than take money for a blank page.
 enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
     case manhattan
     case brooklyn
@@ -53,16 +54,20 @@ enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
     /// climb is the same whichever way round the city is taken.
     static let ladder = [200, 600, 1_200, 2_000]
 
-    /// The ones with a map behind them. Two entries today; this is the line that grows
-    /// as each borough gets drawn. A file in `Resources/` and a cache line in
-    /// `BoroughMap.of` go with it, and nothing else has to change to open one.
-    static let drawn: Set<Borough> = [.manhattan, .brooklyn]
+    /// The ones with a map behind them. All five, now: the city is drawn. It stays a
+    /// set of its own rather than becoming `allCases` because it is the line a borough
+    /// comes off if its file is ever pulled, and the line the next one goes on once its
+    /// file lands — a file in `Resources/` and a cache line in `BoroughMap.of` go with
+    /// each entry, and nothing else has to change to open one.
+    static let drawn: Set<Borough> = Set(allCases)
 
     /// Whether there is a map behind it yet.
     var isDrawn: Bool { Borough.drawn.contains(self) }
 
-    /// The file its map is read from, without the `.json`. Only the drawn ones exist;
-    /// the rest are named here so that drawing one is a matter of writing the file.
+    /// The file its map is read from, without the `.json`. One per borough, spelled the
+    /// way `Tools/fetch_map_data.py` writes them — which for Staten Island is
+    /// `staten-island`, hyphenated, because a resource name with a space in it is a
+    /// bug waiting for a shell.
     var mapFile: String {
         switch self {
         case .manhattan: return "manhattan"
@@ -87,6 +92,13 @@ enum Borough: String, CaseIterable, Identifiable, Codable, Sendable {
     /// Flatbush avenues — and no one of them is the borough. There is no turn that stands
     /// Brooklyn's streets up the way the twenty-nine degrees stands Manhattan's; whichever
     /// grid you chose, the others would lean. North-up is how a Brooklyn map is drawn.
+    ///
+    /// The other three are north-up for their own reasons. Queens has a dozen grids
+    /// and none of them is the borough, which is Brooklyn's problem twice over. The
+    /// Bronx does have Manhattan's grid — the numbered streets carry on over the Harlem
+    /// River — but they bend and give out a mile or two in, and a turn that suited
+    /// Mott Haven would put Riverdale and Throgs Neck on a slant for nothing. Staten
+    /// Island has no grid to speak of, and it runs north-east to south-west as it is.
     var gridBearingDegrees: Double {
         switch self {
         case .manhattan: return 29
