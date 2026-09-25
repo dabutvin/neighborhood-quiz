@@ -17,6 +17,13 @@ which borough the next round is about, and one button to start. A round can be l
 part-way from the same menu — though a round pays when it is played out, so walking away
 from one banks nothing.
 
+The first round is also the tutorial. Rather than pages of rules in front of the game,
+four tips come up over it, each at the moment it is about: tap where you think the place
+is, and the streets are the clues; Answer is what locks it in; what each of the three goes
+pays, said right after the first one; and, on the card at the end of the round, that the
+money is kept and what it buys. Every tip can be skipped, "How to play" in Settings brings
+them back, and a player who was already playing before there were tips is not given them.
+
 A round is ten neighbourhoods. You are given a name and three goes to put your finger on
 it: five dollars if you know it straight away, three on the second go, one on the third,
 and nothing if three goes are not enough — at which point the round shows you where it
@@ -183,7 +190,8 @@ NeighborhoodQuiz/
 │   ├── Place.swift                 # A neighbourhood anywhere in the city: which borough, which shape
 │   ├── Wallet.swift                # The money, the boroughs bought, and what the next round is about
 │   ├── Bank.swift                  # The one wallet the app plays with, written down after every change
-│   └── QuizRound.swift             # Ten places, three goes each, and what the goes are worth
+│   ├── QuizRound.swift             # Ten places, three goes each, and what the goes are worth
+│   └── Tutorial.swift              # The four tips over a first round: which is up when, and who gets them
 ├── Map/
 │   ├── Geography.swift             # A coordinate, and a Mercator turned so the avenues stand up
 │   ├── BoroughMap.swift            # Reads a borough's .json: the land, the greens, the streets
@@ -195,11 +203,12 @@ NeighborhoodQuiz/
 │   └── MapPalette.swift            # Paper, ink, sage — day and night — and the hand it is lettered in
 ├── Views/
 │   ├── QuizView.swift              # The game: the question, the map, the menu, the end of a round
+│   ├── TipCard.swift               # One tutorial tip, on paper
 │   ├── MapBoard.swift              # The map you can push about, and what a tap on it means
 │   ├── BoroughMapView.swift        # One Canvas: the borough under the transform, the names over it
 │   ├── BoroughsView.swift          # The city: what you have, and what the next borough costs
 │   ├── HomeView.swift              # The map on its own, for the screenshot runs
-│   ├── SettingsView.swift          # The version, rate and share, the privacy switch, and the one destructive thing
+│   ├── SettingsView.swift          # The version, the tips again, rate and share, the privacy switch, and the one destructive thing
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette
 └── Resources/
     ├── manhattan.json              # The city's Manhattan, written by Tools/fetch_map_data.py
@@ -222,7 +231,9 @@ list can be read end to end. A launch. A round started, and whether it was one b
 or the whole city's. Each question settled: which neighbourhood, and on which go it was
 found — or that it was never found, which is the signal the whole thing is for. A round
 finished, with the score and how it was made; a round left part-way, and how far it got.
-A borough bought, which rung of the ladder it was and how many rounds it took. Which
+A borough bought, which rung of the ladder it was and how many rounds it took. Each
+tutorial tip as it comes up, and whether the tips were skipped, finished or asked for
+again — which makes the four of them a funnel. Which
 borough the next round was pointed at, the ladder and settings being opened, the rating
 sheet being asked for, and the privacy switch itself being moved.
 

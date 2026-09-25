@@ -119,6 +119,13 @@ jobs:
           # because a regression in the loader or the projection that only one
           # file would catch needs that file on the screen to be caught.
           #
+          # The `-quiz-tutorial*` runs are a first-time player's round with a
+          # tip up: the first one over the first question, the one about the
+          # Answer button once something is picked, and the last one on the
+          # card at the end of the round. Each is one tip held still — a staged
+          # run never moves the tips on — over the same fixed round as the
+          # other `-quiz-*` shots.
+          #
           # `-boroughs` is the ladder, seeded with enough money for a first
           # borough so the shot shows the card that has something to say — and
           # a live Unlock button on every row but Manhattan's now that the whole
@@ -204,6 +211,9 @@ jobs:
           capture 31 map_staten_island -map-staten-island
           capture 33 boroughs        -boroughs
           capture 35 settings        -settings
+          capture 37 tutorial        -quiz-tutorial
+          capture 39 tutorial_picked -quiz-tutorial-picked
+          capture 41 tutorial_over   -quiz-tutorial-over
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true

@@ -1,18 +1,22 @@
 import StoreKit
 import SwiftUI
 
-/// What build this is, two ways to send the app on, the one switch about privacy, and the
-/// one destructive thing it can do to itself.
+/// What build this is, the tips again, two ways to send the app on, the one switch about
+/// privacy, and the one destructive thing it can do to itself.
 ///
-/// Five rows and nothing else. A settings screen that offers to throw away everything
-/// somebody has earned should have very little else on it to mis-tap around, and the
-/// two rows between the version and the delete both open something of the phone's — a
-/// store page, a share sheet — rather than doing anything to the wallet.
+/// Six rows and nothing else. A settings screen that offers to throw away everything
+/// somebody has earned should have very little else on it to mis-tap around, and none
+/// of the rows between the version and the delete does anything to the wallet: one
+/// starts a round with the tips, two open something of the phone's — a store page, a
+/// share sheet — and one is a switch.
 struct SettingsView: View {
     let bank: Bank
     /// What the game counts, and the switch that stops it. The real one by default; the
     /// screenshot run hands in one that remembers nothing.
     @Bindable var analytics: Analytics = .shared
+    /// Shows the tips again over a fresh round. The row is only there when the screen
+    /// it was opened over can start one.
+    var onHowToPlay: (() -> Void)?
     var onClose: () -> Void = {}
 
     @Environment(\.colorScheme) private var colorScheme
@@ -34,6 +38,7 @@ struct SettingsView: View {
                         .foregroundStyle(palette.ink)
 
                     version
+                    howToPlay
                     rate
                     share
                     counting
@@ -111,6 +116,18 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
+    /// The four tips again, over a round started for them, for anybody who skipped them
+    /// or wants a reminder.
+    @ViewBuilder
+    private var howToPlay: some View {
+        if let onHowToPlay {
+            Button(action: onHowToPlay) {
+                row { leading("How to play") }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     /// The plain "try this" message, handed to whatever the phone can send it with.
     private var share: some View {
         ShareLink(item: AppStore.shareText) {
@@ -161,7 +178,7 @@ struct SettingsView: View {
     }
 
     private var whatIsCounted: String {
-        "Which neighbourhoods get asked and how the rounds go — scores, goes, and which "
+        "Which neighborhoods get asked and how the rounds go — scores, goes, and which "
             + "boroughs get bought. It shows which places are too hard. No name, no account, "
             + "no advertising identifier, and nothing that says who you are."
     }

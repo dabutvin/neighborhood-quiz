@@ -345,7 +345,13 @@ final class AnalyticsTests: XCTestCase {
             .dataCleared,
             .analyticsSwitched(on: false),
             .ratingAsked(afterRounds: 3),
-            .ratingPageOpened
+            .ratingPageOpened,
+            .tutorialTip(.pick),
+            .tutorialTip(.goes(found: false)),
+            .tutorialSkipped(at: .answer),
+            .tutorialSkipped(at: nil),
+            .tutorialFinished,
+            .tutorialReplayed
         ]
 
         for signal in signals {
@@ -376,6 +382,15 @@ final class AnalyticsTests: XCTestCase {
         }
     }
 
+    func testATipSaysWhichTipItWas() {
+        let tip = AnalyticsSignal.tutorialTip(.goes(found: true))
+
+        XCTAssertEqual(tip.name, "Tutorial.tip")
+        XCTAssertEqual(tip.parameters["tip"], "goes")
+        XCTAssertEqual(tip.value, 3, "charted by number, so the four read as a funnel")
+        XCTAssertEqual(AnalyticsSignal.tutorialSkipped(at: .answer).parameters["at"], "answer")
+    }
+
     // MARK: - The wire
 
     /// Every argument the screenshot workflow launches with. A run that opens on one of
@@ -385,7 +400,8 @@ final class AnalyticsTests: XCTestCase {
         "-quiz-filling", "-quiz-missed", "-quiz-over",
         "-map", "-map-zoomed", "-map-neighborhood",
         "-map-brooklyn", "-map-queens", "-map-bronx", "-map-staten-island",
-        "-boroughs", "-settings"
+        "-boroughs", "-settings",
+        "-quiz-tutorial", "-quiz-tutorial-picked", "-quiz-tutorial-over"
     ]
 
     func testTheCameraIsNotCountedAsAPlayer() {

@@ -413,6 +413,27 @@ extension AnalyticsSignal {
         AnalyticsSignal("Boroughs.opened", ["from": source])
     }
 
+    // MARK: The tips
+
+    /// A tip put up for a first-time player, and which of the four. The count of each
+    /// against the count of `pick` is the funnel: how far through the tips players get,
+    /// and which one they give up on.
+    static func tutorialTip(_ step: Tutorial.Step) -> AnalyticsSignal {
+        AnalyticsSignal("Tutorial.tip", ["tip": step.name], value: Double(step.number))
+    }
+
+    /// The Skip on a tip, and which tip it was on.
+    static func tutorialSkipped(at step: Tutorial.Step?) -> AnalyticsSignal {
+        AnalyticsSignal("Tutorial.skipped", ["at": step?.name ?? "between"])
+    }
+
+    /// The last tip read and the round's card left: the whole of it seen through.
+    static let tutorialFinished = AnalyticsSignal("Tutorial.finished")
+
+    /// "How to play" pressed in Settings. Somebody asking for the tips again is somebody
+    /// the tips did not stick with the first time.
+    static let tutorialReplayed = AnalyticsSignal("Tutorial.replayed")
+
     // MARK: Settings
 
     static let settingsOpened = AnalyticsSignal("Settings.opened")
