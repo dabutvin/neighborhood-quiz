@@ -11,7 +11,8 @@ import Foundation
 ///
 /// 1. `pick` — as the first question is asked: tap where you think it is, and the
 ///    streets are the clues.
-/// 2. `answer` — once something is picked: Answer is what locks it in.
+/// 2. `answer` — once something is picked: the outline is the place picked, and Answer
+///    is what locks it in.
 /// 3. `goes` — once the first answer is in: what a go is worth, said about the go the
 ///    player has just had.
 /// 4. `money` — on the card at the end of the round: the money is kept, and what it buys.
@@ -153,8 +154,8 @@ extension Tutorial.Step {
         case .answer:
             return Tip(
                 title: "Now tap Answer",
-                body: "That locks it in and spends a go. Until you do, picking somewhere "
-                    + "else is free."
+                body: "The outline shows the boundaries of the neighborhood you picked. "
+                    + "Not the one you meant? Tap somewhere else to pick again."
             )
         case .goes(found: true):
             return Tip(title: "Found it, first go", body: goes)
