@@ -12,13 +12,13 @@ enum AppStore {
     /// `CFBundleDisplayName` because it truncates; nothing else does.
     static let name = "NYC Neighborhoods: Map Quiz"
 
-    /// The numeric id App Store Connect gives the app — the digits after `id` in its
-    /// store link. Nothing until the app record exists, and to be filled in once it
-    /// does: until then there is no page to link to, so the share text goes out without
-    /// a link and the rating row falls back to the in-app sheet.
-    static let id: String? = nil
+    /// The numeric id App Store Connect gave the app — the digits after `id` in its
+    /// store link. Optional not because it is in doubt but because it once was: the
+    /// share text and the rating row were written to go without a link while there was
+    /// no page to link to, and they still would if this were ever blank again.
+    static let id: String? = "6812890344"
 
-    /// The listing, or nothing while there is no id to point at.
+    /// The listing, or nothing if there were no id to point at.
     static var url: URL? {
         id.flatMap { storeURL(id: $0) }
     }
@@ -29,7 +29,7 @@ enum AppStore {
     }
 
     /// The store link for an id. Split out so the shape of the link can be checked
-    /// against a made-up id while the real one is still blank.
+    /// against a made-up id as well as the real one.
     static func storeURL(id: String, review: Bool = false) -> URL? {
         URL(string: "https://apps.apple.com/app/id\(id)" + (review ? "?action=write-review" : ""))
     }
@@ -53,7 +53,7 @@ enum AppStore {
     static var shareText: String { invitation(url: url) }
 
     /// The same, with the link passed in, so the wording can be checked with and
-    /// without one while `id` is still blank. Its own name rather than a third
+    /// without one whatever `id` holds. Its own name rather than a third
     /// `shareText`, so that `AppStore.shareText` on its own can only ever mean the
     /// property.
     static func invitation(url: URL?) -> String {
