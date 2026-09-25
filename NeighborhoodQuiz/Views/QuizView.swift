@@ -29,6 +29,22 @@ struct QuizView: View {
         case missed
         /// The end of it.
         case over
+        /// A first-time player's first question, with the first tip up.
+        case tutorial
+        /// The same, something picked, and the tip about the Answer button.
+        case tutorialPicked = "tutorial-picked"
+        /// The end of that first round, with the last tip on its card.
+        case tutorialOver = "tutorial-over"
+
+        /// The tip a staged run shows, if it is one of the tutorial's.
+        var tip: Tutorial.Step? {
+            switch self {
+            case .tutorial: return .pick
+            case .tutorialPicked: return .answer
+            case .tutorialOver: return .money
+            default: return nil
+            }
+        }
     }
 
     /// The places the gallery is played through, chosen to be recognisable rather than
@@ -64,9 +80,30 @@ struct QuizView: View {
 
     @State private var overlay: Overlay?
 
+    /// Which tip is up, for a player being shown how to play.
+    @State private var tutorial: Tutorial
+    /// Where "has been shown how to play" is kept. A staged run's keeps nothing.
+    private let record: TutorialRecord
+
     init(stage: Stage? = nil) {
         self.stage = stage
-        _bank = State(initialValue: stage == nil ? Bank() : Bank.staged(QuizView.stagedWallet))
+        let bank: Bank
+        let record: TutorialRecord
+        let tutorial: Tutorial
+        if let stage {
+            // A tutorial shot is a first-time player's round, so its wallet is empty;
+            // every other shot has a career behind it.
+            bank = .staged(stage.tip == nil ? QuizView.stagedWallet : Wallet())
+            record = TutorialRecord(defaults: nil)
+            tutorial = stage.tip.map { Tutorial.showing($0) } ?? Tutorial(coaching: false)
+        } else {
+            bank = Bank()
+            record = TutorialRecord()
+            tutorial = Tutorial(coaching: record.shouldCoach(bank.wallet))
+        }
+        self.record = record
+        _bank = State(initialValue: bank)
+        _tutorial = State(initialValue: tutorial)
     }
 
     @State private var round: QuizRound?
@@ -171,6 +208,16 @@ struct QuizView: View {
                     if let round, !round.isFinished {
                         quitButton
                     }
+
+                    // In a layer of its own so the fade is the tip's alone: the same
+                    // modifier on the stack above would animate the map as well.
+                    ZStack {
+                        if let round, let step = tutorial.step, step != .money,
+                           !round.isFinished || showing != nil {
+                            tip(step)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.25), value: tutorial.step)
                 }
             }
 
@@ -186,7 +233,10 @@ struct QuizView: View {
         .sheet(item: $overlay) { which in
             switch which {
             case .boroughs: BoroughsView(bank: bank) { overlay = nil }
-            case .settings: SettingsView(bank: bank) { overlay = nil }
+            case .settings:
+                SettingsView(bank: bank, tutorialRecord: record, onHowToPlay: { replayTutorial() }) {
+                    overlay = nil
+                }
             }
         }
         // Changing what the next round is about is only offered from the menu and from
@@ -200,6 +250,13 @@ struct QuizView: View {
         // from one borough to the other.
         .onChange(of: bank.wallet.pick) { _, _ in
             if round != nil { leave() }
+        }
+        // A wallet only ever goes back to empty one way: "Delete all saved data", which
+        // erases the tips' record with it. So the tips are asked again, from the record,
+        // and the next round is coached the way a fresh install's would be.
+        .onChange(of: bank.wallet.isEmpty) { _, empty in
+            guard empty, stage == nil else { return }
+            tutorial = Tutorial(coaching: record.shouldCoach(bank.wallet))
         }
         // Holding the settled place on screen, then moving along. `task(id:)` rather
         // than a Task started by hand: it is cancelled for us if the view goes away or
@@ -418,6 +475,12 @@ struct QuizView: View {
 
             takings
 
+            // The last tip, on the card rather than over the map: it is about the money
+            // on this card, and the round it would otherwise sit over is finished.
+            if tutorial.step == .money {
+                TipCard(step: .money, wallet: bank.wallet, palette: palette)
+            }
+
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
                     pill("Play again", action: startRound)
@@ -615,6 +678,20 @@ struct QuizView: View {
         .padding(.top, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityLabel("Leave this round")
+    }
+
+    /// A tip during the round, at the top of the map: under the question it is about,
+    /// and below the quit button rather than over it. Always in the same place, so after
+    /// the first one a player knows where to look for the next. The space around the
+    /// card is not the card's, so the map under it still takes a tap.
+    private func tip(_ step: Tutorial.Step) -> some View {
+        TipCard(step: step, wallet: bank.wallet, palette: palette) {
+            coach(.skipped)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .transition(.opacity)
     }
 
     /// What the round did to the wallet.
@@ -818,15 +895,15 @@ struct QuizView: View {
         // The map reports an id on the borough it is drawing; the round wants to know
         // which borough that was.
         let place = id.map { Place(shownBorough, $0) }
-        guard let place, !round.ruledOut.contains(place),
-              !round.found.contains(place), !round.missed.contains(place)
-        else {
-            withAnimation(.easeOut(duration: 0.15)) { candidate = nil }
-            return
+        let next: Place?
+        if let place, !round.ruledOut.contains(place),
+           !round.found.contains(place), !round.missed.contains(place) {
+            next = (place == candidate) ? nil : place
+        } else {
+            next = nil
         }
-        withAnimation(.easeOut(duration: 0.15)) {
-            candidate = (place == candidate) ? nil : place
-        }
+        withAnimation(.easeOut(duration: 0.15)) { candidate = next }
+        coach(next == nil ? .unpicked : .picked)
     }
 
     /// Answering with what is picked. This is the only thing that spends a go.
@@ -857,6 +934,7 @@ struct QuizView: View {
         case .wrong, .ignored:
             settled = nil
         }
+        coach(.answered(outcome))
 
         // Paid here rather than where the summary is drawn. This runs once, when the
         // last question is answered; a view body runs whenever SwiftUI feels like it,
@@ -865,6 +943,7 @@ struct QuizView: View {
         if playing.isFinished {
             bank.earn(playing.score)
             count(.roundFinished(playing, pick: bank.wallet.pick, rounds: bank.wallet.rounds))
+            coach(.roundFinished)
             askForARating()
         }
 
@@ -913,10 +992,13 @@ struct QuizView: View {
         case .borough(let borough): pool = Place.all(in: borough)
         case .anywhere: pool = bank.wallet.playable.flatMap(Place.all(in:))
         }
+        // Play again is a way off the end-of-round card as much as Menu is.
+        if let round, round.isFinished { coach(.summaryLeft) }
         showing = nil
         candidate = nil
         round = QuizRound(askingAbout: pool)
         count(.roundStarted(bank.wallet.pick, open: bank.wallet.playable.count))
+        coach(.roundStarted)
         // A fresh round starts on the whole borough. Mid-round it never does.
         opening += 1
     }
@@ -930,8 +1012,13 @@ struct QuizView: View {
     private func leave() {
         // A round left part-way is worth a line on a chart; a finished one has already
         // had its say, and leaving its summary for the menu is not leaving the round.
-        if let round, !round.isFinished {
-            count(.roundLeft(round, pick: bank.wallet.pick))
+        if let round {
+            if round.isFinished {
+                coach(.summaryLeft)
+            } else {
+                count(.roundLeft(round, pick: bank.wallet.pick))
+                coach(.roundLeft)
+            }
         }
         withAnimation(.easeOut(duration: 0.25)) {
             round = nil
@@ -947,6 +1034,38 @@ struct QuizView: View {
     private func count(_ signal: AnalyticsSignal) {
         guard stage == nil else { return }
         Analytics.record(signal)
+    }
+
+    // MARK: - Showing a first-time player how to play
+
+    /// Tells the tips what happened. Every tip that comes up is counted, which makes the
+    /// four of them a funnel on a chart; and the moment the tips end — read to the end,
+    /// or skipped — it is written down so they do not come back next launch.
+    ///
+    /// A staged run is shown one tip and never moves off it: its record keeps nothing and
+    /// its counting counts nothing, and a photograph must not change under the camera.
+    private func coach(_ event: Tutorial.Event) {
+        guard stage == nil else { return }
+        let before = tutorial
+        tutorial.handle(event)
+
+        if let step = tutorial.step, step != before.step {
+            count(.tutorialTip(step))
+        }
+        if before.isCoaching, !tutorial.isCoaching {
+            record.finish()
+            count(event == .skipped ? .tutorialSkipped(at: before.step) : .tutorialFinished)
+        }
+    }
+
+    /// "How to play", from Settings: the tips again, over a round started for them.
+    /// Settings only opens from the menu, so there is never a round in the way.
+    private func replayTutorial() {
+        overlay = nil
+        record.replay()
+        tutorial = Tutorial(coaching: true)
+        count(.tutorialReplayed)
+        startRound()
     }
 
     // MARK: - Staging, for the gallery
@@ -979,9 +1098,9 @@ struct QuizView: View {
         }
 
         switch stage {
-        case .menu, .asking:
+        case .menu, .asking, .tutorial:
             break
-        case .picked:
+        case .picked, .tutorialPicked:
             candidate = QuizView.place(named: "SoHo")
         case .narrowing:
             elsewhere(2)
@@ -992,7 +1111,7 @@ struct QuizView: View {
             for _ in 0..<2 { if let wanted = round.current { _ = round.guess(wanted) } }
             elsewhere(QuizRound.tries)
             if let given = round.missed.last { showing = .missed(given) }
-        case .over:
+        case .over, .tutorialOver:
             var asked = 0
             while let wanted = round.current {
                 if asked == 4 || asked == 7 {

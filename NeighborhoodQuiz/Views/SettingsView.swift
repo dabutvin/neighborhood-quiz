@@ -1,18 +1,26 @@
 import StoreKit
 import SwiftUI
 
-/// What build this is, two ways to send the app on, the one switch about privacy, and the
-/// one destructive thing it can do to itself.
+/// What build this is, the tips again, two ways to send the app on, the one switch about
+/// privacy, and the one destructive thing it can do to itself.
 ///
-/// Five rows and nothing else. A settings screen that offers to throw away everything
-/// somebody has earned should have very little else on it to mis-tap around, and the
-/// two rows between the version and the delete both open something of the phone's — a
-/// store page, a share sheet — rather than doing anything to the wallet.
+/// Six rows and nothing else. A settings screen that offers to throw away everything
+/// somebody has earned should have very little else on it to mis-tap around, and none
+/// of the rows between the version and the delete does anything to the wallet: one
+/// starts a round with the tips, two open something of the phone's — a store page, a
+/// share sheet — and one is a switch.
 struct SettingsView: View {
     let bank: Bank
     /// What the game counts, and the switch that stops it. The real one by default; the
     /// screenshot run hands in one that remembers nothing.
     @Bindable var analytics: Analytics = .shared
+    /// Whether the tips have been seen, which "Delete all saved data" forgets along with
+    /// the wallet. The real one by default; the screenshot run hands in one that keeps
+    /// nothing.
+    var tutorialRecord = TutorialRecord()
+    /// Shows the tips again over a fresh round. The row is only there when the screen
+    /// it was opened over can start one.
+    var onHowToPlay: (() -> Void)?
     var onClose: () -> Void = {}
 
     @Environment(\.colorScheme) private var colorScheme
@@ -34,6 +42,7 @@ struct SettingsView: View {
                         .foregroundStyle(palette.ink)
 
                     version
+                    howToPlay
                     rate
                     share
                     counting
@@ -70,7 +79,7 @@ struct SettingsView: View {
             }
             Button("Keep it", role: .cancel) {}
         } message: {
-            Text("Your wallet, everything you have earned and every borough you have bought. This cannot be undone.")
+            Text("Your wallet, everything you have earned and every borough you have bought. The app will be as it was when you first opened it. This cannot be undone.")
         }
     }
 
@@ -109,6 +118,18 @@ struct SettingsView: View {
             row { leading("Rate the app") }
         }
         .buttonStyle(.plain)
+    }
+
+    /// The four tips again, over a round started for them, for anybody who skipped them
+    /// or wants a reminder.
+    @ViewBuilder
+    private var howToPlay: some View {
+        if let onHowToPlay {
+            Button(action: onHowToPlay) {
+                row { leading("How to play") }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     /// The plain "try this" message, handed to whatever the phone can send it with.
@@ -161,7 +182,7 @@ struct SettingsView: View {
     }
 
     private var whatIsCounted: String {
-        "Which neighbourhoods get asked and how the rounds go — scores, goes, and which "
+        "Which neighborhoods get asked and how the rounds go — scores, goes, and which "
             + "boroughs get bought. It shows which places are too hard. No name, no account, "
             + "no advertising identifier, and nothing that says who you are."
     }
@@ -216,13 +237,18 @@ struct SettingsView: View {
 
     // MARK: - Actions
 
-    /// The wallet, and the number the counting knew this phone by. Said before it is
-    /// thrown away, since the number it would be counted under is one of the things going.
-    /// What survives is the switch itself: a player who turned counting off and then
-    /// deleted their wallet has not asked to be counted again.
+    /// Everything, so the app is as it was on a fresh install: the wallet, whether the
+    /// tips have been seen — so the next round is coached again — and the number the
+    /// counting knew this phone by. Said before it is thrown away, since the number it
+    /// would be counted under is one of the things going.
+    ///
+    /// The one thing a fresh install would have and this does not put back is the
+    /// counting's switch. A player who turned counting off and then deleted their wallet
+    /// has not asked to be counted again.
     private func deleteEverything() {
         analytics.record(.dataCleared)
         analytics.flush()
+        tutorialRecord.erase()
         bank.erase()
         analytics.eraseEverything()
     }
