@@ -129,9 +129,9 @@ boroughs write them: 4th Avenue and 18th Avenue in Brooklyn, 82nd Street and 37t
 Avenue in Queens, where Manhattan has Fifth — a borough whose avenues run to 28th cannot
 switch from words to figures at Twelfth without it showing. And their neighbourhoods are
 the same census-tract treatment Manhattan's had — the city's compounds taken apart and
-the split ones put back together — which comes to 52 places in Brooklyn, about sixty in
-Queens, about fifty in the Bronx and about thirty on Staten Island: the places a player
-would actually call something, and no "Elmhurst-Corona" among them.
+the split ones put back together — which comes to 52 places in Brooklyn, 68 in Queens,
+51 in the Bronx and 40 on Staten Island: the places a player would actually call
+something, and no "Elmhurst-Corona" among them.
 
 ### Why it wobbles
 

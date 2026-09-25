@@ -136,6 +136,10 @@ class Borough(NamedTuple):
     #: None keeps every island the city files under the borough.
     min_ring_latitude: float | None = None
     min_ring_longitude: float | None = None
+    #: Rings of the borough boundary smaller than this are left out, as piers and
+    #: mooring dolphins rather than land. The city-wide floor suits every borough but
+    #: one; see the Queens record for why it lifts its own.
+    min_ring_area: float = MIN_RING_AREA
 
 
 # The three tracts in the East River. The city files them under Lenox Hill; nobody
@@ -326,17 +330,377 @@ BROOKLYN_AREAS = (
 )
 
 
-# What Queens is divided into. Filled in by the Queens pass; see the notes there.
-QUEENS_AREAS = ()
+# The two tracts of Woodside that the city files with Astoria: the wedge between
+# Northern Boulevard and Astoria Boulevard, east of the expressway, which is across the
+# road from the rest of Woodside and a mile from Astoria's Broadway.
+WOODSIDE_NORTH = ("295", "297")
+# Beechhurst is the north shore east of 154th Street; Whitestone is the rest.
+BEECHHURST = ("987", "991")
+# The three tracts of Rochdale Village, the co-op boxed in by Baisley Boulevard,
+# Bedell Street, 137th Avenue and Guy R. Brewer Boulevard.
+ROCHDALE = ("334.03", "334.04", "334.05")
+# Bayswater is the peninsula north of Mott Avenue, west of Beach 25th Street.
+BAYSWATER = ("1008.01",)
+
+# What Queens is divided into.
+#
+# The city draws 59 lived-in neighborhoods in Queens, and Queens, being the borough
+# of a hundred named places, has the most to undo: Astoria is in four pieces and
+# Ozone Park, Richmond Hill, Corona and Springfield Gardens in two, while "Breezy
+# Point-Belle Harbor-Rockaway Park-Broad Channel" is three places strung along a
+# peninsula plus an island in the bay. So the pieces go back together, the strings
+# come apart by tract along the Beach streets, and the qualifiers — "Murray Hill
+# (Queens)" is Murray Hill here — come off.
+#
+# Where an NTA is cut, the cut is the road people draw the line on — 21st Street and
+# 36th Avenue round Dutch Kills, 164th Street between Pomonok and Hillcrest, 188th
+# Street between Jamaica Estates and Holliswood, Parsons Boulevard between Briarwood
+# and Jamaica Hills, Union Turnpike under Glen Oaks, Little Neck Parkway, the Belt
+# Parkway under Lindenwood, Beach 126th and Beach 73rd on the peninsula — rounded to
+# the nearest tract edge, and a tract that straddles the line goes with the side most
+# of it is on. Parks, cemeteries, the airports, Fort Totten and the rail yards are
+# not places anybody is asked to name and are left out, which is why Flushing Meadows
+# and Forest Park are holes.
+QUEENS_AREAS = (
+    # --- the west
+    Area("Astoria",
+         ntas=("Astoria (Central)", "Astoria (North)-Ditmars-Steinway",
+               "Old Astoria-Hallets Point", "Astoria (East)-Woodside (North)"),
+         without=WOODSIDE_NORTH),
+    Area("Woodside", ntas=("Woodside",), tracts=WOODSIDE_NORTH),
+    # Long Island City is Queens Plaza, Court Square and the waterfront up to the
+    # bridge; Hunters Point is everything south of 44th Drive and Jackson Avenue,
+    # from the Gantry piers along Newtown Creek to the yards.
+    Area("Long Island City", tracts=("1.03", "19.01", "19.02", "19.03")),
+    Area("Hunters Point", tracts=("1.01", "1.02", "1.04", "7.01", "7.02")),
+    # Dutch Kills is east of 21st Street and south of 36th Avenue, down to Queens
+    # Plaza. Ravenswood is the rest — the Queensbridge and Ravenswood Houses and the
+    # power station on the river.
+    Area("Ravenswood", tracts=("25", "37", "39", "43", "45", "47", "85")),
+    Area("Dutch Kills", tracts=("31", "33.01", "33.02", "51", "55")),
+    Area("Sunnyside", ntas=("Sunnyside",)),
+    Area("Jackson Heights", ntas=("Jackson Heights",)),
+    Area("East Elmhurst", ntas=("East Elmhurst",)),
+    Area("Elmhurst", ntas=("Elmhurst",)),
+    Area("Corona", ntas=("Corona", "North Corona")),
+    Area("Maspeth", ntas=("Maspeth",)),
+    Area("Ridgewood", ntas=("Ridgewood",)),
+    Area("Glendale", ntas=("Glendale",)),
+    Area("Middle Village", ntas=("Middle Village",)),
+    # --- the middle
+    Area("Rego Park", ntas=("Rego Park",)),
+    Area("Forest Hills", ntas=("Forest Hills",)),
+    Area("Kew Gardens", ntas=("Kew Gardens",)),
+    Area("Kew Gardens Hills", ntas=("Kew Gardens Hills",)),
+    # "Jamaica Hills-Briarwood" is split at Parsons Boulevard.
+    Area("Briarwood", tracts=("214", "220.01", "220.02", "230", "232")),
+    Area("Jamaica Hills", tracts=("448", "450", "452", "454", "456")),
+    # "Pomonok-Electchester-Hillcrest" is split at 164th Street: Pomonok and
+    # Electchester west of it, Hillcrest and St. John's east of it.
+    Area("Pomonok", tracts=("1227.02", "1227.03", "1227.04", "1257")),
+    Area("Hillcrest", tracts=("1241", "1247", "1265", "1267")),
+    Area("Fresh Meadows", ntas=("Fresh Meadows-Utopia",)),
+    # "Jamaica Estates-Holliswood" is split at 188th Street.
+    Area("Jamaica Estates", tracts=("458", "464", "466", "472", "1277")),
+    Area("Holliswood", tracts=("476", "478.01", "492.01")),
+    # --- Flushing and the north shore
+    Area("Flushing", ntas=("Flushing-Willets Point",)),
+    Area("Queensboro Hill", ntas=("Queensboro Hill",)),
+    Area("East Flushing", ntas=("East Flushing",)),
+    Area("Murray Hill", ntas=("Murray Hill-Broadway Flushing",)),
+    Area("College Point", ntas=("College Point",)),
+    Area("Whitestone", ntas=("Whitestone-Beechhurst",), without=BEECHHURST),
+    Area("Beechhurst", tracts=BEECHHURST),
+    Area("Bay Terrace", ntas=("Bay Terrace-Clearview",)),
+    Area("Auburndale", ntas=("Auburndale",)),
+    Area("Bayside", ntas=("Bayside",)),
+    Area("Oakland Gardens", ntas=("Oakland Gardens-Hollis Hills",)),
+    # "Douglaston-Little Neck" is split at Little Neck Parkway north of the
+    # expressway — Douglas Manor, Douglaston Hill and Douglaston Park on the west —
+    # and Little Neck takes the blocks south of it, Deepdale included.
+    Area("Douglaston", tracts=("1479", "1483", "1507.01")),
+    Area("Little Neck", tracts=("1507.02", "1529.01", "1529.02")),
+    # "Glen Oaks-Floral Park-New Hyde Park" is split at Union Turnpike; the Queens
+    # end of New Hyde Park goes with whichever side of the turnpike it is on.
+    Area("Glen Oaks", tracts=("1551.01", "1551.03", "1551.04")),
+    Area("Floral Park", tracts=("1579.01", "1579.02", "1579.03")),
+    Area("Bellerose", ntas=("Bellerose",)),
+    # --- the south-east
+    Area("Jamaica", ntas=("Jamaica",)),
+    Area("South Jamaica", ntas=("South Jamaica",)),
+    Area("Baisley Park", ntas=("Baisley Park",)),
+    Area("Hollis", ntas=("Hollis",)),
+    Area("St. Albans", ntas=("St. Albans",)),
+    Area("Queens Village", ntas=("Queens Village",)),
+    Area("Cambria Heights", ntas=("Cambria Heights",)),
+    Area("Laurelton", ntas=("Laurelton",)),
+    Area("Rosedale", ntas=("Rosedale",)),
+    Area("Springfield Gardens",
+         ntas=("Springfield Gardens (North)-Rochdale Village",
+               "Springfield Gardens (South)-Brookville"),
+         without=ROCHDALE),
+    Area("Rochdale", tracts=ROCHDALE),
+    # --- the south-west
+    Area("Woodhaven", ntas=("Woodhaven",)),
+    Area("Richmond Hill", ntas=("Richmond Hill", "South Richmond Hill")),
+    Area("Ozone Park", ntas=("Ozone Park", "Ozone Park (North)")),
+    Area("South Ozone Park", ntas=("South Ozone Park",)),
+    # "Howard Beach-Lindenwood" is split at the Belt Parkway: Lindenwood north of it,
+    # Howard Beach on both sides of Cross Bay Boulevard south of it.
+    Area("Howard Beach", tracts=("884", "892.01")),
+    Area("Lindenwood", tracts=("62.01", "62.02")),
+    # --- the Rockaways
+    # The peninsula, west to east. Breezy Point is everything west of Fort Tilden,
+    # Roxbury included. Belle Harbor runs from Beach 149th to Beach 126th, Neponsit
+    # included; Rockaway Park from there to Beach 100th; Rockaway Beach to Beach
+    # 73rd; Arverne to Beach 59th; Edgemere to Beach 32nd; Far Rockaway is the end.
+    Area("Breezy Point", tracts=("916.03",)),
+    Area("Belle Harbor", tracts=("922", "928")),
+    Area("Rockaway Park", tracts=("934.01", "934.02", "938")),
+    Area("Rockaway Beach", tracts=("942.01", "942.02", "942.03")),
+    Area("Arverne", tracts=("954", "964")),
+    Area("Edgemere", tracts=("972.02", "972.04", "972.05", "972.06")),
+    Area("Far Rockaway", ntas=("Far Rockaway-Bayswater",), without=BAYSWATER),
+    Area("Bayswater", tracts=BAYSWATER),
+    Area("Broad Channel", tracts=("1072.01",)),
+)
 
 
-# What the Bronx is divided into. Filled in by the Bronx pass; see the notes there.
-BRONX_AREAS = ()
+# The industrial south-east corner of the borough, below Bruckner Boulevard: the rail
+# yards and the power plant between the Harlem River and the Bronx Kill.
+PORT_MORRIS = ("19.01", "19.02", "19.03")
+# The three tracts the city files as "Claremont (West)" that actually adjoin Claremont
+# Park — north of it along the Cross Bronx, and south of it along East 170th. The
+# fourth, 225, touches nothing of Claremont but the park and goes with Mount Eden.
+CLAREMONT_WEST = ("177.02", "227.03", "229.02")
+# South of Allerton Avenue and north of Pelham Parkway, from Bronx Park East to
+# Williamsbridge Road; the Bronxdale Houses are in 332.02.
+BRONXDALE = ("324", "328", "330", "332.01", "332.02")
+# West of the Bronx River Parkway, between the cemetery and the county line.
+WOODLAWN = ("449.01", "449.02", "451.01", "451.02")
+# The peninsula south of Lacombe Avenue, Harding Park included.
+CLASON_POINT = ("2", "4")
+# North of the Bruckner Expressway, from White Plains Road to Westchester Creek.
+UNIONPORT = ("40.01", "72", "78", "92")
+# North of East Tremont Avenue and the Bruckner interchange, up to Middletown Road.
+SCHUYLERVILLE = ("184", "194", "264")
+
+# What the Bronx is divided into.
+#
+# The city draws 37 lived-in neighborhoods in the Bronx, and its compounds are the same
+# trouble as Brooklyn's: "Pelham Bay-Country Club-City Island" is a shore, a peninsula
+# and an island, "Eastchester-Edenwald-Baychester" three places with three subway
+# stops, and "University Heights (North)-Fordham" a half of one place stapled to a
+# whole other. So the compounds come apart by tract, the two halves of University
+# Heights go back together, and the double-barrelled names lose the barrel nobody
+# says — Concourse, Kingsbridge, Van Nest, Castle Hill.
+#
+# Where a cut is made it follows the line people draw it on — Bruckner Boulevard for
+# Port Morris, Allerton Avenue for Bronxdale, the Bronx River Parkway for Woodlawn,
+# Jerome Avenue for Fordham, Sagamore Street for Van Nest — rounded to the nearest
+# tract edge. Marble Hill is not here: it is Manhattan by law and in Manhattan's
+# tract file, and is on Manhattan's map. Van Cortlandt and Pelham Bay Parks, Bronx
+# Park with the zoo and the garden, Woodlawn Cemetery, Hart and Rikers Islands are
+# not lived in and are left out, as the parks are everywhere.
+BRONX_AREAS = (
+    # --- the south
+    Area("Mott Haven", ntas=("Mott Haven-Port Morris",), without=PORT_MORRIS),
+    Area("Port Morris", tracts=PORT_MORRIS),
+    Area("Melrose", ntas=("Melrose",)),
+    Area("Hunts Point", ntas=("Hunts Point",)),
+    Area("Longwood", ntas=("Longwood",)),
+    Area("Morrisania", ntas=("Morrisania",)),
+    Area("Crotona Park East", ntas=("Crotona Park East",)),
+    Area("Claremont", ntas=("Claremont Village-Claremont (East)",), tracts=CLAREMONT_WEST),
+    Area("Mount Eden", ntas=("Mount Eden-Claremont (West)",), without=CLAREMONT_WEST),
+    Area("Concourse", ntas=("Concourse-Concourse Village",)),
+    Area("Highbridge", ntas=("Highbridge",)),
+    # --- the west
+    Area("Mount Hope", ntas=("Mount Hope",)),
+    # "University Heights (South)-Morris Heights" is cut at West Burnside Avenue: the
+    # campus and the blocks above it are University Heights, the slope down to the
+    # Harlem River below is Morris Heights. "University Heights (North)-Fordham"
+    # is cut at Jerome Avenue — west of it, over University and Sedgwick Avenues, is the
+    # top of University Heights; east of it, Fordham Plaza and the blocks up to
+    # Kingsbridge Road, is Fordham, which takes Fordham Heights south of the road too:
+    # Fordham is the road and both sides of it.
+    Area("Morris Heights",
+         tracts=("53", "205.01", "205.02", "213.01", "215.01", "215.02", "217", "243", "245.01")),
+    Area("University Heights",
+         tracts=("245.02", "247", "249", "251", "253", "255", "257", "261", "263", "265", "269")),
+    Area("Fordham", ntas=("Fordham Heights",), tracts=("399.01", "401")),
+    Area("Bedford Park", ntas=("Bedford Park",)),
+    Area("Norwood", ntas=("Norwood",)),
+    Area("Kingsbridge Heights", ntas=("Kingsbridge Heights-Van Cortlandt Village",)),
+    Area("Kingsbridge", ntas=("Kingsbridge-Marble Hill",)),
+    # One NTA, "Riverdale-Spuyten Duyvil", is the whole north-west corner. Spuyten
+    # Duyvil is the tip by the Harlem River, west of the Henry Hudson Parkway and south
+    # of West 232nd; Fieldston is the private streets between the parkway and Van
+    # Cortlandt Park, Manhattan College Parkway to West 250th; North Riverdale is
+    # everything above West 254th; Riverdale is the rest.
+    Area("Spuyten Duyvil", tracts=("293.01", "293.02", "301")),
+    Area("Riverdale", tracts=("295", "297", "307.01", "309")),
+    Area("Fieldston", tracts=("335", "351")),
+    Area("North Riverdale", tracts=("319", "323", "337", "343", "345")),
+    # --- the middle
+    # The city's "Tremont" runs from Webster Avenue to Crotona Park; it is cut at
+    # Arthur Avenue, with the Southern Boulevard side as East Tremont.
+    Area("Tremont", tracts=("369.01", "369.02", "375.04", "395")),
+    Area("East Tremont", tracts=("365.01", "365.02", "367", "371", "373")),
+    Area("West Farms", ntas=("West Farms",)),
+    Area("Belmont", ntas=("Belmont",)),
+    Area("Bronxdale", tracts=BRONXDALE),
+    Area("Allerton", ntas=("Allerton",), without=BRONXDALE),
+    # "Pelham Parkway-Van Nest" is cut at Sagamore Street.
+    Area("Pelham Parkway", tracts=("224.01", "224.03", "224.04", "228", "230")),
+    Area("Van Nest", tracts=("232", "236", "238", "240")),
+    Area("Morris Park", ntas=("Morris Park",)),
+    Area("Pelham Gardens", ntas=("Pelham Gardens",)),
+    # --- the north
+    Area("Williamsbridge", ntas=("Williamsbridge-Olinville",)),
+    Area("Woodlawn", tracts=WOODLAWN),
+    Area("Wakefield", ntas=("Wakefield-Woodlawn",), without=WOODLAWN),
+    # Edenwald is the houses and the blocks round them, Laconia Avenue to Boston Road
+    # between East 222nd and Bussing Avenue; Eastchester is east of Boston Road up to
+    # the Hutchinson River, Dyre Avenue included; Baychester is south of both, Boston
+    # Road and Gun Hill Road down to Bay Plaza.
+    Area("Edenwald", tracts=("426", "458", "460", "484.02")),
+    Area("Eastchester", tracts=("456", "462.09", "484.01")),
+    Area("Baychester", tracts=("356", "358", "364", "386", "462.08")),
+    Area("Co-op City", ntas=("Co-op City",)),
+    # --- the east
+    Area("Parkchester", ntas=("Parkchester",)),
+    Area("Westchester Square", ntas=("Westchester Square",)),
+    Area("Unionport", tracts=UNIONPORT),
+    Area("Castle Hill", ntas=("Castle Hill-Unionport",), without=UNIONPORT),
+    # Soundview is both of the city's Soundviews less the point: the Bronx River
+    # Houses and Bruckner blocks in the north, Soundview Avenue in the south.
+    Area("Soundview",
+         ntas=("Soundview-Bruckner-Bronx River", "Soundview-Clason Point"),
+         without=CLASON_POINT),
+    Area("Clason Point", tracts=CLASON_POINT),
+    Area("Schuylerville", tracts=SCHUYLERVILLE),
+    Area("Throgs Neck", ntas=("Throgs Neck-Schuylerville",), without=SCHUYLERVILLE),
+    # Pelham Bay is the blocks by the park's gate, Country Club the peninsula east of
+    # the Bruckner, City Island the island.
+    Area("Pelham Bay", tracts=("266.01", "266.02", "300")),
+    Area("Country Club", tracts=("274.01", "274.02")),
+    Area("City Island", tracts=("516.01",)),
+)
 
 
-# What Staten Island is divided into. Filled in by the Staten Island pass; see the
-# notes there.
-STATEN_ISLAND_AREAS = ()
+# What Staten Island is divided into.
+#
+# The city draws only 16 lived-in neighborhoods on Staten Island, and all but one of
+# them are compounds: "Annadale-Huguenot-Prince's Bay-Woodrow" is four places with four
+# railway stations, "New Springville-Willowbrook-Bulls Head-Travis" four that do not
+# even touch in the middle. So this borough is nearly all tract-level splitting, the
+# other way round from Brooklyn, where the work was putting halves back together.
+#
+# Staten Island's tracts are big and its borders are vaguer than Brooklyn's — a hill,
+# a railway station, a stretch of Amboy Road — so the cuts follow the roads people do
+# draw the line on where a tract edge runs along one (Woodrow Road between Rossville
+# and Woodrow, Armstrong Avenue between Eltingville and Great Kills, Arden Avenue
+# between Annadale and Huguenot, Jersey Street between St. George and New Brighton,
+# Sand Lane between Arrochar and South Beach), and where none does the name a tract
+# is folded into is the neighbour whose centre it is nearest. The places that could
+# not be cut out at tract size are folded rather than drawn wrong: Shore Acres into
+# Rosebank, Concord and Fox Hills into Park Hill, Randall Manor into West Brighton,
+# Sunnyside into Castleton Corners, Meiers Corners into Westerleigh, Manor Heights
+# and Sea View into Willowbrook, Emerson Hill into Todt Hill, Heartland Village into
+# New Springville, Egbertville into Lighthouse Hill, New Dorp Beach into New Dorp,
+# Bay Terrace into Great Kills, Pleasant Plains and Richmond Valley into Prince's Bay
+# and Charleston. The parks the city files as neighborhoods — Freshkills, Great Kills
+# Park, Miller Field, Fort Wadsworth, Snug Harbor — are not lived-in and stay out.
+STATEN_ISLAND_AREAS = (
+    # --- the north shore, east
+    # St. George is the ferry end, east of Jersey Street and north of Victory
+    # Boulevard; New Brighton is west of Jersey Street along the Kill, down to Forest
+    # Avenue. Tompkinsville, Stapleton and Clifton follow Bay Street south one tract
+    # each; Park Hill is the hill behind them, Fox Hills and Concord included.
+    Area("St. George", tracts=("3", "9", "11")),
+    Area("New Brighton", tracts=("7", "75", "77", "81")),
+    Area("Tompkinsville", tracts=("17",)),
+    Area("Stapleton", tracts=("21",)),
+    Area("Clifton", tracts=("27", "40.01")),
+    Area("Park Hill", tracts=("29", "40.02", "40.03", "40.04")),
+    # Rosebank runs down Bay Street to Fort Wadsworth, the Shore Acres waterfront
+    # included; 20.01 straddles the bridge approach and lies mostly north of it.
+    Area("Rosebank", tracts=("6", "8", "20.01", "36")),
+    # Grymes Hill is the college on the hill between Clove Road and Howard Avenue;
+    # Silver Lake is the reservoir and the blocks round it up to Forest Avenue,
+    # Clove Lakes Park on its western tract.
+    Area("Grymes Hill", tracts=("39", "47")),
+    Area("Silver Lake", tracts=("33", "59.01", "59.02")),
+    # West Brighton is Bard Avenue to Port Richmond, the Kill to Forest Avenue, with
+    # Randall Manor and Livingston on its eastern tracts. Castleton Corners is the
+    # far side of Clove Road down to the expressway, Sunnyside included.
+    Area("West Brighton", tracts=("67", "97.01", "105", "125", "133.01")),
+    Area("Castleton Corners", tracts=("121", "147", "169.01")),
+    # --- the north shore, west
+    Area("Port Richmond", ntas=("Port Richmond",)),
+    # Arlington is the one big tract at the western end, Howland Hook included;
+    # Mariners Harbor is everything between it and Port Richmond north of Forest
+    # Avenue; Graniteville is south of Forest Avenue from the expressway to
+    # Willowbrook Road.
+    Area("Arlington", tracts=("323",)),
+    Area("Mariners Harbor", tracts=("223", "231", "239", "319.01", "319.02")),
+    Area("Graniteville", tracts=("251", "303.01", "303.02")),
+    # Westerleigh is the grid between Willowbrook Road and Manor Road, north of the
+    # expressway, Meiers Corners on its Victory Boulevard edge.
+    Area("Westerleigh", tracts=("151", "187.01", "189.01", "197", "201")),
+    # --- mid-island
+    # Bulls Head is the Victory Boulevard–Richmond Avenue crossing and its tracts to
+    # the west and south; Travis is the west shore tract beyond it. Willowbrook is the
+    # park and the college, the expressway to Rockland Avenue and Richmond Avenue to
+    # Manor Road, with Manor Heights and Sea View on its eastern side. New Springville
+    # is the mall and Richmond Avenue south of it, Heartland Village included.
+    Area("Bulls Head", tracts=("291.04", "291.05", "291.06")),
+    Area("Travis", tracts=("291.02",)),
+    Area("Willowbrook", tracts=("173", "187.03", "187.04", "189.02", "273.01", "273.02")),
+    Area("New Springville", tracts=("277.02", "277.04", "277.05", "277.06", "279")),
+    # Todt Hill is the hill, Emerson Hill on its Richmond Road slope; Lighthouse Hill
+    # is the tract below it, which is the Greenbelt and Egbertville too.
+    Area("Todt Hill", tracts=("177.01", "177.02")),
+    Area("Lighthouse Hill", tracts=("181",)),
+    # --- the east shore
+    # Grasmere is the lakes and the station, Old Town Road its southern edge.
+    # Arrochar is under the bridge, north of Sand Lane; South Beach is the boardwalk
+    # from Sand Lane to Seaview Avenue, Hylan Boulevard to the water.
+    Area("Grasmere", tracts=("50", "96.01")),
+    Area("Arrochar", tracts=("20.02", "64")),
+    Area("South Beach", tracts=("70.01", "70.02", "74")),
+    # Dongan Hills is both sides of the station between Richmond Road and Hylan;
+    # Midland Beach is seaward of Hylan from Seaview Avenue to New Dorp Lane; New
+    # Dorp is the lane and the plaza, New Dorp Beach south of Miller Field included.
+    Area("Dongan Hills", tracts=("96.02", "114.01")),
+    Area("Midland Beach", tracts=("112.01", "112.03")),
+    Area("New Dorp", tracts=("114.02", "122", "128.04", "134")),
+    # Oakwood is Guyon Avenue down to the beach; Richmondtown is the old county seat
+    # at the top of Richmond Road.
+    Area("Oakwood", tracts=("128.05", "128.06", "132.01", "132.04")),
+    Area("Richmondtown", tracts=("138",)),
+    # --- the south shore
+    # Great Kills and Eltingville are cut at Armstrong Avenue, halfway between their
+    # stations; Great Kills has Bay Terrace on its eastern side. Eltingville and
+    # Annadale are cut at the tract edge nearest Arbutus Avenue, Annadale and Huguenot
+    # at the one nearest Arden Avenue, halfway between those two stations, and
+    # Huguenot and Woodrow at the one between Huguenot Avenue and Bloomingdale Road.
+    Area("Great Kills", tracts=("132.03", "146.05", "146.06", "146.08", "156.03")),
+    Area("Eltingville", tracts=("146.04", "146.07", "156.01", "156.02", "170.11", "170.12")),
+    Area("Annadale", tracts=("170.05", "176")),
+    Area("Huguenot", tracts=("170.09", "208.04")),
+    Area("Arden Heights", tracts=("170.07", "170.13", "170.14", "170.15", "170.16")),
+    # Rossville is north of Woodrow Road, Woodrow south of it down to the parkway.
+    Area("Rossville", tracts=("208.05", "208.06")),
+    Area("Woodrow", tracts=("208.03", "226.01")),
+    # Prince's Bay is one tract with Pleasant Plains on its western edge; Charleston
+    # is one tract with Richmond Valley on its southern; Tottenville is the end of
+    # the island, Page Avenue and everything beyond it.
+    Area("Prince's Bay", tracts=("198",)),
+    Area("Charleston", tracts=("226.02",)),
+    Area("Tottenville", tracts=("244.01", "244.02", "248")),
+)
 
 
 MANHATTAN = Borough(
@@ -381,6 +745,12 @@ QUEENS = Borough(
     avenue_count=45,
     major_count=400,
     avenues_in_words=False,
+    # Queens' share of Jamaica Bay is a dozen marsh islands, and the city has drawn
+    # the smallest of them with their creeks folded over themselves at its own
+    # resolution, which no thinning can make sound. They are specks at the scale the
+    # borough is drawn — none is two hundred metres across — so the floor is lifted
+    # just enough to leave them out; the islands anybody could point to stay.
+    min_ring_area=1.7e-5,
 )
 
 BRONX = Borough(
@@ -389,8 +759,15 @@ BRONX = Borough(
     park_letter="X",
     file="bronx.json",
     areas=BRONX_AREAS,
+    # The Bronx has about Brooklyn's streets on two-thirds of the ground, and much of
+    # what is longest is parkway — the Bronx River, Hutchinson River, Pelham, Mosholu
+    # and Henry Hudson Parkways, the Deegan, the Cross Bronx and the Bruckner — which
+    # the roadway type and the greens keep out of the avenue band. Thirty-five named
+    # at the widest zoom puts the Grand Concourse, the Boulevards and the long
+    # avenues on the paper without their names fighting.
     avenue_count=35,
     major_count=300,
+    # Its numbered avenues are in figures, as its street signs write them: 3rd Avenue.
     avenues_in_words=False,
 )
 
@@ -400,7 +777,14 @@ STATEN_ISLAND = Borough(
     park_letter="R",
     file="staten-island.json",
     areas=STATEN_ISLAND_AREAS,
-    avenue_count=30,
+    # Staten Island's streets wind, and few of them run far: twenty in, the length
+    # order is already down to the railroad service roads and the loop round the
+    # college campus, which nobody gives directions by. So fewer avenues than
+    # Manhattan, not more, though the borough has twice Brooklyn's street names —
+    # most of them a court in a subdivision — and the second band is cut to match,
+    # since the island is drawn small on the glass, being the tallest of the five
+    # as well as the widest.
+    avenue_count=20,
     major_count=250,
     avenues_in_words=False,
 )
@@ -427,8 +811,16 @@ BOROUGHS = {
 #   - an avenue is not in a park. West Drive and East Drive are type 1 and look like
 #     avenues by length, so they are caught by the greens instead: a road that spends
 #     most of itself inside a park polygon is a carriage drive.
+#   - an avenue is not called an expressway. The city files an expressway's frontage
+#     roads under the expressway's own name and as ordinary streets, and where there
+#     are more frontage rows than highway rows — the Throgs Neck, the Whitestone —
+#     the first rule lets the whole thing through. The word on the sign is the tell.
 #
-# Neither rule is a list of street names, so both survive the city re-surveying.
+# None of the rules is a list of street names, so all three survive the city
+# re-surveying.
+
+# What a road is called when it is a highway whatever the city's roadway type says.
+HIGHWAY_WORDS = ("Expressway", "Freeway", "Thruway")
 
 ORDINAL_WORDS = {
     1: "First", 2: "Second", 3: "Third", 4: "Fourth", 5: "Fifth", 6: "Sixth",
@@ -455,19 +847,75 @@ EXPANSIONS = {
     "NE": "Northeast", "NW": "Northwest", "SE": "Southeast", "SW": "Southwest",
     "JR": "Jr.", "JJ": "J.J.",
     "OF": "of", "THE": "the", "AND": "and", "AT": "at", "TO": "to",
+    "CRES": "Crescent",
+    "TRL": "Trail",
+    "VLG": "Village",
+    "PT": "Point",
+    "UNIV": "University",
+    "CONC": "Concourse",  # 323 rows of "GRAND CONC" beside the rows of "GRAND CONCOURSE"
+    "TRWY": "Thruway",
+    "MEM": "Memorial",
+    "MSGR": "Msgr.",
+    "REV": "Rev.",
+    "BX": "Bronx",
+    "CP": "Camp",  # Pennyfield Camp, a lane in Edgewater Park
+    "VETS": "Veterans",
+    "GRN": "Green",
+    "VIA": "Viaduct",
+    "GLN": "Glen",
+    "XING": "Crossing",
+    "TPKE": "Turnpike",
+    "FWY": "Freeway",
+    "LK": "Lake",
+    "CLOS": "Close",
+    "GRDN": "Garden",
+    "RDG": "Ridge",
+    "CRSE": "Course",
+    "VET": "Veterans",
 }
 
 # Names that capitalise in the middle, which `str.capitalize` cannot know.
-PROPER = {"DEKALB": "DeKalb", "METROTECH": "MetroTech"}
+PROPER = {
+    "DEKALB": "DeKalb", "METROTECH": "MetroTech",
+    "OP": "op",  # "CO-OP CITY BLVD" is spelled a side of the hyphen at a time: Co-op
+    "RFK": "RFK",
+    "USS": "USS",
+    "JFK": "JFK",
+    "LGA": "LGA",
+    "LIRR": "LIRR",
+    "NYCTA": "NYCTA",
+    "GCP": "GCP",
+    "FMCP": "FMCP",
+    "VWE": "VWE",
+}
 
 # Rows whose name marks them as a ramp, a direction of travel or a piece of highway
 # plumbing. These are named like streets in the data and are not streets.
-PLUMBING = re.compile(r"\b(EN|EX|NB|SB|EB|WB|OPAS|RAMP|RP|SR|SVC|VIADUCT APPR)\b")
+PLUMBING = re.compile(
+    r"\b(EN|EX|NB|SB|EB|WB|OPAS|RAMP|RP|SR|SVC|VIADUCT APPR"
+    # Queens adds the exits the city writes out in full — "WHITESTONE EXPY EXIT 13A",
+    # "GRAND CENTRAL PARKWAY ET 14" — an underpass, and the roads inside its two
+    # airports, which are named like streets ("JFK TERMINAL 4 ARRIVALS RD") and are
+    # kerbs outside a terminal. The speller would write that one as "Terminal 4th".
+    r"|EXIT|ET|UNP|TERMINAL|TERMINALS|ARRIVALS|DEPARTURES)\b"
+)
 
 # The city records a segment it has no name for as "UNNAMED STREET" — or "UNNAMED
 # ST", depending on who typed it. That is a row with a blank in it, not a street
 # called Unnamed, and ninety-one rows of Brooklyn are called nothing but "CONNECTOR".
-NAMELESS = {"DRIVEWAY", "STREET", "CONNECTOR"}
+NAMELESS = {
+    "DRIVEWAY", "STREET", "CONNECTOR",
+    "CONNECTOR RD TO WESTCHESTER AVE",
+    "CONNECTOR ROAD MACOMBS DAM BR MN",
+    "CONNECTOR ROAD TO BRUCKNER EXPWY",
+    "CONNECTOR ROAD TO MDE NORTHBOUND",
+    "CONNECTOR TO BRUCKNER BL MAIN RD",
+    "MDE SOUTHBOUND EXIT 13",
+    "RIKERS IS INTERIOR FACILITY RD",
+    "RIKERS ISLAND ACCESS RD",
+    "GEORGE R VIERNO CENTER ACCESS RD",
+    "ROSE M SINGER CENTER ACCESS RD",
+}
 
 
 def fetch(dataset: str, where: str, limit: int = 50_000, select: str | None = None) -> list[dict]:
@@ -519,6 +967,10 @@ def spell_word(
         # Leading ST is Saint, not Street: St Nicholas Avenue, St Marks Place.
         # Anywhere else it is the street — "65 ST TRANSVERSE" is a cross street.
         return "St."
+    if word == "DR" and first:
+        # And leading DR is Doctor: Dr. M. L. King Jr. Expressway. A drive is never
+        # the first word of its own name.
+        return "Dr."
     if word in EXPANSIONS:
         return EXPANSIONS[word]
     if word in PROPER:
@@ -554,6 +1006,7 @@ def spell(
 
     parts = words.split(" ")
     spelled = []
+    lone = lambda part: len(part) == 1 and part.isalpha()
     index = 0
     while index < len(parts):
         word = parts[index]
@@ -570,6 +1023,13 @@ def spell(
             # where the name has none. Note MACON and MACKAY do not come this way.
             spelled.append(word.capitalize() + follows.capitalize())
             index += 2
+            continue
+        if lone(word) and index > 0 and (lone(follows) or lone(parts[index - 1])):
+            # A run of single letters is a set of initials: "DR M L KING JR EXPY" is
+            # Dr. M. L. King Jr. One letter on its own is not — Malcolm X Boulevard,
+            # Avenue C Loop, Franklin D Roosevelt Drive are written as they are.
+            spelled.append(word + ".")
+            index += 1
             continue
         spelled.append(spell_word(word, follows, index == 0 and len(parts) > 1, avenues_in_words, unknown))
         index += 1
@@ -632,8 +1092,14 @@ def crossing_edges(ring) -> set[int]:
     take a coffee break to test.
     """
     count = len(ring)
+    # An edge of no length — two of the city's points under a metre apart, which
+    # round to the same place — is skipped, and the edges either side of it are
+    # neighbours: they share a corner, as the file will write them, and do not
+    # cross. Queens' tracts trace the Grand Central Parkway that finely.
+    real = [i for i in range(count) if ring[i] != ring[(i + 1) % count]]
+    following = {i: real[(k + 1) % len(real)] for k, i in enumerate(real)}
     extents = []
-    for i in range(count):
+    for i in real:
         (ax, ay), (bx, by) = ring[i], ring[(i + 1) % count]
         extents.append((min(ax, bx), max(ax, bx), min(ay, by), max(ay, by), i))
     extents.sort()
@@ -644,7 +1110,7 @@ def crossing_edges(ring) -> set[int]:
         for _, _, ey0, ey1, j in active:
             if ey1 < y0 or ey0 > y1:
                 continue
-            if (j + 1) % count == i or (i + 1) % count == j:
+            if following[j] == i or following[i] == j:
                 continue  # neighbours share a corner, which is not a crossing
             if segments_cross(ring[i], ring[(i + 1) % count], ring[j], ring[(j + 1) % count]):
                 crossing.add(i)
@@ -816,8 +1282,18 @@ def outline(polygons: list[list[tuple[float, float]]]) -> list[list[tuple[float,
     one NTA share a border that is the same list of points on both sides.
     """
     edges: collections.Counter = collections.Counter()
+    # A corner is the same corner within a centimetre. The city's topology is exact
+    # to the metre and then some, but not to the millimetre: one corner shared by two
+    # tracts of Mariners Harbor is off by eight nanodegrees between them, which read
+    # exactly is two corners, and two corners is a spike out and back that no
+    # thinning can unfold. So corners are matched at seven places and kept at nine,
+    # as the first tract to reach one wrote it.
+    corner: dict = {}
     for ring in polygons:
-        points = [(round(x, 9), round(y, 9)) for x, y in ring]
+        points = [
+            corner.setdefault((round(x, 7), round(y, 7)), (round(x, 9), round(y, 9)))
+            for x, y in ring
+        ]
         if len(points) > 1 and points[0] == points[-1]:
             points.pop()
         if len(points) < 3:
@@ -983,7 +1459,7 @@ def build(borough: Borough) -> None:
     rings = [r for poly in boundary[0]["geometry"]["coordinates"] for r in poly]
     land = []
     for ring in rings:
-        if ring_area(ring) < MIN_RING_AREA:
+        if ring_area(ring) < borough.min_ring_area:
             continue
         if borough.min_ring_latitude is not None and min(p[1] for p in ring) < borough.min_ring_latitude:
             continue
@@ -1105,6 +1581,7 @@ def build(borough: Borough) -> None:
         avenue = (
             ranked < borough.avenue_count
             and street["roadway"] == "1"
+            and not street["name"].endswith(HIGHWAY_WORDS)
             and not mostly_in_a_park(street)
         )
         if avenue:
