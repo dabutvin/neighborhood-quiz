@@ -1,15 +1,18 @@
 import StoreKit
 import SwiftUI
 
-/// What build this is, two ways to send the app on, and the one destructive thing it
-/// can do to itself.
+/// What build this is, two ways to send the app on, the one switch about privacy, and the
+/// one destructive thing it can do to itself.
 ///
-/// Four rows and nothing else. A settings screen that offers to throw away everything
+/// Five rows and nothing else. A settings screen that offers to throw away everything
 /// somebody has earned should have very little else on it to mis-tap around, and the
 /// two rows between the version and the delete both open something of the phone's — a
 /// store page, a share sheet — rather than doing anything to the wallet.
 struct SettingsView: View {
     let bank: Bank
+    /// What the game counts, and the switch that stops it. The real one by default; the
+    /// screenshot run hands in one that remembers nothing.
+    @Bindable var analytics: Analytics = .shared
     var onClose: () -> Void = {}
 
     @Environment(\.colorScheme) private var colorScheme
@@ -33,6 +36,7 @@ struct SettingsView: View {
                     version
                     rate
                     share
+                    counting
                     savedData
 
                     Button(action: onClose) {
@@ -62,7 +66,7 @@ struct SettingsView: View {
             titleVisibility: .visible
         ) {
             Button("Delete all saved data", role: .destructive) {
-                bank.erase()
+                deleteEverything()
             }
             Button("Keep it", role: .cancel) {}
         } message: {
@@ -95,6 +99,7 @@ struct SettingsView: View {
     /// to Settings to rate the app has asked; the store page always answers.
     private var rate: some View {
         Button {
+            analytics.record(.ratingPageOpened)
             if let url = AppStore.reviewURL {
                 openURL(url)
             } else {
@@ -128,6 +133,37 @@ struct SettingsView: View {
                 // mark", which is no help to anybody.
                 .accessibilityHidden(true)
         }
+    }
+
+    /// What the game counts, and the switch that stops it.
+    ///
+    /// It says what is counted in the same words it would be said in out loud, because a
+    /// player deciding whether to leave it on deserves the actual answer rather than a
+    /// link to one: which neighbourhoods get asked and how the rounds go, and nothing
+    /// else. No name, no account, no advertising identifier, and nothing that leaves the
+    /// phone with a player's name on it.
+    private var counting: some View {
+        row {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(isOn: $analytics.isOn) {
+                    Text("Anonymous usage")
+                        .font(MapFont.chrome(size: 20))
+                        .foregroundStyle(palette.ink)
+                }
+                .tint(palette.highlightInk)
+
+                Text(whatIsCounted)
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var whatIsCounted: String {
+        "Which neighbourhoods get asked and how the rounds go — scores, goes, and which "
+            + "boroughs get bought. It shows which places are too hard. No name, no account, "
+            + "no advertising identifier, and nothing that says who you are."
     }
 
     private var savedData: some View {
@@ -176,6 +212,19 @@ struct SettingsView: View {
 
     private var nothingSaved: String {
         "Nothing saved yet. Play a round and what you earn will be kept here."
+    }
+
+    // MARK: - Actions
+
+    /// The wallet, and the number the counting knew this phone by. Said before it is
+    /// thrown away, since the number it would be counted under is one of the things going.
+    /// What survives is the switch itself: a player who turned counting off and then
+    /// deleted their wallet has not asked to be counted again.
+    private func deleteEverything() {
+        analytics.record(.dataCleared)
+        analytics.flush()
+        bank.erase()
+        analytics.eraseEverything()
     }
 
     private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

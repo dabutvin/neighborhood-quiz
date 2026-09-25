@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  What the app collects, said in Apple's words rather than ours: nothing.
+  What the app collects, said in Apple's words rather than ours.
 
-  The map is a data file in the app bundle, fetched from NYC Open Data when a
-  developer runs Tools/fetch_map_data.py and committed to the repository. There is no
-  network call at runtime, no account, nothing written to the device and nothing sent
-  off it. If that ever stops being true, this file is the first thing that has to change.
+  The prose version is on the settings screen, beside the switch, and the two say the same
+  thing: which neighbourhoods get asked and how the rounds go, under a random number
+  minted on this phone, and nothing else. Nothing here is used for tracking, nothing is
+  linked to a person, and there is no advertising identifier anywhere in the app — which
+  is why the app never asks for a tracking permission. The map itself is a data file in
+  the bundle, fetched from NYC Open Data by a developer and committed; nothing about it
+  is fetched at runtime.
+
+  The UserDefaults declaration is owed by the wallet as much as by the counting: it is
+  where the app keeps the one preference it has.
 -->
 <plist version="1.0">
 <dict>
@@ -15,8 +21,43 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

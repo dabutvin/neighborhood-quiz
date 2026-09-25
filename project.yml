@@ -15,6 +15,10 @@ settings:
     DEVELOPMENT_TEAM: "${TEAM_ID}"
     CODE_SIGN_STYLE: Automatic
     INFOPLIST_FILE: NeighborhoodQuiz/Resources/Info.plist
+    # Where the counting is sent. Empty by default, and empty means the app counts
+    # nothing and sends nothing — a fork, a checkout, CI and a screenshot run all build
+    # and play exactly as they did. TestFlight and the release pass the real one in.
+    TELEMETRYDECK_APP_ID: ""
 
 targets:
   NeighborhoodQuiz:
@@ -56,6 +60,7 @@ targets:
         CFBundleName: NeighborhoodQuiz
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        TelemetryDeckAppID: "$(TELEMETRYDECK_APP_ID)"
         UILaunchScreen:
           UIColorName: ""
         ITSAppUsesNonExemptEncryption: false

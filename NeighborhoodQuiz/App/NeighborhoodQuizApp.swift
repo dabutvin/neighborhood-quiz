@@ -2,20 +2,41 @@ import SwiftUI
 
 @main
 struct NeighborhoodQuizApp: App {
+    private let launch = ProcessInfo.processInfo.arguments
     private let screen = Screen(arguments: ProcessInfo.processInfo.arguments)
+
+    /// Whether the game has been put down — the cue to send whatever has been counted so
+    /// far, since a player who backgrounds the app may never bring it up again.
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
-            switch screen {
-            case .quiz(let stage):
-                QuizView(stage: stage)
-            case .map(let borough, let opening, let showing):
-                HomeView(borough: borough, opening: opening, showing: showing)
-            case .boroughs(let wallet):
-                StagedBoroughs(wallet)
-            case .settings(let wallet):
-                StagedSettings(wallet)
+            Group {
+                switch screen {
+                case .quiz(let stage):
+                    QuizView(stage: stage)
+                case .map(let borough, let opening, let showing):
+                    HomeView(borough: borough, opening: opening, showing: showing)
+                case .boroughs(let wallet):
+                    StagedBoroughs(wallet)
+                case .settings(let wallet):
+                    StagedSettings(wallet)
+                }
             }
+            .onAppear {
+                // A camera is not a player. The sink already hands back nothing on a
+                // screenshot run; this keeps one from so much as minting an install
+                // number into the simulator's defaults.
+                guard !Screen.isPhotographing(launch) else { return }
+                Analytics.record(.sessionStarted(isFirstRun: Analytics.shared.isFirstRun))
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Anything counted since the last batch goes the moment the game is put down.
+            // A phone in a pocket is where most sittings end, and a batch still in hand
+            // when the system reclaims the app is a batch nobody ever sees.
+            guard phase != .active else { return }
+            Analytics.flush()
         }
     }
 }
@@ -43,6 +64,14 @@ enum Screen: Equatable {
     case map(borough: Borough, opening: MapBoard.Opening, showing: String?)
     case boroughs(Wallet)
     case settings(Wallet)
+
+    /// Whether a launch was the camera's rather than a person's — which is to say,
+    /// whether it opened on anything but the plain game. Derived from the same reading of
+    /// the arguments that opens the screens, so an argument cannot be added here without
+    /// the counting already knowing to ignore it; there is nowhere to say it twice.
+    static func isPhotographing(_ arguments: [String]) -> Bool {
+        Screen(arguments: arguments) != .quiz(stage: nil)
+    }
 
     init(arguments: [String]) {
         if arguments.contains("-settings") {
@@ -102,15 +131,18 @@ private struct StagedBoroughs: View {
 }
 
 /// Settings on its own, for the gallery, with a throwaway bank behind it — so a
-/// photograph of the delete button can never be pointed at real money.
+/// photograph of the delete button can never be pointed at real money — and a throwaway
+/// counter, so the photograph of the privacy switch cannot move a real one.
 private struct StagedSettings: View {
     @State private var bank: Bank
+    @State private var analytics: Analytics
 
     init(_ wallet: Wallet) {
         _bank = State(initialValue: .staged(wallet))
+        _analytics = State(initialValue: .staged())
     }
 
     var body: some View {
-        SettingsView(bank: bank)
+        SettingsView(bank: bank, analytics: analytics)
     }
 }

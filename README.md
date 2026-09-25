@@ -40,8 +40,10 @@ fifty dollars, so the first borough is four good rounds away and the fourth is a
 winter.
 
 All of that lives in one preference on the phone and nowhere else — there is no account
-and no server — and Settings will delete it, which is the only destructive thing the app
-can do.
+and no server of the app's own — and Settings will delete it, which is the only destructive
+thing the app can do. The one thing that does leave the phone is an anonymous count of how
+the rounds go, described under [What it counts](#what-it-counts), with a switch in Settings
+that stops it.
 
 Two numbers are tracked, not one. The balance is what you can spend and it goes down when
 you spend it; the career total is every dollar ever earned and it never goes down, because
@@ -173,7 +175,9 @@ NeighborhoodQuiz/
 ├── App/
 │   ├── NeighborhoodQuizApp.swift   # App entry point, and the launch arguments CI shoots with
 │   ├── AppVersion.swift            # What build this is, read from the bundle rather than written down
-│   └── AppStore.swift              # The listing's name and links, and the words the share sheet gets
+│   ├── AppStore.swift              # The listing's name and links, and the words the share sheet gets
+│   ├── Analytics.swift             # Every signal the game sends, and the one switch that stops them
+│   └── TelemetryDeckSink.swift     # Puts a batch of signals on the wire, in a dozen lines of URLSession
 ├── Game/
 │   ├── Borough.swift               # The five, what the next one costs, which are drawn, and how each is turned
 │   ├── Place.swift                 # A neighbourhood anywhere in the city: which borough, which shape
@@ -195,7 +199,7 @@ NeighborhoodQuiz/
 │   ├── BoroughMapView.swift        # One Canvas: the borough under the transform, the names over it
 │   ├── BoroughsView.swift          # The city: what you have, and what the next borough costs
 │   ├── HomeView.swift              # The map on its own, for the screenshot runs
-│   ├── SettingsView.swift          # The version, rate and share, and the one destructive thing
+│   ├── SettingsView.swift          # The version, rate and share, the privacy switch, and the one destructive thing
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette
 └── Resources/
     ├── manhattan.json              # The city's Manhattan, written by Tools/fetch_map_data.py
@@ -204,7 +208,67 @@ NeighborhoodQuiz/
     ├── bronx.json                  #   one file per borough, and the whole city now
     ├── staten-island.json          #   (hyphenated, so no resource has a space in its name)
     ├── Assets.xcassets             # App icon (drawn from the same data) and accent colour
-    └── PrivacyInfo.xcprivacy       # Nothing collected, nothing sent
+    └── PrivacyInfo.xcprivacy       # What is counted, in Apple's words: usage, anonymous, never for tracking
+```
+
+## What it counts
+
+A game that is tuned by playing it wants to know how it is played, and the only honest way
+to know which neighbourhoods are too hard is to count how often they are found. So the app
+counts — anonymously, in the open, and with a switch to stop it.
+
+**What goes out.** Every signal is written out in one place, `Analytics.swift`, so the
+list can be read end to end. A launch. A round started, and whether it was one borough's
+or the whole city's. Each question settled: which neighbourhood, and on which go it was
+found — or that it was never found, which is the signal the whole thing is for. A round
+finished, with the score and how it was made; a round left part-way, and how far it got.
+A borough bought, which rung of the ladder it was and how many rounds it took. Which
+borough the next round was pointed at, the ladder and settings being opened, the rating
+sheet being asked for, and the privacy switch itself being moved.
+
+**What does not go out.** No name, no account, no email, no advertising identifier, no
+vendor identifier, no location, and nothing a player typed — there is no way to type
+anything into this app, and there is nowhere in the shape of a signal to put it if there
+were; `AnalyticsTests` holds every value to a borough, a neighbourhood's name out of the
+data, or a number. A batch is stamped with two random numbers: one minted on this phone
+the first time the app opens and SHA256'd before it leaves, and one minted fresh every
+launch. Because nothing is used for tracking, the app never asks for a tracking
+permission. `PrivacyInfo.xcprivacy` says all of the above in Apple's own words.
+
+**The switch.** On as the app comes, and off in one tap under *Anonymous usage* in
+Settings, which says in plain words what is counted. Off means nothing is recorded, held
+or sent — the signal is dropped at the door rather than queued quietly. Turning it off
+sends one last signal saying so, because a chart that cannot tell *switched off* from
+*stopped playing* reads every opt-out as a player lost. *Delete all saved data* throws the
+install's number away, so the player is somebody nobody has counted before, and
+deliberately leaves the switch alone: a player who opted out and then deleted their
+wallet has not asked to be counted again.
+
+**Where it goes.** [TelemetryDeck](https://telemetrydeck.com), over its ingest API — one
+POST of one JSON array, in about a dozen lines of `URLSession` in `TelemetryDeckSink`,
+rather than an SDK that would be the only third-party code in the repo. Signals gather
+into batches of twenty and go when a batch fills or when the player puts the app down.
+Nothing retries and nothing is written to disk: a batch that cannot get out on a train is
+dropped, which costs a few rows on a chart and nothing at all to the player. Debug and
+simulator builds are marked as test signals, so they land on TelemetryDeck's test screen
+rather than beside real players.
+
+**A camera is not a player.** The screenshot runs open straight onto a screen with one of
+the app's own launch arguments, and a fortnight of CI on the charts would read as somebody
+who knows exactly where SoHo is, ten times a day. Which arguments mean *camera* is not a
+list kept by hand: `Screen.isPhotographing` asks the same reading of the arguments that
+opens the screens whether it opened on anything but the plain game, so an argument cannot
+be added without the counting already knowing to ignore it.
+
+**Turning it on.** Set the `TELEMETRYDECK_APP_ID` secret (see
+[Required Secrets](#required-secrets)). Without it the plist key is empty,
+`TelemetryDeckSink` hands back nothing, and the app counts nothing and sends nowhere —
+which is what a fork, a checkout and every CI run get. It is an ordinary build setting —
+`TELEMETRYDECK_APP_ID` in `project.yml`, read into the plist as `TelemetryDeckAppID` — so
+a local build that wants to send somewhere overrides it on the command line:
+
+```bash
+xcodebuild build -project NeighborhoodQuiz.xcodeproj -scheme NeighborhoodQuiz TELEMETRYDECK_APP_ID=your-app-id
 ```
 
 ## Tech Stack
@@ -309,9 +373,11 @@ Set these in GitHub repo settings → Secrets and variables → Actions.
 | `APPLE_DISTRIBUTION_CERT_P12` | Optional. Distribution certificate **and its private key**, base64 | [One stored certificate](#one-stored-certificate) |
 | `APPLE_DISTRIBUTION_CERT_PASSWORD` | Optional. Password protecting that `.p12` | Same |
 | `APPLE_PROVISIONING_PROFILE` | Optional. App Store profile for `com.nycneighborhoodsquiz.app`, base64 | Same |
+| `TELEMETRYDECK_APP_ID` | Optional. Where usage counting is sent | telemetrydeck.com → your app → App ID. Leave it unset and the app counts nothing |
 
 CI and the PR screenshots need none of them — a fork builds, tests and photographs the app
-with no secrets at all. Only TestFlight and the release need signing.
+with no secrets at all. Only TestFlight and the release need signing, and only they carry
+the counting's app id.
 
 The App Store Connect app record must exist with bundle ID `com.nycneighborhoodsquiz.app` (see
 `project.yml`) before the first TestFlight upload.

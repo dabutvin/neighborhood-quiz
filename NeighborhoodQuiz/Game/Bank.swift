@@ -66,8 +66,10 @@ final class Bank {
     /// promise settings makes is that the data is gone, not that it has been set back to
     /// nought. After this the app is in the state it was in before it was ever played.
     ///
-    /// This wallet is the only thing the app keeps anywhere, so this really is all of
-    /// it — no file, no keychain entry, nothing on a server.
+    /// This wallet is the only game data the app keeps anywhere, so this really is all of
+    /// it — no file, no keychain entry, nothing on a server. The counting keeps two things
+    /// of its own beside it, a switch and a random number, and `Analytics.eraseEverything`
+    /// deals with the number; settings calls both.
     func erase() {
         wallet = Wallet()
         defaults?.removeObject(forKey: key)
