@@ -135,4 +135,36 @@ final class BankTests: XCTestCase {
         XCTAssertEqual(bank.wallet.pick, .borough(.manhattan))
         XCTAssertEqual(Bank(defaults: defaults).wallet.current, .manhattan)
     }
+
+    /// A round's score is written down against what it was about, in the same write as
+    /// the money, and is still there next launch.
+    func testABestIsKeptAcrossLaunches() {
+        let bank = Bank(defaults: defaults)
+        XCTAssertTrue(bank.earn(38, on: .borough(.manhattan)), "a first round sets the best")
+        XCTAssertFalse(bank.earn(20, on: .borough(.manhattan)), "a worse one does not")
+
+        let next = Bank(defaults: defaults)
+
+        XCTAssertEqual(next.wallet.best(for: .borough(.manhattan)), 38)
+        XCTAssertEqual(next.wallet.balance, 58)
+    }
+
+    /// Earning without saying what the round was about records no best — which is how
+    /// every test above pays, and must stay harmless.
+    func testEarningWithoutAChoiceRecordsNoBest() {
+        let bank = Bank(defaults: defaults)
+        XCTAssertFalse(bank.earn(38))
+        XCTAssertNil(bank.wallet.best(for: .borough(.manhattan)))
+    }
+
+    /// "Delete all saved data" takes the records with the money.
+    func testErasingForgetsTheBests() {
+        let bank = Bank(defaults: defaults)
+        bank.earn(44, on: .anywhere)
+
+        bank.erase()
+
+        XCTAssertNil(bank.wallet.best(for: .anywhere))
+        XCTAssertNil(Bank(defaults: defaults).wallet.best(for: .anywhere))
+    }
 }

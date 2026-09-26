@@ -123,6 +123,9 @@ final class BrooklynMapDataTests: XCTestCase {
         let parks = map.parks
         XCTAssertGreaterThan(parks.count, 10)
         XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Prospect Park") })
+        // Not in the parks table — the city does not run it — but four hundred acres of
+        // trees in the middle of the borough, and a blank hole in the map without it.
+        XCTAssertTrue(parks.contains { $0.name == "Green-Wood Cemetery" }, "Green-Wood is green")
         for park in parks {
             XCTAssertGreaterThanOrEqual(park.ring.count, 3, "\(park.name) is not a shape")
         }

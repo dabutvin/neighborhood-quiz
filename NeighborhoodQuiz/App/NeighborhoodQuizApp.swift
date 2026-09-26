@@ -83,7 +83,7 @@ enum Screen: Equatable {
             // something to say. With the whole city drawn, what it says is a live
             // Unlock button on every row but Manhattan's — the one state where the
             // ladder can actually be climbed from.
-            self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24))
+            self = .boroughs(Wallet(balance: 240, earned: 940, rounds: 24, best: [.borough(.manhattan): 44]))
         } else if let stage = QuizView.Stage.allCases.first(where: { arguments.contains("-quiz-\($0.rawValue)") }) {
             self = .quiz(stage: stage)
         } else if arguments.contains("-map-neighborhood") {

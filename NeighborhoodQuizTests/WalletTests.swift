@@ -400,4 +400,72 @@ final class WalletTests: XCTestCase {
         XCTAssertEqual(Money.text(38), "$38")
         XCTAssertTrue(Money.text(1_200).hasPrefix("$1"), "grouped however the locale groups")
     }
+
+    // MARK: - Best rounds
+
+    func testAFirstRoundOfAChoiceIsItsBest() {
+        var wallet = Wallet()
+
+        XCTAssertNil(wallet.best(for: .borough(.manhattan)))
+        XCTAssertTrue(wallet.record(31, for: .borough(.manhattan)))
+        XCTAssertEqual(wallet.best(for: .borough(.manhattan)), 31)
+    }
+
+    /// Only a higher score moves it. A tie is not a new best, and a worse round never
+    /// lowers it.
+    func testOnlyABetterRoundReplacesTheBest() {
+        var wallet = Wallet()
+        wallet.record(31, for: .borough(.manhattan))
+
+        XCTAssertFalse(wallet.record(20, for: .borough(.manhattan)))
+        XCTAssertFalse(wallet.record(31, for: .borough(.manhattan)), "a tie is not a new best")
+        XCTAssertEqual(wallet.best(for: .borough(.manhattan)), 31)
+
+        XCTAssertTrue(wallet.record(44, for: .borough(.manhattan)))
+        XCTAssertEqual(wallet.best(for: .borough(.manhattan)), 44)
+    }
+
+    /// Each borough, and the whole city, keep a best of their own.
+    func testEachChoiceKeepsItsOwnBest() {
+        var wallet = Wallet()
+        wallet.record(44, for: .borough(.manhattan))
+        wallet.record(29, for: .borough(.brooklyn))
+        wallet.record(36, for: .anywhere)
+
+        XCTAssertEqual(wallet.best(for: .borough(.manhattan)), 44)
+        XCTAssertEqual(wallet.best(for: .borough(.brooklyn)), 29)
+        XCTAssertEqual(wallet.best(for: .anywhere), 36)
+        XCTAssertNil(wallet.best(for: .borough(.queens)))
+    }
+
+    /// Filed under the raw name, so re-lettering a borough on screen keeps its record.
+    func testABestIsFiledUnderTheRawName() {
+        XCTAssertEqual(Wallet.Pick.borough(.statenIsland).key, "statenIsland")
+        XCTAssertEqual(Wallet.Pick.borough(.bronx).key, "bronx")
+        XCTAssertEqual(Wallet.Pick.anywhere.key, "anywhere")
+    }
+
+    func testBestsSurviveBeingWrittenDownAndReadBack() throws {
+        var wallet = Wallet()
+        wallet.earn(40)
+        wallet.record(40, for: .borough(.queens))
+        wallet.record(12, for: .anywhere)
+
+        let read = try JSONDecoder().decode(Wallet.self, from: JSONEncoder().encode(wallet))
+
+        XCTAssertEqual(read, wallet)
+        XCTAssertEqual(read.best(for: .borough(.queens)), 40)
+        XCTAssertEqual(read.best(for: .anywhere), 12)
+    }
+
+    /// Every wallet saved before there were bests has no `bests` in it, and must still
+    /// read — with the money in it — rather than being thrown away as unreadable.
+    func testAWalletSavedBeforeBestsStillReads() throws {
+        let json = #"{"balance":90,"earned":330,"rounds":9,"bought":[],"playing":"manhattan","anywhere":false}"#
+
+        let wallet = try JSONDecoder().decode(Wallet.self, from: Data(json.utf8))
+
+        XCTAssertEqual(wallet.balance, 90)
+        XCTAssertNil(wallet.best(for: .borough(.manhattan)))
+    }
 }

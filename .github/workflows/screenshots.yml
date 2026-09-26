@@ -219,6 +219,7 @@ jobs:
           capture 39 tutorial_picked -quiz-tutorial-picked
           capture 41 tutorial_over   -quiz-tutorial-over
           capture 43 tutorial_goes   -quiz-tutorial-goes
+          capture 45 menu_city       -quiz-menu-city
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true

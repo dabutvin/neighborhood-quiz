@@ -268,6 +268,12 @@ final class AnalyticsTests: XCTestCase {
         XCTAssertEqual(signal.parameters["thirdGo"], "0")
         XCTAssertEqual(signal.parameters["missed"], "1")
         XCTAssertEqual(signal.parameters["rounds"], "12")
+        XCTAssertEqual(signal.parameters["newBest"], "false")
+        XCTAssertEqual(
+            AnalyticsSignal.roundFinished(playedRound(), pick: .anywhere, rounds: 3, newBest: true)
+                .parameters["newBest"],
+            "true"
+        )
     }
 
     func testARoundAcrossTheCityIsCountedAsAnywhere() {
@@ -401,7 +407,7 @@ final class AnalyticsTests: XCTestCase {
         "-map", "-map-zoomed", "-map-closest", "-map-neighborhood",
         "-map-brooklyn", "-map-queens", "-map-bronx", "-map-staten-island",
         "-boroughs", "-settings",
-        "-quiz-tutorial", "-quiz-tutorial-picked", "-quiz-tutorial-over", "-quiz-tutorial-goes"
+        "-quiz-tutorial", "-quiz-tutorial-picked", "-quiz-tutorial-over", "-quiz-tutorial-goes", "-quiz-menu-city"
     ]
 
     func testTheCameraIsNotCountedAsAPlayer() {

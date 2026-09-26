@@ -228,9 +228,20 @@ struct BoroughsView: View {
         let owned = wallet.has(borough)
 
         return HStack(spacing: 10) {
-            Text(borough.name)
-                .font(MapFont.chrome(size: 22))
-                .foregroundStyle(owned ? palette.ink : palette.inkSoft.opacity(borough.isDrawn ? 1 : 0.7))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(borough.name)
+                    .font(MapFont.chrome(size: 22))
+                    .foregroundStyle(owned ? palette.ink : palette.inkSoft.opacity(borough.isDrawn ? 1 : 0.7))
+                // The best round there has been here, so the whole city's records can be
+                // read down one list. Only once there is one: an open borough nobody has
+                // finished a round of has nothing to say yet.
+                if let best = wallet.best(for: .borough(borough)), best > 0 {
+                    Text("best round \(Money.text(best))")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.inkSoft)
+                        .monospacedDigit()
+                }
+            }
             Spacer(minLength: 8)
             status(for: borough, owned: owned)
         }
@@ -329,6 +340,12 @@ struct BoroughsView: View {
     }
 
     private func spoken(for borough: Borough, owned: Bool) -> String {
+        let best = wallet.best(for: .borough(borough)).flatMap { $0 > 0 ? $0 : nil }
+        let record = best.map { ", best round \(Money.text($0))" } ?? ""
+        return spokenState(for: borough, owned: owned) + record
+    }
+
+    private func spokenState(for borough: Borough, owned: Bool) -> String {
         guard !owned else {
             guard borough.isDrawn else { return "\(borough.name), bought, map not drawn yet" }
             return wallet.pick == .borough(borough)

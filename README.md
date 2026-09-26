@@ -58,6 +58,12 @@ Two numbers are tracked, not one. The balance is what you can spend and it goes 
 you spend it; the career total is every dollar ever earned and it never goes down, because
 buying a borough should not make it look like you played less than you did.
 
+A best round is kept too, one for each thing a round can be about: each borough on its
+own, and the whole city. The menu shows the best for whichever is picked, the Boroughs
+screen lists each borough's under its name, and the end of a round says "New best!"
+when one falls. A first round of a choice sets its best quietly; there was nothing to
+beat.
+
 **All five boroughs are drawn.** Buying one opens it; the menu then offers each you
 have, and one more thing — "Anywhere" — which draws the ten from every borough you have
 open and hops the map between them as the questions come, saying which borough each one
@@ -86,6 +92,7 @@ City of New York's own street centreline file, drawn by hand.
 | Centerline (`inkn-q76z`) | every street segment in the borough, with its name |
 | Borough Boundaries (`gthc-hcne`) | the real shoreline, piers and all |
 | Parks Properties (`enfh-gkve`) | the greens, Central Park chief among Manhattan's |
+| 2020 NTAs (`9nt8-h7nd`) | the neighbourhoods, and the cemeteries — Green-Wood, Woodlawn, Calvary — which are green on the map but not in the parks table |
 
 It runs on demand, never at build time and never at runtime. CI does not touch the
 network and neither does a shipped build.
