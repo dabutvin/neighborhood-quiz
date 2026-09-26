@@ -84,6 +84,12 @@ struct BoroughMapView: View, @MainActor Animatable {
         }
     }
 
+    /// How much detail the camera is asking for: its zoom, measured in the drawing's
+    /// own terms. The same as the zoom on one borough; about a third of it on the
+    /// whole city, where 1× shows three times as much ground. Everything that decides
+    /// what is inked or written asks this. The transform itself uses the zoom as it is.
+    private var detailZoom: Double { camera.zoom * drawn.detail }
+
     var body: some View {
         Canvas { context, size in
             draw(map: drawn, in: &context, size: size)
@@ -106,7 +112,7 @@ struct BoroughMapView: View, @MainActor Animatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             BoroughMapView.spoken(
-                borough: drawn.borough.name,
+                borough: drawn.sheet.name,
                 showing: chosen?.name,
                 picked: candidate != nil,
                 found: settled.count,
@@ -231,12 +237,13 @@ struct BoroughMapView: View, @MainActor Animatable {
             guard area.id != selected, area.id != candidate,
                   !settled.contains(area.id), !givenAway.contains(area.id)
             else { continue }
-            let dash = [5 / zoom, 3.5 / zoom]
+            let pen = CGFloat(borderPen)
+            let dash = [5 * pen / zoom, 3.5 * pen / zoom]
             board.stroke(
                 area.edge,
                 with: .color(palette.land.opacity(0.9)),
                 style: StrokeStyle(
-                    lineWidth: CGFloat(borderWeight + 1.8) / zoom,
+                    lineWidth: CGFloat(borderWeight + 1.8 * borderPen) / zoom,
                     lineCap: .round,
                     lineJoin: .round,
                     dash: dash
@@ -335,8 +342,17 @@ struct BoroughMapView: View, @MainActor Animatable {
     /// which corrected too far. This sits between the two: a line you can follow across
     /// the borough without it becoming the thing the borough is made of.
     private var borderWeight: Double {
-        let pulledBack = min(max((3 - camera.zoom) / 2, 0), 1)
-        return 1.2 + 0.5 * pulledBack
+        let pulledBack = min(max((3 - detailZoom) / 2, 0), 1)
+        return (1.2 + 0.5 * pulledBack) * borderPen
+    }
+
+    /// A finer pen for the borders below a borough's own scale, which only the whole
+    /// city reaches. Pulled back to the city, a neighbourhood is a few points across,
+    /// and a border drawn as heavy as it is round Manhattan's — with its casing of paper
+    /// on either side — is most of the neighbourhood. Never under half, so the borders
+    /// are still the lines the overview is made of. On a borough it is always 1.
+    private var borderPen: Double {
+        min(max(detailZoom, 0.5), 1)
     }
 
     /// The streets.
@@ -367,7 +383,7 @@ struct BoroughMapView: View, @MainActor Animatable {
     ) {
         // Light lines under heavy ones, which is the order the roads themselves are in.
         for kind in [RoadKind.side, .major, .avenue] {
-            let ink = DrawnMap.presence(of: kind, at: camera.zoom)
+            let ink = DrawnMap.presence(of: kind, at: detailZoom)
             // A rank with no ink in it is not counted, never mind drawn. Pulled back
             // to the whole island, that is a thousand side streets passed over before
             // anything asks where any of them is.
@@ -528,11 +544,11 @@ struct BoroughMapView: View, @MainActor Animatable {
         var taken: [CGRect] = claimed
         // Close in the names are written larger, and the paper round them grows with
         // them. Worked out once for the whole pass rather than once per name.
-        let zoom = camera.zoom
+        let zoom = detailZoom
         let growth = palette.labelSize(for: .side, at: zoom) / palette.labelSize(for: .side)
         let offsets = BoroughMapView.crossOffsets(radius: palette.labelHaloReach * growth)
 
-        for label in labels where camera.zoom >= label.minZoom {
+        for label in labels where zoom >= label.minZoom {
             var point = camera.screenPoint(label.position, in: size)
             guard visible.contains(point) else { continue }
 

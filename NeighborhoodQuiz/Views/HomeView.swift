@@ -8,8 +8,9 @@ import SwiftUI
 /// and a regression in the drawing is far easier to see on a screen with nothing else
 /// happening on it than it is behind a prompt and a highlight.
 struct HomeView: View {
-    /// Which borough to show. The screenshot runs pick; a person never reaches this.
-    var borough: Borough = .manhattan
+    /// What to show: one borough, or the whole city. The screenshot runs pick; a person
+    /// never reaches this.
+    var sheet: MapSheet = .borough(.manhattan)
     var opening: MapBoard.Opening = .island
     /// Picked out from the start, for the shot that shows what a highlight looks like.
     var showing: String?
@@ -26,7 +27,7 @@ struct HomeView: View {
 
             MapBoard(
                 palette: palette,
-                borough: borough,
+                sheet: sheet,
                 opening: opening,
                 selected: selected,
                 onTap: { selected = ($0 == selected) ? nil : $0 },
@@ -57,7 +58,7 @@ struct HomeView: View {
                 .multilineTextAlignment(.trailing)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
-            Text(borough.name.uppercased())
+            Text(sheet.name.uppercased())
                 .font(.system(size: 10, weight: .semibold))
                 .kerning(2.2)
                 .foregroundStyle(palette.inkSoft)

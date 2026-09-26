@@ -66,8 +66,9 @@ beat.
 
 **All five boroughs are drawn.** Buying one opens it; the menu then offers each you
 have, and one more thing — "Anywhere" — which draws the ten from every borough you have
-open and hops the map between them as the questions come, saying which borough each one
-is in. Whichever you pick is written down with the money so the app opens where you left
+open and draws them all on one map, laid out as they sit and north-up, so getting from
+SoHo to Astoria is a push across the river; the card says which borough each question is
+in, and a place given away off the edge of the screen is brought into view. Whichever you pick is written down with the money so the app opens where you left
 it. The game still will not take money for a borough it cannot open — nothing is in that
 state today, but the guard stays for the next map that is not drawn yet, whichever that
 turns out to be — and when the balance is there and the map is not, it says so and there
@@ -523,7 +524,7 @@ the game cannot open. What is next is the game, and that is not something to pla
 here — it is whatever the play says. The neighbourhood names in the outer boroughs are
 a judgement, and playing them is how the wrong ones get found; the ladder was tuned
 against two boroughs and may want a look now that it buys four; and a round across the
-whole city hops between five maps now rather than two. None of that is a feature. It is
+whole city is now one map of all five, which is a lot of city to find a neighbourhood in. None of that is a feature. It is
 the tuning that comes after the drawing, and it starts with playing it.
 
 ## License

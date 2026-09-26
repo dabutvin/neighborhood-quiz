@@ -12,6 +12,10 @@ struct MapCamera: Equatable {
 
     var zoom: Double = 1
     var pan: CGSize = .zero
+    /// How far in this camera may go. Fourteen for one borough; further for the whole
+    /// city, which starts three or four times further out and has to reach the same
+    /// streets. Set by the board from the drawing it is looking at.
+    var ceiling: Double = MapCamera.range.upperBound
 
     /// Where a point of the drawing lands on the glass.
     func screenPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
@@ -27,7 +31,7 @@ struct MapCamera: Equatable {
     /// and shrink with the zoom it was measured against.
     mutating func setZoom(_ newZoom: Double) {
         guard zoom > 0 else { return }
-        let clamped = min(max(newZoom, MapCamera.range.lowerBound), MapCamera.range.upperBound)
+        let clamped = min(max(newZoom, MapCamera.range.lowerBound), max(ceiling, MapCamera.range.lowerBound))
         let ratio = clamped / zoom
         pan = CGSize(width: Double(pan.width) * ratio, height: Double(pan.height) * ratio)
         zoom = clamped
@@ -130,7 +134,12 @@ struct MapCamera: Equatable {
 
     /// A camera holding a piece of the drawing comfortably on the glass, with a little
     /// of what is round it left showing so the piece reads as part of something.
-    static func framing(_ rect: CGRect, in size: CGSize, fill: Double = 0.62) -> MapCamera {
+    static func framing(
+        _ rect: CGRect,
+        in size: CGSize,
+        fill: Double = 0.62,
+        ceiling: Double = MapCamera.range.upperBound
+    ) -> MapCamera {
         guard rect.width > 0, rect.height > 0, size.width > 0, size.height > 0 else {
             return MapCamera()
         }
@@ -138,8 +147,10 @@ struct MapCamera: Equatable {
             Double(size.width) / Double(rect.width),
             Double(size.height) / Double(rect.height)
         ) * fill
-        let zoom = min(max(wanted, range.lowerBound), range.upperBound)
-        return centred(on: CGPoint(x: rect.midX, y: rect.midY), zoom: zoom, in: size)
+        let zoom = min(max(wanted, range.lowerBound), ceiling)
+        var camera = centred(on: CGPoint(x: rect.midX, y: rect.midY), zoom: zoom, in: size)
+        camera.ceiling = ceiling
+        return camera
     }
 
     private static func centre(of size: CGSize) -> (x: Double, y: Double) {

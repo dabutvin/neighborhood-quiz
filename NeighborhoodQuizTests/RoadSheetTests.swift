@@ -113,6 +113,25 @@ final class RoadSheetTests: XCTestCase {
         }
     }
 
+    /// Below a borough's own scale — the whole city, pulled back — even the avenues go,
+    /// so the overview is the shape of the city rather than a wash of brown.
+    func testTheAvenuesGiveWayOnTheWholeCity() {
+        XCTAssertEqual(DrawnMap.presence(of: .avenue, at: DrawnMap.overviewZoom), 0)
+        XCTAssertEqual(DrawnMap.presence(of: .avenue, at: 0.3), 0)
+        XCTAssertEqual(DrawnMap.presence(of: .major, at: 0.3), 0)
+        XCTAssertEqual(DrawnMap.presence(of: .side, at: 0.3), 0)
+
+        let middle = (DrawnMap.overviewZoom + 1) / 2
+        XCTAssertEqual(DrawnMap.presence(of: .avenue, at: middle), 0.5, accuracy: 0.001)
+
+        var last = -1.0
+        for zoom in stride(from: 0.2, through: 1.0, by: 0.05) {
+            let now = DrawnMap.presence(of: .avenue, at: zoom)
+            XCTAssertGreaterThanOrEqual(now, last, "avenues fading back out at \(zoom)")
+            last = now
+        }
+    }
+
     /// And the one rank that does fade is never caught part-way at full ink, so it can
     /// never be drawn as a sheet while it is still coming in.
     func testTheSideStreetsComeInSmoothlyAndOnlyCountAsFullAtTheEnd() {

@@ -164,15 +164,15 @@ final class DrawnMapTests: XCTestCase {
     func testTheScreenshotArgumentsAskForTheMap() {
         XCTAssertEqual(
             Screen(arguments: ["x", "-map"]),
-            .map(borough: .manhattan, opening: .island, showing: nil)
+            .map(sheet: .borough(.manhattan), opening: .island, showing: nil)
         )
         XCTAssertEqual(
             Screen(arguments: ["x", "-map-zoomed"]),
-            .map(borough: .manhattan, opening: .midtown, showing: nil)
+            .map(sheet: .borough(.manhattan), opening: .midtown, showing: nil)
         )
         XCTAssertEqual(
             Screen(arguments: ["x", "-map-neighborhood"]),
-            .map(borough: .manhattan, opening: .neighborhood("Greenwich Village"), showing: "Greenwich Village")
+            .map(sheet: .borough(.manhattan), opening: .neighborhood("Greenwich Village"), showing: "Greenwich Village")
         )
         // An argument apiece rather than a flag on `-map`, so the gallery's capture
         // lines stay one word per shot.
@@ -185,7 +185,7 @@ final class DrawnMapTests: XCTestCase {
         for (argument, borough) in shots {
             XCTAssertEqual(
                 Screen(arguments: ["x", argument]),
-                .map(borough: borough, opening: .island, showing: nil),
+                .map(sheet: .borough(borough), opening: .island, showing: nil),
                 "\(argument) should open on \(borough.name)"
             )
         }
