@@ -49,14 +49,31 @@ struct Wallet: Equatable, Codable {
     /// honoured.
     private(set) var anywhere = false
 
+    /// The best a round has ever come to, for each thing a round can be about — each
+    /// borough on its own, and the whole city — keyed by `Pick.key`.
+    ///
+    /// Apart for each, because they are not the same test: fifty in Manhattan and fifty
+    /// across the city are different feats, and a best in Staten Island should not be
+    /// shown up by a run in the borough somebody grew up in. Kept in the wallet because
+    /// it is the one thing the app writes down, and "Delete all saved data" clears it
+    /// with everything else.
+    private(set) var bests: [String: Int] = [:]
+
     init() {}
 
     /// A wallet part-way through, for tests and for the screenshot runs.
-    init(balance: Int, earned: Int? = nil, rounds: Int = 0, bought: Set<Borough> = []) {
+    init(
+        balance: Int,
+        earned: Int? = nil,
+        rounds: Int = 0,
+        bought: Set<Borough> = [],
+        best: [Pick: Int] = [:]
+    ) {
         self.balance = max(balance, 0)
         self.earned = max(earned ?? balance, self.balance)
         self.rounds = max(rounds, 0)
         self.bought = bought
+        self.bests = Dictionary(uniqueKeysWithValues: best.map { ($0.key.key, $0.value) })
     }
 
     /// Whether there is anything here worth keeping. What settings asks before it
@@ -86,9 +103,25 @@ struct Wallet: Equatable, Codable {
     }
 
     /// What the next round is about: one borough, or all of them.
-    enum Pick: Equatable, Sendable {
+    enum Pick: Hashable, Sendable {
         case borough(Borough)
         case anywhere
+
+        /// What a best is filed under: the borough's raw name, or `anywhere`. The raw
+        /// name rather than the one on screen, so "The Bronx" can be re-lettered without
+        /// losing anybody's record.
+        var key: String {
+            switch self {
+            case .borough(let borough): return borough.rawValue
+            case .anywhere: return "anywhere"
+            }
+        }
+    }
+
+    /// The best round so far for one choice, or nothing if no round of it has been
+    /// played to the end.
+    func best(for pick: Pick) -> Int? {
+        bests[pick.key]
     }
 
     /// The choice the game can honour.
@@ -152,6 +185,16 @@ struct Wallet: Equatable, Codable {
         canAfford(borough) && drawn.contains(borough)
     }
 
+    /// Writes a finished round's score down against what it was about, if it beats the
+    /// best so far. Returns whether it did, which is what the end of a round says out
+    /// loud. A tie is not a new best.
+    @discardableResult
+    mutating func record(_ score: Int, for pick: Pick) -> Bool {
+        if let standing = bests[pick.key], score <= standing { return false }
+        bests[pick.key] = max(score, 0)
+        return true
+    }
+
     /// Take the money for a round.
     mutating func earn(_ amount: Int) {
         guard amount > 0 else { rounds += 1; return }
@@ -200,7 +243,7 @@ struct Wallet: Equatable, Codable {
     // MARK: - Reading it back
 
     private enum CodingKeys: String, CodingKey {
-        case balance, earned, rounds, bought, playing, anywhere
+        case balance, earned, rounds, bought, playing, anywhere, bests
     }
 
     /// Written by hand so that a wallet saved before `playing` existed still reads.
@@ -211,6 +254,7 @@ struct Wallet: Equatable, Codable {
     /// player would open the update to an empty balance. A missing field means
     /// Manhattan, which is where everybody was. `anywhere` arrived later still and is
     /// read the same way: missing means one borough, which is all there used to be.
+    /// `bests` came later again, and missing means no round has set one yet.
     /// Encoding is still the compiler's.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -220,5 +264,6 @@ struct Wallet: Equatable, Codable {
         bought = try container.decode(Set<Borough>.self, forKey: .bought)
         playing = try container.decodeIfPresent(Borough.self, forKey: .playing) ?? .manhattan
         anywhere = try container.decodeIfPresent(Bool.self, forKey: .anywhere) ?? false
+        bests = try container.decodeIfPresent([String: Int].self, forKey: .bests) ?? [:]
     }
 }

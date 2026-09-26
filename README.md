@@ -58,6 +58,12 @@ Two numbers are tracked, not one. The balance is what you can spend and it goes 
 you spend it; the career total is every dollar ever earned and it never goes down, because
 buying a borough should not make it look like you played less than you did.
 
+A best round is kept too, one for each thing a round can be about: each borough on its
+own, and the whole city. The menu shows the best for whichever is picked, the Boroughs
+screen lists each borough's under its name, and the end of a round says "New best!"
+when one falls. A first round of a choice sets its best quietly; there was nothing to
+beat.
+
 **All five boroughs are drawn.** Buying one opens it; the menu then offers each you
 have, and one more thing — "Anywhere" — which draws the ten from every borough you have
 open and hops the map between them as the questions come, saying which borough each one

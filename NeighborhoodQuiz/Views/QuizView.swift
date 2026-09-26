@@ -63,10 +63,18 @@ struct QuizView: View {
 
     /// What the gallery's wallet holds before the staged round is paid for: part-way to
     /// a first borough, with a career behind it, so the rows have something to say.
-    static let stagedWallet = Wallet(balance: 140, earned: 440, rounds: 11)
+    static let stagedWallet = Wallet(
+        balance: 140, earned: 440, rounds: 11, best: [.borough(.manhattan): 46]
+    )
 
     /// The gallery's wallet for the menu with every borough open.
-    static let stagedCity = Wallet(balance: 90, earned: 4_090, rounds: 96, bought: Set(Borough.buyable))
+    static let stagedCity = Wallet(
+        balance: 90, earned: 4_090, rounds: 96, bought: Set(Borough.buyable),
+        best: [
+            .borough(.manhattan): 48, .borough(.brooklyn): 41, .borough(.queens): 33,
+            .borough(.bronx): 29, .borough(.statenIsland): 22, .anywhere: 36,
+        ]
+    )
 
     var stage: Stage?
 
@@ -119,6 +127,10 @@ struct QuizView: View {
     }
 
     @State private var round: QuizRound?
+    /// Whether the round just finished beat the best there already was for its choice.
+    /// Not set by a first round of a choice: there was nothing to beat, and "New best"
+    /// on somebody's first go at Queens would be a compliment for turning up.
+    @State private var beatBest = false
     /// The place the round has just settled, held on the map with its name on for a
     /// moment before the next question. Also what stops a fast thumb from answering the
     /// next question before it has read it.
@@ -481,6 +493,7 @@ struct QuizView: View {
                      : "out of \(Money.text(round.perfectScore))")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(palette.inkSoft)
+                roundBest
             }
 
             breakdown(of: round)
@@ -561,6 +574,7 @@ struct QuizView: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
                 whereabouts
+                menuBest
             }
 
             VStack(spacing: 1) {
@@ -640,6 +654,44 @@ struct QuizView: View {
                 .font(.system(size: 9, weight: .semibold))
                 .kerning(1.3)
                 .foregroundStyle(palette.inkSoft)
+        }
+    }
+
+    /// The best round there has been for whatever the menu has picked — Manhattan,
+    /// Brooklyn, Anywhere — which changes as the pills are pressed, so each choice shows
+    /// its own. Nothing until a round of it has been played to the end and scored.
+    @ViewBuilder
+    private var menuBest: some View {
+        if let best = bank.wallet.best(for: bank.wallet.pick), best > 0 {
+            Text("BEST ROUND  \(Money.text(best))")
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(1.3)
+                .foregroundStyle(palette.highlightInk)
+                .monospacedDigit()
+                .accessibilityLabel("Best round \(Money.text(best))")
+        }
+    }
+
+    /// Under the score at the end of a round: that it was a new best, or what the best
+    /// still is. Nothing for a first round of a choice, where the score *is* the best
+    /// and saying so twice would say nothing.
+    @ViewBuilder
+    private var roundBest: some View {
+        if beatBest {
+            Text("NEW BEST!")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.6)
+                .foregroundStyle(palette.highlightInk)
+                .padding(.top, 5)
+        } else if let best = bank.wallet.best(for: bank.wallet.pick), best > 0,
+                  let round, best > round.score {
+            Text("BEST  \(Money.text(best))")
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(1.3)
+                .foregroundStyle(palette.inkSoft)
+                .monospacedDigit()
+                .padding(.top, 5)
+                .accessibilityLabel("Your best is \(Money.text(best))")
         }
     }
 
@@ -894,7 +946,7 @@ struct QuizView: View {
             // A staged round that reached the end is paid like any other, so the wallet
             // on the card agrees with the breakdown above it. The bank is a throwaway,
             // so this goes nowhere near a real player's money.
-            if staged.isFinished { bank.earn(staged.score) }
+            if staged.isFinished { bank.earn(staged.score, on: bank.wallet.pick) }
             round = staged
             return
         }
@@ -963,8 +1015,11 @@ struct QuizView: View {
         // and paying from one would pay again on every redraw. Counted after it is paid,
         // so the round count on the signal includes this one.
         if playing.isFinished {
-            bank.earn(playing.score)
-            count(.roundFinished(playing, pick: bank.wallet.pick, rounds: bank.wallet.rounds))
+            let pick = bank.wallet.pick
+            let standing = bank.wallet.best(for: pick)
+            let record = bank.earn(playing.score, on: pick)
+            beatBest = record && standing != nil
+            count(.roundFinished(playing, pick: pick, rounds: bank.wallet.rounds, newBest: beatBest))
             coach(.roundFinished)
             askForARating()
         }
@@ -1016,6 +1071,7 @@ struct QuizView: View {
         }
         // Play again is a way off the end-of-round card as much as Menu is.
         if let round, round.isFinished { coach(.summaryLeft) }
+        beatBest = false
         showing = nil
         candidate = nil
         round = QuizRound(askingAbout: pool)

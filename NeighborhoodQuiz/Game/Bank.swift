@@ -31,9 +31,16 @@ final class Bank {
         Bank(defaults: nil, starting: wallet)
     }
 
-    func earn(_ amount: Int) {
+    /// Takes the money for a round and, when told what the round was about, writes its
+    /// score down against that choice's best. One write for both. Returns whether the
+    /// round set a new best.
+    @discardableResult
+    func earn(_ amount: Int, on pick: Wallet.Pick? = nil) -> Bool {
         wallet.earn(amount)
+        var record = false
+        if let pick { record = wallet.record(amount, for: pick) }
         write()
+        return record
     }
 
     @discardableResult

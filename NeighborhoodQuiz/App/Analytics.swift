@@ -329,7 +329,12 @@ extension AnalyticsSignal {
     /// second, how many third, how many never — which is the difficulty of the game read
     /// off the players rather than guessed at. `rounds` is the career count including
     /// this one, so a chart can tell a first round from a fiftieth.
-    static func roundFinished(_ round: QuizRound, pick: Wallet.Pick, rounds: Int) -> AnalyticsSignal {
+    static func roundFinished(
+        _ round: QuizRound,
+        pick: Wallet.Pick,
+        rounds: Int,
+        newBest: Bool = false
+    ) -> AnalyticsSignal {
         AnalyticsSignal(
             "Round.finished",
             [
@@ -340,7 +345,8 @@ extension AnalyticsSignal {
                 "secondGo": String(round.foundOn[safe: 1] ?? 0),
                 "thirdGo": String(round.foundOn[safe: 2] ?? 0),
                 "missed": String(round.missed.count),
-                "rounds": String(rounds)
+                "rounds": String(rounds),
+                "newBest": String(newBest)
             ],
             value: Double(round.score)
         )

@@ -268,6 +268,12 @@ final class AnalyticsTests: XCTestCase {
         XCTAssertEqual(signal.parameters["thirdGo"], "0")
         XCTAssertEqual(signal.parameters["missed"], "1")
         XCTAssertEqual(signal.parameters["rounds"], "12")
+        XCTAssertEqual(signal.parameters["newBest"], "false")
+        XCTAssertEqual(
+            AnalyticsSignal.roundFinished(playedRound(), pick: .anywhere, rounds: 3, newBest: true)
+                .parameters["newBest"],
+            "true"
+        )
     }
 
     func testARoundAcrossTheCityIsCountedAsAnywhere() {
