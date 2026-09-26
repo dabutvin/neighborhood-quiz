@@ -12,18 +12,27 @@ struct TipCard: View {
     let palette: MapPalette
     /// Ends the tips. Nothing on the last one, which goes when the round's card does.
     var onSkip: (() -> Void)?
+    /// Puts this one tip away and leaves the rest to come — the Got it on the tip about
+    /// tries, in the place Skip has on the others. One button in the corner either way.
+    var onDismiss: (() -> Void)?
 
     var body: some View {
         let tip = step.tip(for: wallet)
 
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                Text("TIP \(step.number) OF \(Tutorial.tipCount)")
+                Text("TIP \(step.number)")
                     .font(.system(size: 10, weight: .semibold))
                     .kerning(2.2)
                     .foregroundStyle(palette.highlightInk)
                 Spacer(minLength: 8)
-                if let onSkip {
+                if let onDismiss {
+                    Button("Got it", action: onDismiss)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(palette.highlightInk)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Got it, hide this tip")
+                } else if let onSkip {
                     Button("Skip", action: onSkip)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(palette.inkSoft)

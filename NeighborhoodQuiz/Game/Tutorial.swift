@@ -13,8 +13,9 @@ import Foundation
 ///    streets are the clues.
 /// 2. `answer` — once something is picked: the outline is the place picked, and Answer
 ///    is what locks it in.
-/// 3. `goes` — once the first answer is in: what a go is worth, said about the go the
-///    player has just had.
+/// 3. `goes` — once the first answer is in: what a try is worth, said about the try the
+///    player has just had. The one tip with a Got it on it, since it is the one a player
+///    reads and is then done with before the game has moved on.
 /// 4. `money` — on the card at the end of the round: the money is kept, and what it buys.
 ///
 /// Nothing here knows about views or storage. It is told what happened and says which
@@ -38,8 +39,16 @@ struct Tutorial: Equatable {
             }
         }
 
+        /// Whether the card has a Got it that puts this one tip away, rather than a Skip
+        /// that ends them all. Only the tip about tries: it stays up until the next pick
+        /// otherwise, and a player who has read it should not have to look past it.
+        var isDismissible: Bool {
+            if case .goes = self { return true }
+            return false
+        }
+
         /// The word it goes under on a chart. `goes` is one tip whichever way the first
-        /// answer went.
+        /// answer went, and keeps its name so the charts drawn off it carry on.
         var name: String {
             switch self {
             case .pick: return "pick"
@@ -65,9 +74,9 @@ struct Tutorial: Equatable {
         case roundLeft
         /// The Skip on a tip.
         case skipped
+        /// The Got it on the tip about tries: this tip read, the rest still to come.
+        case dismissed
     }
-
-    static let tipCount = 4
 
     /// Whether this player is still being shown how to play.
     private(set) var isCoaching: Bool
@@ -123,6 +132,8 @@ struct Tutorial: Equatable {
         case .skipped:
             step = nil
             isCoaching = false
+        case .dismissed:
+            if case .goes = step { step = nil }
         }
     }
 }
@@ -140,13 +151,13 @@ extension Tutorial.Step {
     /// something the game no longer does.
     func tip(for wallet: Wallet) -> Tip {
         let points = QuizRound.points.map(Money.text)
-        let goes = "The first go pays \(points[0]), the second \(points[1]) and the third "
+        let tries = "The first try pays \(points[0]), the second \(points[1]) and the third "
             + "\(points[2]). Three misses and the map shows you where it was."
 
         switch self {
         case .pick:
             return Tip(
-                title: "Find it on the map",
+                title: "Zoom in and find",
                 body: "Tap the neighborhood you think it is. Nothing is labeled, so the "
                     + "streets are your clues. Pinch or use + and − to zoom, and drag to "
                     + "look around."
@@ -158,12 +169,12 @@ extension Tutorial.Step {
                     + "Not the one you meant? Tap somewhere else to pick again."
             )
         case .goes(found: true):
-            return Tip(title: "Found it, first go", body: goes)
+            return Tip(title: "Found it, first try!", body: tries)
         case .goes(found: false):
             return Tip(
                 title: "Not there",
-                body: "That place is crossed off, and you have \(QuizRound.tries - 1) goes "
-                    + "left. \(goes)"
+                body: "That place is crossed off, and you have \(QuizRound.tries - 1) tries "
+                    + "left. \(tries)"
             )
         case .money:
             guard let price = wallet.nextPrice else {
@@ -171,9 +182,9 @@ extension Tutorial.Step {
             }
             let body = wallet.balance >= price
                 ? "It adds up across rounds, and you have enough for another borough. "
-                    + "Pick one from Boroughs."
+                    + "Pick one from the Boroughs menu below."
                 : "It adds up across rounds. At \(Money.text(price)) you can unlock "
-                    + "another borough, whichever you like, from Boroughs."
+                    + "another borough, whichever you like, from the Boroughs menu below."
             return Tip(title: "Your money is kept", body: body)
         }
     }

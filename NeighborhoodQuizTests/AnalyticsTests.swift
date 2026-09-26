@@ -401,7 +401,7 @@ final class AnalyticsTests: XCTestCase {
         "-map", "-map-zoomed", "-map-neighborhood",
         "-map-brooklyn", "-map-queens", "-map-bronx", "-map-staten-island",
         "-boroughs", "-settings",
-        "-quiz-tutorial", "-quiz-tutorial-picked", "-quiz-tutorial-over"
+        "-quiz-tutorial", "-quiz-tutorial-picked", "-quiz-tutorial-over", "-quiz-tutorial-goes"
     ]
 
     func testTheCameraIsNotCountedAsAPlayer() {

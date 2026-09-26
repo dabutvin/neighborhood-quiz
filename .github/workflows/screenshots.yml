@@ -121,8 +121,9 @@ jobs:
           #
           # The `-quiz-tutorial*` runs are a first-time player's round with a
           # tip up: the first one over the first question, the one about the
-          # Answer button once something is picked, and the last one on the
-          # card at the end of the round. Each is one tip held still — a staged
+          # Answer button once something is picked, the last one on the card at
+          # the end of the round, and the one about tries — with its Got it —
+          # after a first answer that missed. Each is one tip held still — a staged
           # run never moves the tips on — over the same fixed round as the
           # other `-quiz-*` shots.
           #
@@ -214,6 +215,7 @@ jobs:
           capture 37 tutorial        -quiz-tutorial
           capture 39 tutorial_picked -quiz-tutorial-picked
           capture 41 tutorial_over   -quiz-tutorial-over
+          capture 43 tutorial_goes   -quiz-tutorial-goes
 
           xcrun simctl status_bar "$UDID" clear
           xcrun simctl shutdown "$UDID" 2>/dev/null || true
