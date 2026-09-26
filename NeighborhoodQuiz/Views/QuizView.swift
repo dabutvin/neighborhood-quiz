@@ -17,6 +17,9 @@ struct QuizView: View {
         /// The menu a returning player opens on, with a wallet part-way to a first
         /// borough.
         case menu
+        /// The same menu for a player who owns the whole city: all five boroughs and
+        /// Anywhere on the row of choices, which is the most that row ever has to hold.
+        case menuCity = "menu-city"
         /// A fresh question, nothing picked.
         case asking
         /// Somewhere picked, waiting on the button.
@@ -62,6 +65,9 @@ struct QuizView: View {
     /// a first borough, with a career behind it, so the rows have something to say.
     static let stagedWallet = Wallet(balance: 140, earned: 440, rounds: 11)
 
+    /// The gallery's wallet for the menu with every borough open.
+    static let stagedCity = Wallet(balance: 90, earned: 4_090, rounds: 96, bought: Set(Borough.buyable))
+
     var stage: Stage?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -96,7 +102,10 @@ struct QuizView: View {
         if let stage {
             // A tutorial shot is a first-time player's round, so its wallet is empty;
             // every other shot has a career behind it.
-            bank = .staged(stage.tip == nil ? QuizView.stagedWallet : Wallet())
+            bank = .staged(
+                stage == .menuCity ? QuizView.stagedCity
+                    : stage.tip == nil ? QuizView.stagedWallet : Wallet()
+            )
             record = TutorialRecord(defaults: nil)
             tutorial = stage.tip.map { Tutorial.showing($0) } ?? Tutorial(coaching: false)
         } else {
@@ -600,13 +609,19 @@ struct QuizView: View {
     /// second borough is open it becomes a row of pills, one per borough in the order
     /// they were bought and then "Anywhere", which draws the ten from all of them; the
     /// one being played is filled in. Only on the menu: mid-round the map is the
-    /// round's, and a staged run never sees the row because its wallet owns nothing.
+    /// round's, and a staged run never sees the row unless it is the one photographing
+    /// it, `-quiz-menu-city`.
+    ///
+    /// A flowing row rather than an `HStack`: three pills already overran a phone's
+    /// width, and an `HStack` answers that by squeezing each pill until "Manhattan"
+    /// breaks after the "a". Each pill keeps its name on one line, and whatever does not
+    /// fit goes on the next line, centred.
     @ViewBuilder
     private var whereabouts: some View {
         let wallet = bank.wallet
 
         if wallet.playable.count > 1 {
-            HStack(spacing: 8) {
+            FlowRow(spacing: 8, lineSpacing: 8) {
                 ForEach(wallet.playable) { borough in
                     choice(borough.name, chosen: wallet.pick == .borough(borough)) {
                         if bank.play(borough) {
@@ -640,6 +655,10 @@ struct QuizView: View {
             Text(title)
                 .font(MapFont.chrome(size: 15))
                 .foregroundStyle(chosen ? palette.labelHalo : palette.ink)
+                // A borough's name is one word to the eye even when it is two, and
+                // never breaks: the row makes room by wrapping pills, not letters.
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(
@@ -869,7 +888,7 @@ struct QuizView: View {
         if let stage {
             // Nothing is a round until Start is pressed, and the gallery's shot of the
             // menu is a shot of exactly that.
-            guard stage != .menu else { return }
+            guard stage != .menu, stage != .menuCity else { return }
             var staged = QuizRound(asking: QuizView.showcase.compactMap(QuizView.place(named:)))
             play(&staged, to: stage)
             // A staged round that reached the end is paid like any other, so the wallet
@@ -1101,7 +1120,7 @@ struct QuizView: View {
         }
 
         switch stage {
-        case .menu, .asking, .tutorial:
+        case .menu, .menuCity, .asking, .tutorial:
             break
         case .picked, .tutorialPicked:
             candidate = QuizView.place(named: "SoHo")
