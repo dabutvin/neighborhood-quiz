@@ -134,6 +134,7 @@ final class BronxMapDataTests: XCTestCase {
         XCTAssertGreaterThan(parks.count, 10)
         XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Van Cortlandt Park") })
         XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Pelham Bay Park") })
+        XCTAssertTrue(parks.contains { $0.name == "Woodlawn Cemetery" }, "Woodlawn is green")
         for park in parks {
             XCTAssertGreaterThanOrEqual(park.ring.count, 3, "\(park.name) is not a shape")
         }

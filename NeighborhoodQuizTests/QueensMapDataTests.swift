@@ -124,6 +124,8 @@ final class QueensMapDataTests: XCTestCase {
         let parks = map.parks
         XCTAssertGreaterThan(parks.count, 10)
         XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Flushing Meadows") })
+        // Queens has more cemetery than any borough, and none of it is in the parks table.
+        XCTAssertTrue(parks.contains { $0.name.localizedCaseInsensitiveContains("Calvary") }, "Calvary is green")
         for park in parks {
             XCTAssertGreaterThanOrEqual(park.ring.count, 3, "\(park.name) is not a shape")
         }

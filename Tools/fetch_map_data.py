@@ -95,6 +95,13 @@ MIN_NEIGHBORHOOD_AREA = 1e-6
 # somewhere people live and call something.
 NEIGHBORHOOD_TYPE = "0"
 
+# Type 7 is drawn green, the way a park is. A cemetery is a park to the eye — Green-Wood
+# is four hundred and seventy-eight acres of trees and paths in the middle of Brooklyn —
+# and it is not in the Parks Properties table, because the city does not run it. Left
+# out, it was a blank hole in the map the size of a neighborhood, and the one shape on
+# the page that looked like a mistake.
+CEMETERY_TYPE = "7"
+
 
 class Area(NamedTuple):
     """One neighborhood of the finished map, and where its ground comes from."""
@@ -1566,6 +1573,25 @@ def build(borough: Borough) -> None:
                 parks.append({"name": row["properties"].get("signname") or "", "ring": ring})
     print(f"    {len(parks)} greens over eight acres")
 
+    # --- and the cemeteries, which the parks table does not have
+    cemeteries = 0
+    for row in fetch(
+        NEIGHBORHOODS,
+        where=f"boroname='{borough.name}' AND ntatype='{CEMETERY_TYPE}'",
+        limit=100,
+    ):
+        geometry = row.get("geometry")
+        if not geometry:
+            continue
+        name = (row["properties"].get("ntaname") or "").strip()
+        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        for polygon in polygons:
+            ring = thin_ring([(x, y) for x, y, *_ in polygon[0]], PARK_TOLERANCE)
+            if len(ring) >= 4 and ring_area(ring) >= MIN_PARK_AREA:
+                parks.append({"name": name, "ring": ring})
+                cemeteries += 1
+    print(f"    {cemeteries} cemetery greens")
+
     # --- which of them are avenues
     park_rings = [p["ring"] for p in parks]
 
@@ -1616,7 +1642,7 @@ def build(borough: Borough) -> None:
             })
 
     document = {
-        "source": "NYC Open Data — Centerline (inkn-q76z), Borough Boundaries (gthc-hcne), Parks Properties (enfh-gkve)",
+        "source": "NYC Open Data — Centerline (inkn-q76z), Borough Boundaries (gthc-hcne), Parks Properties (enfh-gkve), 2020 NTAs (9nt8-h7nd)",
         "names": names,
         "roads": roads,
         "land": [round_points(r, ring=True) for r in land],

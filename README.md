@@ -86,6 +86,7 @@ City of New York's own street centreline file, drawn by hand.
 | Centerline (`inkn-q76z`) | every street segment in the borough, with its name |
 | Borough Boundaries (`gthc-hcne`) | the real shoreline, piers and all |
 | Parks Properties (`enfh-gkve`) | the greens, Central Park chief among Manhattan's |
+| 2020 NTAs (`9nt8-h7nd`) | the neighbourhoods, and the cemeteries — Green-Wood, Woodlawn, Calvary — which are green on the map but not in the parks table |
 
 It runs on demand, never at build time and never at runtime. CI does not touch the
 network and neither does a shipped build.
