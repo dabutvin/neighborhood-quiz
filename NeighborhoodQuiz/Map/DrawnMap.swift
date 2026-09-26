@@ -381,12 +381,29 @@ struct DrawnMap {
     /// This lives here rather than in the drawing because two things depend on it and
     /// they must not disagree: what shade a rank is drawn in, and whether it is allowed
     /// to go down as one stroke. The second is only safe at full ink.
+    ///
+    /// Below a borough's own scale — which only the whole city ever goes — even the
+    /// avenues give way. Fitted to one phone, the city is drawn at well under half the
+    /// size of any one borough, and every avenue in it at full weight is not a street
+    /// map but a brown wash with the neighbourhoods lost somewhere inside it. So they
+    /// fade out on the way down and the overview is land, water, parks and borders:
+    /// the shape of the city, which is what a view of the whole of it is for.
     static func presence(of kind: RoadKind, at zoom: Double) -> Double {
         let start = minZoom(for: kind)
-        guard start > 1 else { return 1 }
+        guard start > 1 else { return overview(at: zoom) }
         let span = sideStreetFullZoom - start
         guard span > 0 else { return zoom >= start ? 1 : 0 }
         return min(max((zoom - start) / span, 0), 1)
+    }
+
+    /// Where the avenues are gone altogether, as a fraction of a borough's own scale.
+    /// The city pulled all the way back sits a little under this, so it opens clean.
+    static let overviewZoom = 0.45
+
+    /// How much of the street network is inked at a zoom below a borough's own: none
+    /// at `overviewZoom`, all of it by 1, which is where every borough starts.
+    static func overview(at zoom: Double) -> Double {
+        min(max((zoom - overviewZoom) / (1 - overviewZoom), 0), 1)
     }
 
     /// How far in the map must be before a name of this rank is written. The avenues

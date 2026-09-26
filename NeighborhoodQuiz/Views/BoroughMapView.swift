@@ -237,12 +237,13 @@ struct BoroughMapView: View, @MainActor Animatable {
             guard area.id != selected, area.id != candidate,
                   !settled.contains(area.id), !givenAway.contains(area.id)
             else { continue }
-            let dash = [5 / zoom, 3.5 / zoom]
+            let pen = CGFloat(borderPen)
+            let dash = [5 * pen / zoom, 3.5 * pen / zoom]
             board.stroke(
                 area.edge,
                 with: .color(palette.land.opacity(0.9)),
                 style: StrokeStyle(
-                    lineWidth: CGFloat(borderWeight + 1.8) / zoom,
+                    lineWidth: CGFloat(borderWeight + 1.8 * borderPen) / zoom,
                     lineCap: .round,
                     lineJoin: .round,
                     dash: dash
@@ -342,7 +343,16 @@ struct BoroughMapView: View, @MainActor Animatable {
     /// the borough without it becoming the thing the borough is made of.
     private var borderWeight: Double {
         let pulledBack = min(max((3 - detailZoom) / 2, 0), 1)
-        return 1.2 + 0.5 * pulledBack
+        return (1.2 + 0.5 * pulledBack) * borderPen
+    }
+
+    /// A finer pen for the borders below a borough's own scale, which only the whole
+    /// city reaches. Pulled back to the city, a neighbourhood is a few points across,
+    /// and a border drawn as heavy as it is round Manhattan's — with its casing of paper
+    /// on either side — is most of the neighbourhood. Never under half, so the borders
+    /// are still the lines the overview is made of. On a borough it is always 1.
+    private var borderPen: Double {
+        min(max(detailZoom, 0.5), 1)
     }
 
     /// The streets.

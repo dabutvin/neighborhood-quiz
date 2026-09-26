@@ -100,6 +100,16 @@ final class CityMapTests: XCTestCase {
         XCTAssertEqual(city.zoomCeiling * city.detail, MapCamera.range.upperBound, accuracy: 0.0001)
     }
 
+    /// Pulled all the way back, the city is drawn small enough that its streets are
+    /// left off — which is what keeps the overview from being a wash of brown.
+    func testTheCityOpensWithoutItsStreets() {
+        let city = DrawnMap.build(sheet: .city(Borough.drawn), size: size)
+
+        let opening = MapCamera.range.lowerBound * city.detail
+        XCTAssertLessThanOrEqual(opening, DrawnMap.overviewZoom)
+        XCTAssertEqual(DrawnMap.presence(of: .avenue, at: opening), 0)
+    }
+
     /// One borough's drawing is what it always was: a borough sheet asks nothing new.
     func testABoroughDrawingIsUnchanged() {
         let drawn = DrawnMap.build(borough: .manhattan, size: size)
