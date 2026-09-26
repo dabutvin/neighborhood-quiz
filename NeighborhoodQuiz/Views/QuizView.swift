@@ -183,19 +183,19 @@ struct QuizView: View {
         }
     }
 
-    /// The borough on the map right now.
+    /// What the map draws: the borough being played, or — in the anywhere mode — every
+    /// open borough on one sheet, laid out as they sit.
     ///
-    /// Derived rather than chosen, because in the anywhere mode the map follows the
-    /// question: whatever is being shown, then whatever is being asked, then — once the
-    /// round is over and the summary is up — wherever the last question was, so the map
-    /// under the card is the one the round ended on. With no round at all, home.
-    private var shownBorough: Borough {
-        if let showing { return showing.place.borough }
-        if let round {
-            if let current = round.current { return current.borough }
-            if let last = round.questions.last { return last.borough }
-        }
-        return home
+    /// The anywhere mode used to draw one borough at a time and jump to whichever the
+    /// question was in, so the map changed under the player between questions and
+    /// finding Astoria after SoHo meant waiting for Queens to appear. Now the whole
+    /// city is one map for the whole round, and getting from one to the other is a
+    /// push across the river. The card still says which borough a question is in.
+    ///
+    /// A staged run is Manhattan whatever its wallet says; see `home`.
+    private var sheet: MapSheet {
+        guard stage == nil, anywhere else { return .borough(home) }
+        return .city(Set(bank.wallet.playable))
     }
 
     /// Whether the round runs over every borough rather than one.
@@ -217,13 +217,16 @@ struct QuizView: View {
                 ZStack {
                     MapBoard(
                         palette: palette,
-                        borough: shownBorough,
+                        sheet: sheet,
                         selected: id(of: showing?.place),
                         ruledOut: ids(of: round?.ruledOut ?? []),
                         settled: ids(of: round?.found ?? []),
                         givenAway: ids(of: round?.missed ?? []),
                         candidate: id(of: candidate),
                         resetToken: opening,
+                        // The answer a round has just given away, brought into view if
+                        // it is off the glass — on the city it can be a borough away.
+                        reveal: id(of: showing?.place),
                         onTap: pick,
                         onReady: { _ in start() }
                     )
@@ -298,20 +301,16 @@ struct QuizView: View {
 
     // MARK: - What the map is handed
 
-    /// The places on the borough being shown, by the id the map draws them under.
-    ///
-    /// A round's lists are places from all over the city and the map draws one borough
-    /// at a time, so it is handed the ids on that borough and none of the others — an
-    /// id from Brooklyn's list is some other neighbourhood on Manhattan's, and would be
-    /// washed in terracotta for no reason anybody could see.
+    /// The places on the map being shown, by the id the map draws them under — which
+    /// the sheet decides: a place's own index on one borough, and the borough folded in
+    /// on the city. A place not on the sheet has no id and is left out.
     private func ids(of places: some Collection<Place>) -> Set<Int> {
-        Set(places.filter { $0.borough == shownBorough }.map(\.id))
+        Set(places.compactMap(sheet.id(of:)))
     }
 
-    /// One place's id, if it is on the borough being shown.
+    /// One place's id, if it is on the map being shown.
     private func id(of place: Place?) -> Int? {
-        guard let place, place.borough == shownBorough else { return nil }
-        return place.id
+        place.flatMap(sheet.id(of:))
     }
 
     // MARK: - The question
@@ -966,9 +965,9 @@ struct QuizView: View {
     private func pick(_ id: Int?) {
         guard showing == nil, let round, !round.isFinished else { return }
 
-        // The map reports an id on the borough it is drawing; the round wants to know
-        // which borough that was.
-        let place = id.map { Place(shownBorough, $0) }
+        // The map reports an id on the sheet it is drawing; the round wants to know
+        // which borough's place that was.
+        let place = id.flatMap(sheet.place(for:))
         let next: Place?
         if let place, !round.ruledOut.contains(place),
            !round.found.contains(place), !round.missed.contains(place) {

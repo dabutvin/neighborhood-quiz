@@ -24,10 +24,10 @@ struct MapBoard: View {
     }
 
     let palette: MapPalette
-    /// Which borough to draw. Change it and the drawing is built from that borough's
-    /// file — the first time; after that it is taken from the cache below — and the
-    /// camera goes home, because it is a different map, not a move.
-    let borough: Borough
+    /// What to draw: one borough, or the city. Change it and the drawing is built — the
+    /// first time; after that it is taken from the cache below — and the camera goes
+    /// home, because it is a different map, not a move.
+    let sheet: MapSheet
     var opening: Opening = .island
     /// Filled and named. The quiz uses it for the place you have just found; the map
     /// on its own uses it for whatever you last touched.
@@ -44,6 +44,11 @@ struct MapBoard: View {
     /// start of a round, because arriving at Inwood still zoomed into SoHo is no use to
     /// anybody.
     var resetToken: Int = 0
+    /// A place to bring into view if it is not in view already: the answer the round
+    /// has just given away, which on the city can be a borough away from where the
+    /// player was looking. Moved to without changing the zoom, and only when it is off
+    /// the glass, so a place already on screen never shifts under anybody.
+    var reveal: Int?
     /// Which neighborhood was touched, or nothing for the water and the parks.
     var onTap: (Int?) -> Void = { _ in }
     /// Handed back once a drawing exists that did not before. The map on its own picks
@@ -58,7 +63,7 @@ struct MapBoard: View {
     /// fraction of a second to draw. Built once each, the second visit is free. A new
     /// size empties it, since every drawing in it was for the old one — a rotation
     /// pays for one borough again, not for all five.
-    @State private var drawn: [Borough: DrawnMap] = [:]
+    @State private var drawn: [MapSheet: DrawnMap] = [:]
     @State private var drawnSize: CGSize = .zero
     @State private var camera = MapCamera()
     /// Set once, the first time the view is given a size, so an opening that has to be
@@ -90,7 +95,7 @@ struct MapBoard: View {
             let size = geometry.size
 
             ZStack {
-                if let drawn = drawn[borough], drawn.size == size {
+                if let drawn = drawn[sheet], drawn.size == size {
                     BoroughMapView(
                         drawn: drawn,
                         camera: live(in: size),
@@ -117,13 +122,27 @@ struct MapBoard: View {
             .onAppear { prepare(for: size) }
             .onChange(of: size) { _, newSize in prepare(for: newSize) }
             .onChange(of: resetToken) { _, _ in
-                withAnimation(.easeOut(duration: 0.35)) { camera = MapCamera() }
+                var home = MapCamera()
+                home.ceiling = camera.ceiling
+                withAnimation(.easeOut(duration: 0.35)) { camera = home }
+            }
+            .onChange(of: reveal) { _, id in
+                guard let id, let map = drawn[sheet],
+                      let area = map.neighborhoods.first(where: { $0.id == id })
+                else { return }
+                // A little inside the edge, so a place whose middle is only just on the
+                // glass is brought in too.
+                guard !camera.visibleRect(in: size, margin: -40).contains(area.labelPoint) else { return }
+                var moved = MapCamera.centred(on: area.labelPoint, zoom: camera.zoom, in: size)
+                moved.ceiling = camera.ceiling
+                moved.clampPan(in: size)
+                withAnimation(.easeInOut(duration: 0.5)) { camera = moved }
             }
             // A new borough is a new drawing, so the camera is put back rather than
             // animated: there is nothing for a move from Inwood to Coney Island to
             // travel across. The drawing itself is built only if this is the first
             // visit; a borough seen before is already in the cache.
-            .onChange(of: borough) { _, _ in
+            .onChange(of: sheet) { _, _ in
                 camera = MapCamera()
                 prepare(for: size)
             }
@@ -174,7 +193,7 @@ struct MapBoard: View {
     /// `setZoom` clamps, so a button at the end of its travel has to ask the same
     /// question the camera would to know it has nothing left to do.
     private func clamped(_ zoom: Double) -> Double {
-        min(max(zoom, MapCamera.range.lowerBound), MapCamera.range.upperBound)
+        min(max(zoom, MapCamera.range.lowerBound), camera.ceiling)
     }
 
     // MARK: - Gestures
@@ -273,11 +292,17 @@ struct MapBoard: View {
             drawn = [:]
             drawnSize = size
         }
-        guard drawn[borough] == nil else { return }
+        if let map = drawn[sheet] {
+            camera.ceiling = map.zoomCeiling
+            return
+        }
 
-        let map = DrawnMap.build(borough: borough, size: size)
-        drawn[borough] = map
+        let map = DrawnMap.build(sheet: sheet, size: size)
+        drawn[sheet] = map
+        camera.ceiling = map.zoomCeiling
         onReady(map)
+        // Every camera made below starts from the drawing's own ceiling.
+        defer { camera.ceiling = map.zoomCeiling }
 
         guard !hasOpened else {
             camera.clampPan(in: size)
@@ -298,11 +323,11 @@ struct MapBoard: View {
             camera.clampPan(in: size)
         case .closest:
             let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
-            camera = MapCamera.centred(on: midtown, zoom: MapCamera.range.upperBound, in: size)
+            camera = MapCamera.centred(on: midtown, zoom: map.zoomCeiling, in: size)
             camera.clampPan(in: size)
         case .neighborhood(let name):
             guard let area = map.neighborhood(named: name) else { break }
-            camera = MapCamera.framing(area.bounds, in: size)
+            camera = MapCamera.framing(area.bounds, in: size, ceiling: map.zoomCeiling)
             camera.clampPan(in: size)
         }
     }

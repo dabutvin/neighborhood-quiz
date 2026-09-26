@@ -404,7 +404,7 @@ final class AnalyticsTests: XCTestCase {
     private let cameraArguments = [
         "-quiz-menu", "-quiz-asking", "-quiz-picked", "-quiz-narrowing",
         "-quiz-filling", "-quiz-missed", "-quiz-over",
-        "-map", "-map-zoomed", "-map-closest", "-map-neighborhood",
+        "-map", "-map-zoomed", "-map-closest", "-map-city", "-map-neighborhood",
         "-map-brooklyn", "-map-queens", "-map-bronx", "-map-staten-island",
         "-boroughs", "-settings",
         "-quiz-tutorial", "-quiz-tutorial-picked", "-quiz-tutorial-over", "-quiz-tutorial-goes", "-quiz-menu-city"

@@ -23,7 +23,9 @@ struct MapProjection: Equatable {
     /// Metres per degree of latitude, near enough anywhere that matters here.
     static let metresPerDegreeLatitude = 111_320.0
 
-    private let scale: Double
+    /// Points on the page per radian of the Mercator plane. How big the drawing is,
+    /// which is what lets a sheet of the whole city be compared with one borough's.
+    let scale: Double
     private let originX: Double
     private let originY: Double
     private let cosAngle: Double

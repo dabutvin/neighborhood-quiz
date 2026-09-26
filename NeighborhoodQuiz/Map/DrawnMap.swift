@@ -91,9 +91,23 @@ struct DrawnMap {
     static let sideStreetZoom = 1.5
     static let sideStreetFullZoom = 2.3
 
-    /// Which borough this is a drawing of. The board checks it against the one it has
-    /// been asked for, the same way it checks the size.
-    let borough: Borough
+    /// What this is a drawing of: one borough, or the city. The board checks it against
+    /// the one it has been asked for, the same way it checks the size.
+    let sheet: MapSheet
+    /// The borough, when the drawing is of one.
+    var borough: Borough? {
+        if case .borough(let borough) = sheet { return borough }
+        return nil
+    }
+    /// How much street a point of this drawing holds, next to one borough's drawing at
+    /// the same zoom: 1 for a borough, and about a third for the whole city, which is
+    /// fitted to the same screen and so drawn three times smaller.
+    ///
+    /// Everything that decides how much detail to show — which streets are inked, which
+    /// names are written, how big — asks about the camera's zoom times this, so the
+    /// city at 4× shows what a borough shows at a little over 1×, and the side streets
+    /// arrive at the same size on the glass on either.
+    let detail: Double
     let size: CGSize
     let projection: MapProjection
     let land: Path
@@ -127,106 +141,155 @@ struct DrawnMap {
     /// started animating, because now a single flick is sixty of them.
     let roadsByKind: [[DrawnRoad]]
 
+    /// How far in the camera may go on this drawing: as far as it takes to reach a
+    /// borough's closest view of the streets.
+    var zoomCeiling: Double { MapCamera.range.upperBound / detail }
+
     /// The measured size of every street name, filled in as each is first drawn.
     let metrics = LabelMetrics()
 
     static func build(borough: Borough, size: CGSize) -> DrawnMap {
-        let data = BoroughMap.of(borough)
-        let islands = data.land
+        build(sheet: .borough(borough), size: size)
+    }
+
+    static func build(sheet: MapSheet, size: CGSize) -> DrawnMap {
+        let members = sheet.boroughs
+        let sources = members.map(BoroughMap.of)
         // Turning the plane back by the grid's own bearing stands the avenues upright.
         // Manhattan's is twenty-nine degrees; Brooklyn's is nought, and is drawn as it
-        // sits — see `Borough.gridBearingDegrees` for why.
+        // sits — see `Borough.gridBearingDegrees` for why. The city is nought too: see
+        // `MapSheet`.
         let projection = MapProjection(
-            fitting: islands.flatMap { $0 },
+            fitting: sources.flatMap { $0.land.flatMap { $0 } },
             in: size,
             padding: 14,
-            rotation: -borough.gridBearingDegrees
+            rotation: sheet.rotation
         )
+
+        // A borough is its own yardstick. The city is measured against the boroughs on
+        // it, each fitted to this screen on its own — the geometric middle of them, so
+        // one long thin borough does not set the scale for the rest.
+        let detail: Double
+        switch sheet {
+        case .borough:
+            detail = 1
+        case .city:
+            let own = members.map { borough in
+                MapProjection(
+                    fitting: BoroughMap.of(borough).land.flatMap { $0 },
+                    in: size,
+                    padding: 14,
+                    rotation: -borough.gridBearingDegrees
+                ).scale
+            }
+            let middle = exp(own.map { log($0) }.reduce(0, +) / Double(max(own.count, 1)))
+            detail = min(max(projection.scale / middle, 0.05), 1)
+        }
 
         var land = Path()
         var landEdge = Path()
-        for (index, ring) in islands.enumerated() {
-            let points = projection.points(ring)
-            let seed = UInt32(7 &+ index &* 13)
-            land.addPath(Pen.fill(points, style: PenStyle(roughness: 0.4, bowing: 0.32, reach: 1.1, seed: seed)))
-            landEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.4, bowing: 0.32, reach: 1, seed: seed &+ 1)))
-        }
-
         var parks = Path()
         var parkEdge = Path()
-        for (index, park) in data.parks.enumerated() {
-            let points = projection.points(park.ring)
-            guard points.count >= 3 else { continue }
-            let seed = UInt32(401 &+ index &* 7)
-            parks.addPath(Pen.fill(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.9, seed: seed)))
-            parkEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.8, seed: seed &+ 1)))
-        }
-
         var neighborhoods: [DrawnNeighborhood] = []
-        for (index, area) in data.neighborhoods.enumerated() {
-            let rings = area.rings.map(projection.points).filter { $0.count >= 3 }
-            guard !rings.isEmpty else { continue }
-
-            var shape = Path()
-            var edge = Path()
-            for (ringIndex, ring) in rings.enumerated() {
-                let seed = UInt32(9_001 &+ index &* 17 &+ ringIndex)
-                shape.addPath(Pen.fill(ring, style: PenStyle(roughness: 0.3, bowing: 0.24, reach: 0.9, seed: seed)))
-                edge.addPath(Pen.outline(ring, style: PenStyle(roughness: 0.3, bowing: 0.24, reach: 0.8, seed: seed &+ 1)))
-            }
-
-            let widest = rings.max { $0.count < $1.count } ?? []
-            var anchor = DrawnNeighborhood.centroid(of: widest)
-            if !DrawnNeighborhood.ring(widest, contains: anchor) {
-                anchor = DrawnNeighborhood.insidePoint(of: widest, near: anchor)
-            }
-
-            var box = CGRect.null
-            for ring in rings {
-                for point in ring { box = box.union(CGRect(origin: point, size: .zero)) }
-            }
-
-            neighborhoods.append(DrawnNeighborhood(
-                id: index,
-                name: area.name,
-                shape: shape,
-                edge: edge,
-                rings: rings,
-                bounds: box,
-                labelPoint: anchor,
-                cross: DrawnMap.cross(at: anchor, across: box, seed: UInt32(21_001 &+ index &* 11))
-            ))
-        }
-
         var roads: [DrawnRoad] = []
         var labels: [DrawnLabel] = []
+        // Counted across the whole sheet, so every island, green and road has its own
+        // seed and every name its own place in the measuring cache.
+        var islandCount = 0
+        var parkCount = 0
+        var roadCount = 0
 
-        // The data arrives longest street first, which is the order names are offered
-        // in: whichever reaches a patch of paper first keeps it.
-        for (index, road) in data.roads.enumerated() {
-            let points = projection.points(road.coordinates)
-            guard points.count >= 2 else { continue }
+        for (borough, data) in zip(members, sources) {
+            for ring in data.land {
+                let points = projection.points(ring)
+                let seed = UInt32(7 &+ islandCount &* 13)
+                islandCount += 1
+                land.addPath(Pen.fill(points, style: PenStyle(roughness: 0.4, bowing: 0.32, reach: 1.1, seed: seed)))
+                landEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.4, bowing: 0.32, reach: 1, seed: seed &+ 1)))
+            }
 
-            let path = Pen.stroke(points, style: penStyle(for: road.kind, seed: UInt32(index &+ 101)))
-            roads.append(DrawnRoad(
-                id: index,
-                path: path,
-                kind: road.kind,
-                minZoom: minZoom(for: road.kind),
-                bounds: path.boundingRect
-            ))
+            for park in data.parks {
+                let points = projection.points(park.ring)
+                let seed = UInt32(401 &+ parkCount &* 7)
+                parkCount += 1
+                guard points.count >= 3 else { continue }
+                parks.addPath(Pen.fill(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.9, seed: seed)))
+                parkEdge.addPath(Pen.outline(points, style: PenStyle(roughness: 0.32, bowing: 0.26, reach: 0.8, seed: seed &+ 1)))
+            }
 
-            guard road.carriesName, !road.name.isEmpty else { continue }
-            let position = Polyline.midpoint(of: points)
-            labels.append(DrawnLabel(
-                id: index,
-                text: road.name,
-                position: position,
-                angle: Polyline.heading(of: points, near: position),
-                kind: road.kind,
-                minZoom: labelZoom(for: road.kind)
-            ))
+            for (index, area) in data.neighborhoods.enumerated() {
+                let rings = area.rings.map(projection.points).filter { $0.count >= 3 }
+                guard !rings.isEmpty else { continue }
+
+                var shape = Path()
+                var edge = Path()
+                for (ringIndex, ring) in rings.enumerated() {
+                    let seed = UInt32(9_001 &+ index &* 17 &+ ringIndex)
+                    shape.addPath(Pen.fill(ring, style: PenStyle(roughness: 0.3, bowing: 0.24, reach: 0.9, seed: seed)))
+                    edge.addPath(Pen.outline(ring, style: PenStyle(roughness: 0.3, bowing: 0.24, reach: 0.8, seed: seed &+ 1)))
+                }
+
+                let widest = rings.max { $0.count < $1.count } ?? []
+                var anchor = DrawnNeighborhood.centroid(of: widest)
+                if !DrawnNeighborhood.ring(widest, contains: anchor) {
+                    anchor = DrawnNeighborhood.insidePoint(of: widest, near: anchor)
+                }
+
+                var box = CGRect.null
+                for ring in rings {
+                    for point in ring { box = box.union(CGRect(origin: point, size: .zero)) }
+                }
+
+                neighborhoods.append(DrawnNeighborhood(
+                    id: sheet.id(of: Place(borough, index)) ?? index,
+                    name: area.name,
+                    shape: shape,
+                    edge: edge,
+                    rings: rings,
+                    bounds: box,
+                    labelPoint: anchor,
+                    cross: DrawnMap.cross(at: anchor, across: box, seed: UInt32(21_001 &+ index &* 11))
+                ))
+            }
+
+            // The data arrives longest street first, which is the order names are offered
+            // in: whichever reaches a patch of paper first keeps it.
+            for road in data.roads {
+                let index = roadCount
+                roadCount += 1
+                let points = projection.points(road.coordinates)
+                guard points.count >= 2 else { continue }
+
+                let path = Pen.stroke(points, style: penStyle(for: road.kind, seed: UInt32(index &+ 101)))
+                roads.append(DrawnRoad(
+                    id: index,
+                    path: path,
+                    kind: road.kind,
+                    minZoom: minZoom(for: road.kind),
+                    bounds: path.boundingRect
+                ))
+
+                guard road.carriesName, !road.name.isEmpty else { continue }
+                let position = Polyline.midpoint(of: points)
+                labels.append(DrawnLabel(
+                    id: index,
+                    text: road.name,
+                    position: position,
+                    angle: Polyline.heading(of: points, near: position),
+                    kind: road.kind,
+                    minZoom: labelZoom(for: road.kind)
+                ))
+            }
         }
+
+        // Names are offered in rank order across the whole sheet — every borough's
+        // avenues before any borough's side streets — and in each borough's own order
+        // within a rank. One borough's file is in that order already, so this changes
+        // nothing there; on the city it keeps Queens Boulevard from losing its paper to
+        // a Manhattan side street that happened to come first in the list.
+        labels = labels.enumerated()
+            .sorted { ($0.element.kind.rawValue, $0.offset) < ($1.element.kind.rawValue, $1.offset) }
+            .map(\.element)
 
         // Light lines under heavy ones. A stable sort would be tidier but the key is
         // the only thing the drawing cares about.
@@ -240,7 +303,8 @@ struct DrawnMap {
         }
 
         return DrawnMap(
-            borough: borough,
+            sheet: sheet,
+            detail: detail,
             size: size,
             projection: projection,
             land: land,

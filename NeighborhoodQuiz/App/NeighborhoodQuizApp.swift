@@ -15,8 +15,8 @@ struct NeighborhoodQuizApp: App {
                 switch screen {
                 case .quiz(let stage):
                     QuizView(stage: stage)
-                case .map(let borough, let opening, let showing):
-                    HomeView(borough: borough, opening: opening, showing: showing)
+                case .map(let sheet, let opening, let showing):
+                    HomeView(sheet: sheet, opening: opening, showing: showing)
                 case .boroughs(let wallet):
                     StagedBoroughs(wallet)
                 case .settings(let wallet):
@@ -54,14 +54,15 @@ struct NeighborhoodQuizApp: App {
 /// one — which is the only reason a screenshot of it is worth looking at.
 ///
 /// The `-map*` arguments are the map on its own: `-map` whole, `-map-zoomed` in on
-/// Midtown, `-map-closest` on Times Square pulled all the way in, `-map-neighborhood` with Greenwich Village picked out — all Manhattan — and
+/// Midtown, `-map-closest` on Times Square pulled all the way in, `-map-city` every
+/// borough on one sheet as a round across the city draws it, `-map-neighborhood` with Greenwich Village picked out — all Manhattan — and
 /// then one per other borough, `-map-brooklyn`, `-map-queens`, `-map-bronx` and
 /// `-map-staten-island`, each whole and north-up, so a regression that only one file
 /// would show has a shot to show it in. `-boroughs` and `-settings` are the two sheets,
 /// each over a throwaway wallet.
 enum Screen: Equatable {
     case quiz(stage: QuizView.Stage?)
-    case map(borough: Borough, opening: MapBoard.Opening, showing: String?)
+    case map(sheet: MapSheet, opening: MapBoard.Opening, showing: String?)
     case boroughs(Wallet)
     case settings(Wallet)
 
@@ -90,25 +91,28 @@ enum Screen: Equatable {
             // Greenwich Village: small enough to fill a phone, known to anybody who has
             // heard of Manhattan, and a tidy shape to show a highlight on.
             self = .map(
-                borough: .manhattan,
+                sheet: .borough(.manhattan),
                 opening: .neighborhood("Greenwich Village"),
                 showing: "Greenwich Village"
             )
         } else if arguments.contains("-map-zoomed") {
-            self = .map(borough: .manhattan, opening: .midtown, showing: nil)
+            self = .map(sheet: .borough(.manhattan), opening: .midtown, showing: nil)
         } else if arguments.contains("-map-closest") {
-            self = .map(borough: .manhattan, opening: .closest, showing: nil)
+            self = .map(sheet: .borough(.manhattan), opening: .closest, showing: nil)
         } else if arguments.contains("-map-brooklyn") {
             // Each of the other four whole, drawn as it sits: one shot per file.
-            self = .map(borough: .brooklyn, opening: .island, showing: nil)
+            self = .map(sheet: .borough(.brooklyn), opening: .island, showing: nil)
         } else if arguments.contains("-map-queens") {
-            self = .map(borough: .queens, opening: .island, showing: nil)
+            self = .map(sheet: .borough(.queens), opening: .island, showing: nil)
         } else if arguments.contains("-map-bronx") {
-            self = .map(borough: .bronx, opening: .island, showing: nil)
+            self = .map(sheet: .borough(.bronx), opening: .island, showing: nil)
         } else if arguments.contains("-map-staten-island") {
-            self = .map(borough: .statenIsland, opening: .island, showing: nil)
+            self = .map(sheet: .borough(.statenIsland), opening: .island, showing: nil)
+        } else if arguments.contains("-map-city") {
+            // Every borough on one sheet, north-up, as a round across the city draws it.
+            self = .map(sheet: .city(Borough.drawn), opening: .island, showing: nil)
         } else if arguments.contains("-map") {
-            self = .map(borough: .manhattan, opening: .island, showing: nil)
+            self = .map(sheet: .borough(.manhattan), opening: .island, showing: nil)
         } else {
             self = .quiz(stage: nil)
         }
