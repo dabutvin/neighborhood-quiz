@@ -73,6 +73,27 @@ final class TutorialTests: XCTestCase {
         XCTAssertEqual(tutorial.step, .goes(found: false), "a tap on water is not reading it")
     }
 
+    /// Got it puts the tip about tries away and leaves the last tip to come.
+    func testGotItPutsTheTriesTipAwayAndKeepsCoaching() {
+        var tutorial = coached(.roundStarted, .picked, .answered(.right), .dismissed)
+        XCTAssertNil(tutorial.step)
+        XCTAssertTrue(tutorial.isCoaching)
+
+        tutorial.handle(.roundFinished)
+        XCTAssertEqual(tutorial.step, .money, "the last tip still comes")
+    }
+
+    /// Only the tip about tries has a Got it; the others have a Skip, which ends them all.
+    func testOnlyTheTriesTipCanBePutAway() {
+        XCTAssertTrue(Tutorial.Step.goes(found: true).isDismissible)
+        XCTAssertTrue(Tutorial.Step.goes(found: false).isDismissible)
+        XCTAssertFalse(Tutorial.Step.pick.isDismissible)
+        XCTAssertFalse(Tutorial.Step.answer.isDismissible)
+        XCTAssertFalse(Tutorial.Step.money.isDismissible)
+
+        XCTAssertEqual(coached(.roundStarted, .dismissed).step, .pick, "Got it is not a Skip")
+    }
+
     func testAGuessThatCountsForNothingMovesNothing() {
         XCTAssertEqual(coached(.roundStarted, .picked, .answered(.ignored)).step, .answer)
     }
@@ -120,7 +141,7 @@ final class TutorialTests: XCTestCase {
 
     func testTheTipsAreNumberedOneToFour() {
         let steps: [Tutorial.Step] = [.pick, .answer, .goes(found: true), .money]
-        XCTAssertEqual(steps.map(\.number), Array(1...Tutorial.tipCount))
+        XCTAssertEqual(steps.map(\.number), [1, 2, 3, 4])
         XCTAssertEqual(Tutorial.Step.goes(found: false).number, 3, "one tip, whichever way it went")
         XCTAssertEqual(Set(steps.map(\.name)).count, steps.count)
     }
@@ -136,7 +157,7 @@ final class TutorialTests: XCTestCase {
         }
         XCTAssertTrue(
             Tutorial.Step.goes(found: false).tip(for: Wallet()).body
-                .contains("\(QuizRound.tries - 1) goes left")
+                .contains("\(QuizRound.tries - 1) tries left")
         )
     }
 
@@ -225,6 +246,7 @@ final class TutorialTests: XCTestCase {
         XCTAssertEqual(QuizView.Stage.tutorial.tip, .pick)
         XCTAssertEqual(QuizView.Stage.tutorialPicked.tip, .answer)
         XCTAssertEqual(QuizView.Stage.tutorialOver.tip, .money)
+        XCTAssertEqual(QuizView.Stage.tutorialGoes.tip, .goes(found: false))
         XCTAssertNil(QuizView.Stage.asking.tip, "the other shots are of a player past the tips")
 
         let staged = Tutorial.showing(.answer)

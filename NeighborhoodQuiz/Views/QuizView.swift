@@ -35,6 +35,8 @@ struct QuizView: View {
         case tutorialPicked = "tutorial-picked"
         /// The end of that first round, with the last tip on its card.
         case tutorialOver = "tutorial-over"
+        /// A first answer that missed, and the tip about tries with its Got it.
+        case tutorialGoes = "tutorial-goes"
 
         /// The tip a staged run shows, if it is one of the tutorial's.
         var tip: Tutorial.Step? {
@@ -42,6 +44,7 @@ struct QuizView: View {
             case .tutorial: return .pick
             case .tutorialPicked: return .answer
             case .tutorialOver: return .money
+            case .tutorialGoes: return .goes(found: false)
             default: return nil
             }
         }
@@ -418,12 +421,12 @@ struct QuizView: View {
     private func spoken(name: String, in borough: String?, round: QuizRound) -> String {
         switch showing {
         case .found(_, let worth): return "Found \(name), worth \(Money.text(worth))."
-        case .missed: return "Out of goes. It was \(name)."
+        case .missed: return "Out of tries. It was \(name)."
         case nil:
             let there = borough.map { " in \($0)" } ?? ""
             return "Find \(name)\(there). "
                 + "Question \(asked(of: round)) of \(round.questions.count), "
-                + "\(round.triesLeft) \(round.triesLeft == 1 ? "go" : "goes") left."
+                + "\(round.triesLeft) \(round.triesLeft == 1 ? "try" : "tries") left."
         }
     }
 
@@ -685,9 +688,9 @@ struct QuizView: View {
     /// the first one a player knows where to look for the next. The space around the
     /// card is not the card's, so the map under it still takes a tap.
     private func tip(_ step: Tutorial.Step) -> some View {
-        TipCard(step: step, wallet: bank.wallet, palette: palette) {
-            coach(.skipped)
-        }
+        let skip: (() -> Void)? = step.isDismissible ? nil : { coach(.skipped) }
+        let dismiss: (() -> Void)? = step.isDismissible ? { coach(.dismissed) } : nil
+        return TipCard(step: step, wallet: bank.wallet, palette: palette, onSkip: skip, onDismiss: dismiss)
         .padding(.horizontal, 14)
         .padding(.top, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -808,7 +811,7 @@ struct QuizView: View {
         VStack(spacing: 5) {
             ForEach(0..<QuizRound.tries, id: \.self) { go in
                 tally(
-                    QuizRound.goName(go),
+                    QuizRound.tryName(go),
                     count: round.foundOn[go],
                     points: round.foundOn[go] * QuizRound.points[min(go, QuizRound.points.count - 1)],
                     ink: palette.highlightInk.opacity(1 - Double(go) * 0.2)
@@ -1102,6 +1105,9 @@ struct QuizView: View {
             break
         case .picked, .tutorialPicked:
             candidate = QuizView.place(named: "SoHo")
+        case .tutorialGoes:
+            // One wrong answer on the first question: crossed off, two tries left.
+            elsewhere(1)
         case .narrowing:
             elsewhere(2)
             candidate = QuizView.place(named: "West Village")

@@ -526,11 +526,14 @@ struct BoroughMapView: View, @MainActor Animatable {
         // it is left off — which is what stops "Central Park West" being written straight
         // through "96th Street" at the widest zoom.
         var taken: [CGRect] = claimed
-        // Worked out once for the whole pass rather than once per name.
-        let offsets = BoroughMapView.crossOffsets(radius: palette.labelHaloReach)
+        // Close in the names are written larger, and the paper round them grows with
+        // them. Worked out once for the whole pass rather than once per name.
+        let zoom = camera.zoom
+        let growth = palette.labelSize(for: .side, at: zoom) / palette.labelSize(for: .side)
+        let offsets = BoroughMapView.crossOffsets(radius: palette.labelHaloReach * growth)
 
         for label in labels where camera.zoom >= label.minZoom {
-            let point = camera.screenPoint(label.position, in: size)
+            var point = camera.screenPoint(label.position, in: size)
             guard visible.contains(point) else { continue }
 
             // Measured from the cache, which knows the answer after the first frame a
@@ -538,13 +541,33 @@ struct BoroughMapView: View, @MainActor Animatable {
             // laying it out first, so every name the grid was too crowded to fit paid in
             // full for the privilege of being left off — and at four times in, where all
             // seven hundred side street names are on offer, most of them are left off.
-            let measured = drawn.metrics.size(of: label, palette: palette, in: context)
+            //
+            // The cache measures every name at its pulled-back size; a name written at
+            // a larger size fills a box larger by the same factor, near enough to decide
+            // whether it collides, so the one measurement serves every zoom.
+            let fontSize = palette.labelSize(for: label.kind, at: zoom)
+            let scale = fontSize / palette.labelSize(for: label.kind)
+            let base = drawn.metrics.size(of: label, palette: palette, in: context)
+            let measured = CGSize(width: base.width * scale, height: base.height * scale)
+
+            // A name whose place on its street is near the edge of the glass hangs off
+            // it, and close in — where a name is written large and a street crosses the
+            // whole screen — that was half the cross streets reading "t-47th Street".
+            // Slid along its own street until all of it is on screen, it reads whole
+            // and is still on the line it names.
+            point = BoroughMapView.slid(
+                point,
+                box: footprint(measured, at: point, angle: label.angle),
+                angle: label.angle,
+                reach: measured.width,
+                onto: size
+            )
             let box = footprint(measured, at: point, angle: label.angle)
             if taken.contains(where: { $0.intersects(box) }) { continue }
             taken.append(box)
 
             let text = Text(label.text)
-                .font(MapFont.label(size: palette.labelSize(for: label.kind)))
+                .font(MapFont.label(size: fontSize))
             let ink = context.resolve(text.foregroundStyle(palette.label))
 
             // The paper showing through a name is what keeps it readable where it
@@ -617,6 +640,41 @@ struct BoroughMapView: View, @MainActor Animatable {
 
     /// The upright box a rotated name sits in. A name written up an avenue is measured
     /// lying down and then stood up, which is what the sine and cosine are doing.
+    /// Where a name should sit so that none of it hangs off the screen: moved along its
+    /// own direction — which, for a name lying on a straight street, is along the street
+    /// — by as much as it overhangs the edge it is crossing.
+    ///
+    /// Moved no further than `reach`, a name's own length, since a name is placed on the
+    /// part of its street it belongs to and a curving street is only straight for so
+    /// long. A name that would need more, or that overhangs an edge it runs parallel
+    /// to — the top of the screen for a cross street — is left where it was; it can
+    /// only be moved along its street, and along its street is no help.
+    static func slid(
+        _ point: CGPoint,
+        box: CGRect,
+        angle: Double,
+        reach: CGFloat,
+        onto screen: CGSize
+    ) -> CGPoint {
+        let glass = CGRect(origin: .zero, size: screen).insetBy(dx: 4, dy: 4)
+        var dx: CGFloat = 0
+        var dy: CGFloat = 0
+        if box.minX < glass.minX { dx = glass.minX - box.minX }
+        else if box.maxX > glass.maxX { dx = glass.maxX - box.maxX }
+        if box.minY < glass.minY { dy = glass.minY - box.minY }
+        else if box.maxY > glass.maxY { dy = glass.maxY - box.maxY }
+        guard dx != 0 || dy != 0 else { return point }
+
+        // Along the name, by whichever of the two it mostly runs along: a cross street
+        // is moved by its overhang at the side, an avenue by its overhang at the top
+        // or bottom. The larger component is never under 0.7, so nothing is divided
+        // by a sliver.
+        let along = CGPoint(x: cos(angle), y: sin(angle))
+        let travel = abs(along.x) >= abs(along.y) ? dx / along.x : dy / along.y
+        guard travel != 0, abs(travel) <= reach else { return point }
+        return CGPoint(x: point.x + travel * along.x, y: point.y + travel * along.y)
+    }
+
     private func footprint(_ measured: CGSize, at point: CGPoint, angle: Double) -> CGRect {
         let across = abs(cos(angle))
         let down = abs(sin(angle))

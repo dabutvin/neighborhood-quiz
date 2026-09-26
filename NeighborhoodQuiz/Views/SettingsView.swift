@@ -182,7 +182,7 @@ struct SettingsView: View {
     }
 
     private var whatIsCounted: String {
-        "Which neighborhoods get asked and how the rounds go — scores, goes, and which "
+        "Which neighborhoods get asked and how the rounds go — scores, tries, and which "
             + "boroughs get bought. It shows which places are too hard. No name, no account, "
             + "no advertising identifier, and nothing that says who you are."
     }

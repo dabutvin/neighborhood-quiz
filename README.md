@@ -20,15 +20,15 @@ from one banks nothing.
 The first round is also the tutorial. Rather than pages of rules in front of the game,
 four tips come up over it, each at the moment it is about: tap where you think the place
 is, and the streets are the clues; the outline is the neighborhood picked, and Answer
-locks it in; what each of the three goes
-pays, said right after the first one; and, on the card at the end of the round, that the
-money is kept and what it buys. Every tip can be skipped, "How to play" in Settings brings
+locks it in; what each of the three tries pays, said right after the first one, with a
+Got it to put it away; and, on the card at the end of the round, that the money is kept
+and what it buys. Every tip can be skipped, "How to play" in Settings brings
 them back, and a player who was already playing before there were tips is not given them.
 "Delete all saved data" puts the app back as it was on a fresh install, tips included.
 
-A round is ten neighbourhoods. You are given a name and three goes to put your finger on
-it: five dollars if you know it straight away, three on the second go, one on the third,
-and nothing if three goes are not enough — at which point the round shows you where it
+A round is ten neighbourhoods. You are given a name and three tries to put your finger on
+it: five dollars if you know it straight away, three on the second try, one on the third,
+and nothing if three tries are not enough — at which point the round shows you where it
 was and moves on. Fifty dollars is a perfect round.
 
 The money is kept. It banks up across every round you ever play, and it buys the rest of
@@ -192,7 +192,7 @@ NeighborhoodQuiz/
 │   ├── Place.swift                 # A neighbourhood anywhere in the city: which borough, which shape
 │   ├── Wallet.swift                # The money, the boroughs bought, and what the next round is about
 │   ├── Bank.swift                  # The one wallet the app plays with, written down after every change
-│   ├── QuizRound.swift             # Ten places, three goes each, and what the goes are worth
+│   ├── QuizRound.swift             # Ten places, three tries each, and what the tries are worth
 │   └── Tutorial.swift              # The four tips over a first round: which is up when, and who gets them
 ├── Map/
 │   ├── Geography.swift             # A coordinate, and a Mercator turned so the avenues stand up
@@ -230,7 +230,7 @@ counts — anonymously, in the open, and with a switch to stop it.
 
 **What goes out.** Every signal is written out in one place, `Analytics.swift`, so the
 list can be read end to end. A launch. A round started, and whether it was one borough's
-or the whole city's. Each question settled: which neighbourhood, and on which go it was
+or the whole city's. Each question settled: which neighbourhood, and on which try it was
 found — or that it was never found, which is the signal the whole thing is for. A round
 finished, with the score and how it was made; a round left part-way, and how far it got.
 A borough bought, which rung of the ladder it was and how many rounds it took. Each

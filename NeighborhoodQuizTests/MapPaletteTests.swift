@@ -79,4 +79,59 @@ final class MapPaletteTests: XCTestCase {
         }
         return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
     }
+
+    // MARK: - How big a street name is
+
+    /// Pulled back, nothing changes: the widest views are where names are most crowded,
+    /// and the sizes there were tuned to fit.
+    func testStreetNamesKeepTheirSizeUntilTheMapIsPulledIn() {
+        let palette = MapPalette.day
+        for kind in RoadKind.allCases {
+            for zoom in [1.0, 2.0, MapPalette.growFrom] {
+                XCTAssertEqual(palette.labelSize(for: kind, at: zoom), palette.labelSize(for: kind))
+            }
+        }
+    }
+
+    /// All the way in, every name is at its close-in size — and a side street's is big
+    /// enough to read, which it was not at nine points.
+    func testAllTheWayInEveryNameIsAtItsCloseSize() {
+        let palette = MapPalette.day
+        let full = MapCamera.range.upperBound
+        for kind in RoadKind.allCases {
+            XCTAssertEqual(palette.labelSize(for: kind, at: full), palette.closeLabelSize(for: kind))
+            XCTAssertGreaterThan(palette.closeLabelSize(for: kind), palette.labelSize(for: kind) * 1.3)
+        }
+        XCTAssertGreaterThanOrEqual(palette.closeLabelSize(for: .side), 14)
+    }
+
+    /// Pinching in never shrinks a name, and never puts a side street above an avenue.
+    func testNamesOnlyGrowAndKeepTheirOrder() {
+        let palette = MapPalette.day
+        var last: [RoadKind: Double] = [:]
+        for step in 0...52 {
+            let zoom = 1 + Double(step) * 0.25
+            let avenue = palette.labelSize(for: .avenue, at: zoom)
+            let major = palette.labelSize(for: .major, at: zoom)
+            let side = palette.labelSize(for: .side, at: zoom)
+            XCTAssertGreaterThanOrEqual(avenue, major, "at \(zoom)")
+            XCTAssertGreaterThanOrEqual(major, side, "at \(zoom)")
+            for kind in RoadKind.allCases {
+                let size = palette.labelSize(for: kind, at: zoom)
+                XCTAssertGreaterThanOrEqual(size, last[kind] ?? 0, "\(kind) shrank at \(zoom)")
+                XCTAssertEqual(size * 2, (size * 2).rounded(), "sizes come in half points")
+                last[kind] = size
+            }
+        }
+    }
+
+    /// A picked-out neighbourhood's name is still the loudest thing on the map, however
+    /// far in the street names have grown.
+    func testANeighborhoodsNameStillOutranksTheLargestStreetName() {
+        for palette in [MapPalette.day, MapPalette.night] {
+            for kind in RoadKind.allCases {
+                XCTAssertGreaterThan(palette.neighborhoodLabelSize, palette.closeLabelSize(for: kind) * 1.3)
+            }
+        }
+    }
 }
