@@ -421,12 +421,12 @@ struct QuizView: View {
     private func spoken(name: String, in borough: String?, round: QuizRound) -> String {
         switch showing {
         case .found(_, let worth): return "Found \(name), worth \(Money.text(worth))."
-        case .missed: return "Out of goes. It was \(name)."
+        case .missed: return "Out of tries. It was \(name)."
         case nil:
             let there = borough.map { " in \($0)" } ?? ""
             return "Find \(name)\(there). "
                 + "Question \(asked(of: round)) of \(round.questions.count), "
-                + "\(round.triesLeft) \(round.triesLeft == 1 ? "go" : "goes") left."
+                + "\(round.triesLeft) \(round.triesLeft == 1 ? "try" : "tries") left."
         }
     }
 
@@ -811,7 +811,7 @@ struct QuizView: View {
         VStack(spacing: 5) {
             ForEach(0..<QuizRound.tries, id: \.self) { go in
                 tally(
-                    QuizRound.goName(go),
+                    QuizRound.tryName(go),
                     count: round.foundOn[go],
                     points: round.foundOn[go] * QuizRound.points[min(go, QuizRound.points.count - 1)],
                     ink: palette.highlightInk.opacity(1 - Double(go) * 0.2)

@@ -322,10 +322,10 @@ final class QuizRoundTests: XCTestCase {
     }
 
     func testEachGoHasAName() {
-        let names = (0..<QuizRound.tries).map(QuizRound.goName)
-        XCTAssertEqual(names, ["First go", "Second go", "Third go"])
+        let names = (0..<QuizRound.tries).map(QuizRound.tryName)
+        XCTAssertEqual(names, ["First try", "Second try", "Third try"])
         XCTAssertEqual(Set(names).count, names.count)
-        XCTAssertFalse(QuizRound.goName(99).isEmpty, "Even one that should not exist")
+        XCTAssertFalse(QuizRound.tryName(99).isEmpty, "Even one that should not exist")
     }
 
     // MARK: - The score

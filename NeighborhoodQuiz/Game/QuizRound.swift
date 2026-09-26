@@ -85,9 +85,11 @@ struct QuizRound: Equatable {
     /// What a round of this length is worth if every place is found first go.
     var perfectScore: Int { questions.count * (QuizRound.points.first ?? 0) }
 
-    /// What a go is called, for the end-of-round breakdown.
-    static func goName(_ go: Int) -> String {
-        ["First go", "Second go", "Third go"][safe: go] ?? "Go \(go + 1)"
+    /// What a try is called, for the end-of-round breakdown. "Try" rather than "go"
+    /// on anything a player reads, the same word the tips use — "Found it, first try!"
+    /// is how people actually say it. The code keeps calling them goes.
+    static func tryName(_ go: Int) -> String {
+        ["First try", "Second try", "Third try"][safe: go] ?? "Try \(go + 1)"
     }
 
     /// Ten of the pool, in an order nobody can predict. Takes the places to choose from
