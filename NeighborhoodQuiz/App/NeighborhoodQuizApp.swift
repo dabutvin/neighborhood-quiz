@@ -54,7 +54,7 @@ struct NeighborhoodQuizApp: App {
 /// one — which is the only reason a screenshot of it is worth looking at.
 ///
 /// The `-map*` arguments are the map on its own: `-map` whole, `-map-zoomed` in on
-/// Midtown, `-map-neighborhood` with Greenwich Village picked out — all Manhattan — and
+/// Midtown, `-map-closest` on Times Square pulled all the way in, `-map-neighborhood` with Greenwich Village picked out — all Manhattan — and
 /// then one per other borough, `-map-brooklyn`, `-map-queens`, `-map-bronx` and
 /// `-map-staten-island`, each whole and north-up, so a regression that only one file
 /// would show has a shot to show it in. `-boroughs` and `-settings` are the two sheets,
@@ -96,6 +96,8 @@ enum Screen: Equatable {
             )
         } else if arguments.contains("-map-zoomed") {
             self = .map(borough: .manhattan, opening: .midtown, showing: nil)
+        } else if arguments.contains("-map-closest") {
+            self = .map(borough: .manhattan, opening: .closest, showing: nil)
         } else if arguments.contains("-map-brooklyn") {
             // Each of the other four whole, drawn as it sits: one shot per file.
             self = .map(borough: .brooklyn, opening: .island, showing: nil)

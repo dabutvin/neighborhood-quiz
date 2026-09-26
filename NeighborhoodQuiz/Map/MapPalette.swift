@@ -131,14 +131,56 @@ struct MapPalette {
         }
     }
 
-    /// The size a street name is written at, in points on screen. Names do not grow
-    /// with the map — pulling in shows *more* of them rather than bigger ones.
+    /// The size a street name is written at, in points on screen, with the map pulled
+    /// back. Pulling in shows *more* names rather than bigger ones — up to a point.
     func labelSize(for kind: RoadKind) -> Double {
         switch kind {
         case .avenue: return 12
         case .major: return 10.5
         case .side: return 9
         }
+    }
+
+    /// The size a street name reaches with the map pulled all the way in.
+    ///
+    /// Nine points of hand lettering is right for a borough's worth of streets, where a
+    /// name has one block's breadth to fit into. Fourteen times in, a block is most of
+    /// the screen and a nine-point name is a smudge in the middle of it that nobody can
+    /// read. So the names grow as the blocks do, and the side streets most, since they
+    /// started smallest: the order between the three ranks holds, but the gap between
+    /// them closes, because close in every street is one you might be looking for.
+    func closeLabelSize(for kind: RoadKind) -> Double {
+        switch kind {
+        case .avenue: return 16.5
+        case .major: return 15
+        case .side: return 14
+        }
+    }
+
+    /// The size a street name is written at for a given zoom.
+    ///
+    /// Unchanged until the map is pulled in past `MapPalette.growFrom` — where the
+    /// cross streets first get room for their names and the grid is at its most crowded
+    /// — then growing towards `closeLabelSize` on a log scale, which is how a pinch
+    /// feels: each doubling of the zoom does about as much as the one before. Rounded to
+    /// the half point, so a pinch asks for a dozen sizes of the face rather than one
+    /// per frame.
+    func labelSize(for kind: RoadKind, at zoom: Double) -> Double {
+        let far = labelSize(for: kind)
+        let close = closeLabelSize(for: kind)
+        let size = far + (close - far) * MapPalette.closeness(at: zoom)
+        return (size * 2).rounded() / 2
+    }
+
+    /// The zoom at which street names start to grow.
+    static let growFrom = 4.0
+
+    /// How far between "names at their usual size" and "names at their close-in size"
+    /// a zoom is, from 0 to 1.
+    static func closeness(at zoom: Double) -> Double {
+        let full = MapCamera.range.upperBound
+        guard zoom > growFrom else { return 0 }
+        return min(log(zoom / growFrom) / log(full / growFrom), 1)
     }
 
     /// The size a picked-out neighbourhood's name is written at. Nearly twice the

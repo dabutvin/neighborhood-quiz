@@ -17,6 +17,9 @@ struct MapBoard: View {
         /// Times Square, close in. Manhattan only: it is a spot on one borough's map,
         /// and nothing but the screenshot runs asks for it.
         case midtown
+        /// Times Square with the map pulled all the way in, for the screenshot that shows
+        /// street names at their close-in size.
+        case closest
         case neighborhood(String)
     }
 
@@ -292,6 +295,10 @@ struct MapBoard: View {
             // it, and that one asks for Manhattan.
             let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
             camera = MapCamera.centred(on: midtown, zoom: 4.2, in: size)
+            camera.clampPan(in: size)
+        case .closest:
+            let midtown = map.projection.point(Coordinate(-73.9855, 40.7580))
+            camera = MapCamera.centred(on: midtown, zoom: MapCamera.range.upperBound, in: size)
             camera.clampPan(in: size)
         case .neighborhood(let name):
             guard let area = map.neighborhood(named: name) else { break }

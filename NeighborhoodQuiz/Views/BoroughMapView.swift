@@ -526,8 +526,11 @@ struct BoroughMapView: View, @MainActor Animatable {
         // it is left off — which is what stops "Central Park West" being written straight
         // through "96th Street" at the widest zoom.
         var taken: [CGRect] = claimed
-        // Worked out once for the whole pass rather than once per name.
-        let offsets = BoroughMapView.crossOffsets(radius: palette.labelHaloReach)
+        // Close in the names are written larger, and the paper round them grows with
+        // them. Worked out once for the whole pass rather than once per name.
+        let zoom = camera.zoom
+        let growth = palette.labelSize(for: .side, at: zoom) / palette.labelSize(for: .side)
+        let offsets = BoroughMapView.crossOffsets(radius: palette.labelHaloReach * growth)
 
         for label in labels where camera.zoom >= label.minZoom {
             let point = camera.screenPoint(label.position, in: size)
@@ -538,13 +541,20 @@ struct BoroughMapView: View, @MainActor Animatable {
             // laying it out first, so every name the grid was too crowded to fit paid in
             // full for the privilege of being left off — and at four times in, where all
             // seven hundred side street names are on offer, most of them are left off.
-            let measured = drawn.metrics.size(of: label, palette: palette, in: context)
+            //
+            // The cache measures every name at its pulled-back size; a name written at
+            // a larger size fills a box larger by the same factor, near enough to decide
+            // whether it collides, so the one measurement serves every zoom.
+            let size = palette.labelSize(for: label.kind, at: zoom)
+            let scale = size / palette.labelSize(for: label.kind)
+            let base = drawn.metrics.size(of: label, palette: palette, in: context)
+            let measured = CGSize(width: base.width * scale, height: base.height * scale)
             let box = footprint(measured, at: point, angle: label.angle)
             if taken.contains(where: { $0.intersects(box) }) { continue }
             taken.append(box)
 
             let text = Text(label.text)
-                .font(MapFont.label(size: palette.labelSize(for: label.kind)))
+                .font(MapFont.label(size: size))
             let ink = context.resolve(text.foregroundStyle(palette.label))
 
             // The paper showing through a name is what keeps it readable where it

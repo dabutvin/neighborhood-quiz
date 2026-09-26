@@ -110,6 +110,8 @@ jobs:
           #
           # The `-map-*` runs ask for the map on its own, where a regression in
           # the drawing shows up plainly with nothing else on the screen.
+          # `-map-closest` is Times Square pulled all the way in, where the
+          # street names are at their largest.
           # `-map-brooklyn`, `-map-queens`, `-map-bronx` and `-map-staten-island`
           # are the other four boroughs, each whole and each drawn north-up
           # rather than turned to a grid — Brooklyn and Queens because they have
@@ -206,6 +208,7 @@ jobs:
           capture 15 map             -map
           capture 17 map_zoomed      -map-zoomed
           capture 19 map_neighborhood -map-neighborhood
+          capture 21 map_closest     -map-closest
           capture 25 map_brooklyn    -map-brooklyn
           capture 27 map_queens      -map-queens
           capture 29 map_bronx       -map-bronx
