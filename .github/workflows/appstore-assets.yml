@@ -123,11 +123,23 @@ jobs:
             xcrun simctl bootstatus "$udid" -b
             xcrun simctl ui "$udid" appearance "$APPEARANCE"
             # The status bar App Review likes: full bars, full battery, 9:41. Given
-            # as a whole date, so the iPad — which shows the day beside the time —
-            # reads Tue Jan 9 rather than whatever day the run happened on.
-            xcrun simctl status_bar "$udid" override \
-              --time "2007-01-09T09:41:00+00:00" --batteryState charged --batteryLevel 100 \
-              --cellularBars 4 --wifiBars 3 --dataNetwork wifi 2>/dev/null || true
+            # as a whole date first, so the iPad — which shows the day beside the
+            # time — reads Tue Jan 9 rather than whatever day the run happened on;
+            # if this simctl will not take a date, 9:41 alone. Said out loud either
+            # way, since an override that fails quietly leaves the real clock in
+            # every shot.
+            local stamp applied=""
+            for stamp in "2007-01-09T09:41:00Z" "2007-01-09T09:41:00+00:00" "9:41"; do
+              if xcrun simctl status_bar "$udid" override \
+                  --time "$stamp" --batteryState charged --batteryLevel 100 \
+                  --cellularBars 4 --wifiBars 3 --dataNetwork wifi; then
+                applied="$stamp"; break
+              fi
+            done
+            if [ -z "$applied" ]; then
+              echo "ERROR: the status bar would not take an override on $label"; return 1
+            fi
+            echo "Status bar on $label: --time $applied"
             xcrun simctl install "$udid" "$APP_PATH"
 
             local order=1

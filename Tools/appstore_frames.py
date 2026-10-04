@@ -113,12 +113,33 @@ def paper(width: int, height: int, colours: dict) -> Image.Image:
     return out
 
 
-def rounded(image: Image.Image, radius: int) -> Image.Image:
+def outline(size: tuple, radii: tuple) -> Image.Image:
+    """A mask of the screen's shape: a rectangle with each corner rounded on its own
+    radius, top-left, top-right, bottom-right, bottom-left."""
+    width, height = size
+    mask = Image.new("L", size, 255)
+    draw = ImageDraw.Draw(mask)
+    tl, tr, br, bl = radii
+    for r, (x, y), (start, end) in (
+        (tl, (0, 0), (180, 270)),
+        (tr, (width - 2 * tr, 0), (270, 360)),
+        (br, (width - 2 * br, height - 2 * br), (0, 90)),
+        (bl, (0, height - 2 * bl), (90, 180)),
+    ):
+        if r <= 0:
+            continue
+        # Clear the corner's square, then put back the quarter of a circle in it.
+        cx = x if start in (180, 90) else x + r
+        cy = y if start in (180, 270) else y + r
+        draw.rectangle([cx, cy, cx + r - 1, cy + r - 1], fill=0)
+        draw.pieslice([x, y, x + 2 * r - 1, y + 2 * r - 1], start, end, fill=255)
+    return mask
+
+
+def rounded(image: Image.Image, radii: tuple) -> Image.Image:
     """The screenshot with its corners taken off, so it reads as a phone."""
-    mask = Image.new("L", image.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle([(0, 0), image.size], radius=radius, fill=255)
     out = image.convert("RGBA")
-    out.putalpha(mask)
+    out.putalpha(outline(image.size, radii))
     return out
 
 
@@ -192,31 +213,37 @@ def frame(input_path: Path, caption: str, output_path: Path, appearance: str = "
     shot_x = (width - shot_w) // 2
     shot_y = round(height * 0.205)
     # A phone's corners on a portrait shot; a tablet's, which are tighter, on one
-    # that is nearer square. The tablet's are still round enough to take off the
-    # resize grip iPadOS 26 draws in an app's bottom-right corner, which is in the
-    # screenshot itself and needs a radius of at least 5.4% of the width to clip.
-    radius = round(shot_w * (0.085 if height / width > 1.8 else 0.065))
+    # that is nearer square. A tablet's bottom corners are rounder than its top
+    # ones, and that is for two things in the screenshot itself: iPadOS 26 draws
+    # a resize grip in an app's bottom-right corner, which a radius of 5.4% of the
+    # width is enough to take off, and the status bar sits so close to the top-left
+    # corner that the same radius there would clip its first letter.
+    if height / width > 1.8:
+        radii = (round(shot_w * 0.085),) * 4
+    else:
+        top, bottom = round(shot_w * 0.035), round(shot_w * 0.065)
+        radii = (top, top, bottom, bottom)
+
+    # A hairline of ink round the phone, the way a drawing is boxed on a page: the
+    # same shape a few pixels bigger, laid down first so only its rim shows.
+    rim = max(2, round(width * 0.0018))
+    ring_size = (shot_w + 2 * rim, shot_h + 2 * rim)
+    ring = Image.new("RGBA", ring_size, (*colours["ink"], 255))
+    ring.putalpha(outline(ring_size, tuple(r + rim for r in radii)).point(lambda a: a * 90 // 255))
 
     # A soft shadow under the phone, so the screenshot lifts off the paper rather
     # than being printed on it.
     blur = round(width * 0.02)
-    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     drop = round(height * 0.008)
-    plate = [(shot_x, shot_y + drop), (shot_x + shot_w, shot_y + shot_h + drop)]
-    ImageDraw.Draw(shadow).rounded_rectangle(plate, radius=radius, fill=colours["shadow"])
+    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    plate = Image.new("RGBA", (shot_w, shot_h), colours["shadow"])
+    plate.putalpha(outline((shot_w, shot_h), radii).point(lambda a: a * colours["shadow"][3] // 255))
+    shadow.alpha_composite(plate, (shot_x, shot_y + drop))
     shadow = shadow.filter(ImageFilter.GaussianBlur(blur))
 
     canvas.alpha_composite(shadow)
-    canvas.alpha_composite(rounded(shot, radius), (shot_x, shot_y))
-
-    # A hairline of ink round the phone, the way a drawing is boxed on a page.
-    edge = ImageDraw.Draw(canvas)
-    edge.rounded_rectangle(
-        [(shot_x, shot_y), (shot_x + shot_w - 1, shot_y + shot_h - 1)],
-        radius=radius,
-        outline=(*colours["ink"], 70),
-        width=max(2, round(width * 0.0018)),
-    )
+    canvas.alpha_composite(ring, (shot_x - rim, shot_y - rim))
+    canvas.alpha_composite(rounded(shot, radii), (shot_x, shot_y))
 
     draw = ImageDraw.Draw(canvas)
 
