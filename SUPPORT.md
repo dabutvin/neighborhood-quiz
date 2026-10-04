@@ -38,7 +38,8 @@ opened it. It cannot be undone.
 **What does the app collect?**
 An anonymous count of how rounds go, such as which neighborhoods are hardest to find,
 so the game can be tuned. It contains no name, account, email, location or advertising
-identifier. To turn it off, open **Settings** and switch off **Anonymous usage**.
+identifier. To turn it off, open **Settings** and switch off **Anonymous usage**. The
+whole of it is in the [privacy policy](PRIVACY.md).
 
 **A neighborhood's boundary looks wrong.**
 The neighborhoods, streets and parks come from the City of New York's own open data,

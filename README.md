@@ -394,7 +394,9 @@ ready to drop into App Store Connect; the raw ones come back as a downloadable a
 
 The listing's support URL is [`SUPPORT.md`](SUPPORT.md): how to get in touch, and the
 handful of questions a player is likely to have, written for players rather than for
-whoever is reading this.
+whoever is reading this. Its privacy policy URL is [`PRIVACY.md`](PRIVACY.md), which says
+what [What it counts](#what-it-counts) says, in a player's terms — and has to change
+whenever a signal is added to `Analytics.swift`.
 
 ## Required Secrets
 
