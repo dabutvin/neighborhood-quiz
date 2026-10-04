@@ -192,8 +192,10 @@ def frame(input_path: Path, caption: str, output_path: Path, appearance: str = "
     shot_x = (width - shot_w) // 2
     shot_y = round(height * 0.205)
     # A phone's corners on a portrait shot; a tablet's, which are tighter, on one
-    # that is nearer square.
-    radius = round(shot_w * (0.085 if height / width > 1.8 else 0.035))
+    # that is nearer square. The tablet's are still round enough to take off the
+    # resize grip iPadOS 26 draws in an app's bottom-right corner, which is in the
+    # screenshot itself and needs a radius of at least 5.4% of the width to clip.
+    radius = round(shot_w * (0.085 if height / width > 1.8 else 0.065))
 
     # A soft shadow under the phone, so the screenshot lifts off the paper rather
     # than being printed on it.
