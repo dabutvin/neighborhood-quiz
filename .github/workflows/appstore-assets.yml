@@ -85,10 +85,10 @@ jobs:
           SCREENS=(
             "question:-quiz-picked:Find the neighborhood on the map"
             "round:-quiz-filling:Ten places a round, three tries each"
-            "streets:-map-zoomed:Every avenue and cross street, drawn by hand"
+            "streets:-map-zoomed:Every street named. No neighborhoods."
             "earn:-quiz-over:Bank what you earn"
             "boroughs:-boroughs:Buy the rest of the city, a borough at a time"
-            "city:-map-city:All five boroughs on one map"
+            "city:-map-city:All five boroughs"
           )
 
           # Pick the first simulator on offer whose name matches one we want, and
