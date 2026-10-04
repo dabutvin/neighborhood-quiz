@@ -389,7 +389,8 @@ PNGs; the build reads them, not the script.
 exact simulators App Review asks for — iPhone 6.9 inch and iPad 13 inch — and frames each
 on the map's own paper with a line of copy in its own hand (`Tools/appstore_frames.py`).
 The screens and their captions are listed, in store order, in the workflow itself. The
-framed shots come back as a downloadable artifact, ready to drop into App Store Connect.
+framed shots land on the `appstore-assets` branch, a folder per appearance and device,
+ready to drop into App Store Connect; the raw ones come back as a downloadable artifact.
 
 ## Required Secrets
 

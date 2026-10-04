@@ -20,6 +20,10 @@ on:
         type: choice
         options: [light, dark]
 
+# Write access for the one thing it writes: the appstore-assets branch below.
+permissions:
+  contents: write
+
 concurrency:
   group: appstore-assets-${{ github.ref_name }}
   cancel-in-progress: true
@@ -161,3 +165,41 @@ jobs:
           name: appstore-assets
           path: out/
           if-no-files-found: error
+
+      # And the framed shots on a branch of their own, so they can be looked at on
+      # GitHub — or fetched with git — without downloading and unpacking a zip.
+      # One folder per appearance and device; a run replaces only its own
+      # appearance, so a light run and a dark run sit side by side.
+      - name: Publish to the appstore-assets branch
+        env:
+          APPEARANCE: ${{ github.event.inputs.appearance || 'light' }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          work="$RUNNER_TEMP/appstore-assets"
+          if git fetch --depth 1 origin appstore-assets 2>/dev/null; then
+            git worktree add --detach "$work" FETCH_HEAD
+          else
+            git worktree add --detach "$work"
+            git -C "$work" checkout --orphan appstore-assets
+            git -C "$work" rm -rfq .
+          fi
+
+          rm -rf "${work:?}/$APPEARANCE"
+          for device in out/*/; do
+            name=$(basename "$device")
+            mkdir -p "$work/$APPEARANCE/$name"
+            cp "$device"framed/*.png "$work/$APPEARANCE/$name/"
+          done
+
+          cd "$work"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing changed since the last run."
+            exit 0
+          fi
+          git commit -qm "App Store assets, $APPEARANCE, from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}"
+          git push origin HEAD:refs/heads/appstore-assets
+          echo "Published: https://github.com/${GITHUB_REPOSITORY}/tree/appstore-assets/$APPEARANCE"
