@@ -20,6 +20,10 @@ on:
         type: choice
         options: [light, dark]
 
+# Write access for the one thing it writes: the appstore-assets branch below.
+permissions:
+  contents: write
+
 concurrency:
   group: appstore-assets-${{ github.ref_name }}
   cancel-in-progress: true
@@ -79,10 +83,16 @@ jobs:
           # The screens the store leads with, each with the line of copy it carries.
           # Kept here, in the order they will sit on the listing, so the story a
           # browser reads is set in one place.
+          # The game first — a question, then a round filling in — because a map
+          # quiz that only shows a map has not said what the game is. Then why the
+          # map is worth looking at, then what the money is for.
           SCREENS=(
-            "map:-map:Manhattan, drawn by hand"
-            "streets:-map-zoomed:Every avenue, every cross street"
-            "brooklyn:-map-brooklyn:Brooklyn, when you have earned it"
+            "question:-quiz-picked:Find the neighborhood on the map"
+            "round:-quiz-filling:Ten places a round, three tries each"
+            "streets:-map-zoomed:The streets are your clues"
+            "earn:-quiz-over:Bank what you earn"
+            "boroughs:-boroughs:Buy the rest of the city, a borough at a time"
+            "city:-map-city:All five boroughs"
           )
 
           # Pick the first simulator on offer whose name matches one we want, and
@@ -112,10 +122,24 @@ jobs:
             xcrun simctl boot "$udid" 2>/dev/null || true
             xcrun simctl bootstatus "$udid" -b
             xcrun simctl ui "$udid" appearance "$APPEARANCE"
-            # The status bar App Review likes: full bars, full battery, 9:41.
-            xcrun simctl status_bar "$udid" override \
-              --time "9:41" --batteryState charged --batteryLevel 100 \
-              --cellularBars 4 --wifiBars 3 --dataNetwork wifi 2>/dev/null || true
+            # The status bar App Review likes: full bars, full battery, 9:41. Given
+            # as a whole date first, so the iPad — which shows the day beside the
+            # time — reads Tue Jan 9 rather than whatever day the run happened on;
+            # if this simctl will not take a date, 9:41 alone. Said out loud either
+            # way, since an override that fails quietly leaves the real clock in
+            # every shot.
+            local stamp applied=""
+            for stamp in "2007-01-09T09:41:00Z" "2007-01-09T09:41:00+00:00" "9:41"; do
+              if xcrun simctl status_bar "$udid" override \
+                  --time "$stamp" --batteryState charged --batteryLevel 100 \
+                  --cellularBars 4 --wifiBars 3 --dataNetwork wifi; then
+                applied="$stamp"; break
+              fi
+            done
+            if [ -z "$applied" ]; then
+              echo "ERROR: the status bar would not take an override on $label"; return 1
+            fi
+            echo "Status bar on $label: --time $applied"
             xcrun simctl install "$udid" "$APP_PATH"
 
             local order=1
@@ -124,13 +148,16 @@ jobs:
               local arg="${rest%%:*}"; local caption="${rest#*:}"
               local raw="out/$label/raw/${slug}.png"
               xcrun simctl launch "$udid" "$BUNDLE_ID" "$arg"
-              sleep 3
+              # The whole city is five boroughs drawn at once; give every screen
+              # the time that one takes rather than tuning each.
+              sleep 5
               xcrun simctl io "$udid" screenshot "$raw"
               xcrun simctl terminate "$udid" "$BUNDLE_ID" 2>/dev/null || true
               python3 Tools/appstore_frames.py \
                 --input "$raw" \
                 --output "$(printf 'out/%s/framed/%02d_%s.png' "$label" "$order" "$slug")" \
-                --caption "$caption"
+                --caption "$caption" \
+                --appearance "$APPEARANCE"
               order=$((order + 1))
             done
             echo "== $label ($APPEARANCE) =="
@@ -152,3 +179,41 @@ jobs:
           name: appstore-assets
           path: out/
           if-no-files-found: error
+
+      # And the framed shots on a branch of their own, so they can be looked at on
+      # GitHub — or fetched with git — without downloading and unpacking a zip.
+      # One folder per appearance and device; a run replaces only its own
+      # appearance, so a light run and a dark run sit side by side.
+      - name: Publish to the appstore-assets branch
+        env:
+          APPEARANCE: ${{ github.event.inputs.appearance || 'light' }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          work="$RUNNER_TEMP/appstore-assets"
+          if git fetch --depth 1 origin appstore-assets 2>/dev/null; then
+            git worktree add --detach "$work" FETCH_HEAD
+          else
+            git worktree add --detach "$work"
+            git -C "$work" checkout --orphan appstore-assets
+            git -C "$work" rm -rfq .
+          fi
+
+          rm -rf "${work:?}/$APPEARANCE"
+          for device in out/*/; do
+            name=$(basename "$device")
+            mkdir -p "$work/$APPEARANCE/$name"
+            cp "$device"framed/*.png "$work/$APPEARANCE/$name/"
+          done
+
+          cd "$work"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing changed since the last run."
+            exit 0
+          fi
+          git commit -qm "App Store assets, $APPEARANCE, from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}"
+          git push origin HEAD:refs/heads/appstore-assets
+          echo "Published: https://github.com/${GITHUB_REPOSITORY}/tree/appstore-assets/$APPEARANCE"
