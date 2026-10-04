@@ -392,6 +392,10 @@ The screens and their captions are listed, in store order, in the workflow itsel
 framed shots land on the `appstore-assets` branch, a folder per appearance and device,
 ready to drop into App Store Connect; the raw ones come back as a downloadable artifact.
 
+The listing's support URL is [`SUPPORT.md`](SUPPORT.md): how to get in touch, and the
+handful of questions a player is likely to have, written for players rather than for
+whoever is reading this.
+
 ## Required Secrets
 
 Set these in GitHub repo settings → Secrets and variables → Actions.
