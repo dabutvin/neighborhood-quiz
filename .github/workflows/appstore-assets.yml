@@ -85,7 +85,7 @@ jobs:
           SCREENS=(
             "question:-quiz-picked:Find the neighborhood on the map"
             "round:-quiz-filling:Ten places a round, three tries each"
-            "streets:-map-zoomed:Every street named. No neighborhoods."
+            "streets:-map-zoomed:The streets are your clues"
             "earn:-quiz-over:Bank what you earn"
             "boroughs:-boroughs:Buy the rest of the city, a borough at a time"
             "city:-map-city:All five boroughs"
