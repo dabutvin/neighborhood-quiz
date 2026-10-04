@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - 'docs/**'
       - 'LICENSE'
       - '.gitignore'
   # A hand crank, for when the run a pull request should have started never

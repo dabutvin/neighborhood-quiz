@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - 'docs/**'
       - 'LICENSE'
       - '.gitignore'
   # Every push to main goes out on its own, but sometimes a build needs to be sent

@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - 'docs/**'
       - 'LICENSE'
       - '.gitignore'
   push:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - 'docs/**'
       - 'LICENSE'
       - '.gitignore'
   workflow_dispatch:

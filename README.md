@@ -1,5 +1,11 @@
 # NYC Neighborhoods: Map Quiz
 
+<p align="center">
+  <img src="docs/screenshots/question.jpg" width="260" alt="A question: find Greenwich Village, with a place picked on the map of Manhattan and the Answer button waiting" />
+  <img src="docs/screenshots/round.jpg" width="260" alt="Halfway through a round: Harlem, Greenwich Village, SoHo and Tribeca found and filled in on the map" />
+  <img src="docs/screenshots/menu-dark.jpg" width="260" alt="The menu at night: $140 to spend, the best round, and the next borough at $200" />
+</p>
+
 An iOS app about knowing where you are in New York. It opens on Manhattan — drawn by
 hand, in ink, on paper — with every avenue and every numbered cross street named, and
 not one neighbourhood.
@@ -207,7 +213,8 @@ NeighborhoodQuiz/
 │   ├── BoroughMap.swift            # Reads a borough's .json: the land, the greens, the streets
 │   ├── Polyline.swift              # Measuring along a line: length, middle, which way a name goes
 │   ├── Pen.swift                   # The unsteady hand: seeded wobble, after rough.js
-│   ├── DrawnMap.swift              # Builds the whole drawing of one borough once for a given size
+│   ├── MapSheet.swift              # What one drawing covers: a borough, or the whole city at once
+│   ├── DrawnMap.swift              # Builds the whole drawing of a sheet once for a given size
 │   ├── DrawnNeighborhood.swift     # A neighbourhood as drawn: the shape, the line, what a tap tests
 │   ├── MapCamera.swift             # How far in, how far pushed about, and what is on the glass
 │   └── MapPalette.swift            # Paper, ink, sage — day and night — and the hand it is lettered in
@@ -217,6 +224,7 @@ NeighborhoodQuiz/
 │   ├── MapBoard.swift              # The map you can push about, and what a tap on it means
 │   ├── BoroughMapView.swift        # One Canvas: the borough under the transform, the names over it
 │   ├── BoroughsView.swift          # The city: what you have, and what the next borough costs
+│   ├── FlowRow.swift               # The borough pills, wrapped a whole pill at a time
 │   ├── HomeView.swift              # The map on its own, for the screenshot runs
 │   ├── SettingsView.swift          # The version, the tips again, rate and share, the privacy switch, and the one destructive thing
 │   └── PaperGrain.swift            # The tooth of the paper, and the vignette
