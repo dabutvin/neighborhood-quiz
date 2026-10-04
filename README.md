@@ -385,9 +385,11 @@ PNGs; the build reads them, not the script.
 3. Tag `vX.Y.Z`. **App Store Release** builds, signs, uploads to App Store Connect and cuts
    a GitHub release.
 
-**App Store Assets** is hand-cranked from the Actions tab: it shoots the screens on the
+**App Store Assets** is hand-cranked from the Actions tab: it shoots six screens on the
 exact simulators App Review asks for — iPhone 6.9 inch and iPad 13 inch — and frames each
-with a line of copy.
+on the map's own paper with a line of copy in its own hand (`Tools/appstore_frames.py`).
+The screens and their captions are listed, in store order, in the workflow itself. The
+framed shots come back as a downloadable artifact, ready to drop into App Store Connect.
 
 ## Required Secrets
 

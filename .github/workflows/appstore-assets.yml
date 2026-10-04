@@ -79,10 +79,16 @@ jobs:
           # The screens the store leads with, each with the line of copy it carries.
           # Kept here, in the order they will sit on the listing, so the story a
           # browser reads is set in one place.
+          # The game first — a question, then a round filling in — because a map
+          # quiz that only shows a map has not said what the game is. Then why the
+          # map is worth looking at, then what the money is for.
           SCREENS=(
-            "map:-map:Manhattan, drawn by hand"
-            "streets:-map-zoomed:Every avenue, every cross street"
-            "brooklyn:-map-brooklyn:Brooklyn, when you have earned it"
+            "question:-quiz-picked:Find the neighborhood on the map"
+            "round:-quiz-filling:Ten places a round, three tries each"
+            "streets:-map-zoomed:Every avenue and cross street, drawn by hand"
+            "earn:-quiz-over:Bank what you earn"
+            "boroughs:-boroughs:Buy the rest of the city, a borough at a time"
+            "city:-map-city:All five boroughs on one map"
           )
 
           # Pick the first simulator on offer whose name matches one we want, and
@@ -124,13 +130,16 @@ jobs:
               local arg="${rest%%:*}"; local caption="${rest#*:}"
               local raw="out/$label/raw/${slug}.png"
               xcrun simctl launch "$udid" "$BUNDLE_ID" "$arg"
-              sleep 3
+              # The whole city is five boroughs drawn at once; give every screen
+              # the time that one takes rather than tuning each.
+              sleep 5
               xcrun simctl io "$udid" screenshot "$raw"
               xcrun simctl terminate "$udid" "$BUNDLE_ID" 2>/dev/null || true
               python3 Tools/appstore_frames.py \
                 --input "$raw" \
                 --output "$(printf 'out/%s/framed/%02d_%s.png' "$label" "$order" "$slug")" \
-                --caption "$caption"
+                --caption "$caption" \
+                --appearance "$APPEARANCE"
               order=$((order + 1))
             done
             echo "== $label ($APPEARANCE) =="
